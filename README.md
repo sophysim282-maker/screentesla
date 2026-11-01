@@ -64,7 +64,7 @@ The build fetches pinned RPiPlay sources and cross-compiles its dependencies, ru
 - Successful iOS compilation does not prove device signing, discovery, sustained background operation, or a frame-rate improvement.
 - No audio forwarding, lock-screen capture or protected-content bypass is provided. The AirPlay protocol core is old; current-iOS compatibility is not established across devices.
 
-Current device procedure and limits: [0.9](TESTING-0.9.md). Native YouTube video-only/HLS casting is not implemented.
+Current disconnect fix and test: [0.9.1](TESTING-0.9.1.md). Video/background architecture: [0.9](TESTING-0.9.md). Native YouTube video-only/HLS casting is not implemented.
 
 Earlier experiment details: [0.7](TESTING-0.7.md), [0.6](TESTING-0.6.md), [0.5](TESTING-0.5.md), [0.4](TESTING-0.4.md), [0.3](TESTING-0.3.md), [0.2](TESTING-0.2.md).
 

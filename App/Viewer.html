@@ -97,9 +97,9 @@ async function pollStatus(){
    if(mode==='h264' && player.getVideoPlaybackQuality){const rendered=player.getVideoPlaybackQuality().totalVideoFrames;
     displayFPS=lastRendered&&rendered>=lastRendered.frames?Math.round((rendered-lastRendered.frames)*1000/(now-lastRendered.time)):0;lastRendered={frames:rendered,time:now};}
    const age=mode==='h264'?state.compressedAgeMs:state.frameAgeMs;
-   const live=state.running && count>0 && age<2000;
+   const live=state.running && state.mirrorConnected!==false && count>0 && age<2000;
    document.body.classList.toggle('stale',!live);
-   status.textContent=live?(mode==='h264'?'H.264':state.profile)+' · source '+sourceFPS+' fps'+((mode==='snapshots'||mode==='h264')?' · display '+displayFPS+' fps':'')+' · no audio':'Waiting for video — keep this page open; check ScreenLink and its background session or floating preview.';
+   status.textContent=live?(mode==='h264'?'H.264':state.profile)+' · source '+sourceFPS+' fps'+((mode==='snapshots'||mode==='h264')?' · display '+displayFPS+' fps':'')+' · no audio':(state.mirrorConnected===false?'AirPlay disconnected — select ScreenLink VPN Phone again in iPhone Screen Mirroring.':'Waiting for video — check ScreenLink and its background session or floating preview.');
   }catch(error){document.body.classList.add('stale');status.textContent='Cannot reach ScreenLink. Check the hotspot and current viewer link.';}
   await delay(1500);
  }

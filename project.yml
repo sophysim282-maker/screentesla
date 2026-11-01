@@ -36,8 +36,8 @@ targets:
       path: App/Info.plist
       properties:
         CFBundleDisplayName: ScreenLink Lab
-        CFBundleShortVersionString: '0.9.0'
-        CFBundleVersion: '9'
+        CFBundleShortVersionString: '0.9.1'
+        CFBundleVersion: '10'
         UILaunchScreen: {}
         UIBackgroundModes: [audio, processing]
         BGTaskSchedulerPermittedIdentifiers:

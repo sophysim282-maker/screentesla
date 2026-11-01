@@ -55,6 +55,10 @@
     if(!self.active)[self log:@"30-minute background session requested. Wait for BACKGROUND SESSION ACTIVE before switching apps. This is a device test; iOS can end the session early."];
 }
 - (void)launched:(id<SLContinuedTask>)task {
+    if(!self.videoIsLive || !self.videoIsLive()){
+        _pending=NO;[task setTaskCompletedWithSuccess:NO];
+        [self log:@"Background request was accepted, but the AirPlay video disconnected before launch. Reconnect ScreenLink VPN Phone in Screen Mirroring, wait for live video, then start the background test again."];return;
+    }
     _pending=NO;_task=task;_started=NSProcessInfo.processInfo.systemUptime;self.active=YES;
     task.progress.totalUnitCount=1800;task.progress.completedUnitCount=0;
     __weak BackgroundSession *weak=self;

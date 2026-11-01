@@ -21,7 +21,7 @@
     UIStackView *stack=[UIStackView new];stack.axis=UILayoutConstraintAxisVertical;stack.spacing=6;stack.translatesAutoresizingMaskIntoConstraints=NO;
     [self.view addSubview:stack];
     [NSLayoutConstraint activateConstraints:@[[stack.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor constant:8],[stack.bottomAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.bottomAnchor constant:-8],[stack.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor constant:16],[stack.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor constant:-16]]];
-    UILabel *title=[UILabel new];title.text=@"ScreenLink · AirPlay Lab 0.9";title.font=[UIFont boldSystemFontOfSize:21];[stack addArrangedSubview:title];
+    UILabel *title=[UILabel new];title.text=@"ScreenLink · AirPlay Lab 0.9.1";title.font=[UIFont boldSystemFontOfSize:21];[stack addArrangedSubview:title];
     UILabel *help=[UILabel new];help.numberOfLines=0;help.font=[UIFont systemFontOfSize:13];help.text=@"Start → copy link → connect AirPlay → return here → start a background session (iOS 26 test), or floating preview. Viewer: use H.264 for full source frame rate.";[stack addArrangedSubview:help];
     self.discoveryMode=[[UISegmentedControl alloc]initWithItems:@[@"iPhone VPN",@"Mac VPN",@"Native"]];
     id savedMode=[NSUserDefaults.standardUserDefaults objectForKey:@"discoveryMode"];
@@ -53,7 +53,7 @@
     self.session.videoIsLive=^BOOL{return weak.receiver.videoIsLive;};
     self.session.activityChanged=^(BOOL active){Controller *owner=weak;if(!owner)return;owner.receiver.compressedOnlyInBackground=active && !owner.preview.active;if(active)[owner endGrace];};
     self.session.ended=^{[weak stop];};
-    [self append:@"Version 0.9: original H.264 video, no 20fps browser cap; JPEG fallback retained. Viewer link survives restarts. iOS 26: a user-started 30-minute background session can be tested without PiP; it needs ACTIVE and a device test. PiP remains the proven option from your earlier session. Native YouTube media casting is not implemented. Keep LocalDevVPN connected."];
+    [self append:@"Version 0.9.1: discovery stays published during app transitions; video intake does not wait for decoding. The background test requires 10 fresh video frames. BACKGROUND SESSION ACTIVE means background execution was granted; it does not establish an AirPlay connection. Use H.264 in the viewer and keep LocalDevVPN connected. No audio or native YouTube media casting."];
     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(background) name:UIApplicationDidEnterBackgroundNotification object:nil];
     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(active) name:UIApplicationDidBecomeActiveNotification object:nil];
     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(foreground) name:UIApplicationWillEnterForegroundNotification object:nil];
@@ -74,7 +74,7 @@
 }
 - (void)stop { [NSUserDefaults.standardUserDefaults setBool:NO forKey:@"receiverArmed"];[self.session finish];[self endGrace];[self.receiver stop];[self.preview reset];[self.preview removeFromSuperview];self.preview=nil;if(_lastPixel){CVPixelBufferRelease(_lastPixel);_lastPixel=NULL;}UIApplication.sharedApplication.idleTimerDisabled=NO;[self append:@"Stopped. Video frames cleared."]; }
 - (void)startSession {
-    if(!self.receiver.videoIsLive){[self append:@"Connect Screen Mirroring and wait for real video before starting the background test."];return;}
+    if(!self.receiver.videoIsLive){[self append:@"The AirPlay video connection is not live yet. Reconnect ScreenLink VPN Phone in Screen Mirroring and wait for at least 10 fresh frames before starting the background test."];return;}
     [self.session start];
 }
 - (void)receivedPixel:(CVPixelBufferRef)pixel {
@@ -149,7 +149,6 @@
 }
 - (void)foreground {
     [self endGrace];[self append:@"App returned to foreground."];
-    if(self.receiver.isRunning && self.receiver.discoveryMode==SLDiscoveryPhoneVPN && !self.receiver.videoIsLive)[self.receiver refreshDiscovery];
 }
 @end
 @interface AppDelegate : UIResponder <UIApplicationDelegate>
