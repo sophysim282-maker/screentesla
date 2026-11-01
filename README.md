@@ -1,109 +1,69 @@
 # ScreenLink AirPlay Lab
 
-## Version 0.8: follow-up to the confirmed local-only VPN session
+ScreenLink receives the iPhone's own AirPlay mirroring stream through a local VPN peer and serves video to another device's browser over the iPhone hotspot. The viewer only needs a browser. The phone app needs LocalDevVPN and an active floating preview for the tested background path.
 
-The user's 0.7 log and browser confirmation establish a working same-iPhone session through LocalDevVPN, including video frames after entering background with PiP active. Version 0.8 preserves that discovery and PiP code and improves the browser path: one continuous JPEG connection, a snapshot compatibility mode, three video profiles, cadence correction, reconnect/full-screen controls, and honest source/display FPS labels. Physical performance improvements still need comparison. See [TESTING-0.8.md](TESTING-0.8.md).
+## Confirmed baseline and current change
 
-## Version 0.7: local-only proxy scope and lookup verification
+The user confirmed version 0.7 displayed their iPhone screen in the browser without a Mac advertiser. Their log shows local-only DNS lookup at 10.7.0.1, an AirPlay connection from that peer to the iPhone's 10.7.1.1 VPN interface, decoded video, floating preview ACTIVE, and additional frames after the app entered background. This establishes that session, not long-term stability or compatibility with every iPhone/browser.
 
-The user reports 0.6 successfully registered its A, AirPlay and RAOP records but the iPhone did not list the receiver. Version 0.7 changes that proxy to Bonjour's local-only scope and adds an internal browse → SRV resolve → IPv4 lookup check. This tests a specific registration-scope difference described by local proxy implementations; it does not establish compatibility with the current iPhone route picker. The build also runs a real local-only Bonjour lookup test on the Mac runner. See [TESTING-0.7.md](TESTING-0.7.md). Video quality and the Mac fallback remain unchanged.
+Version 0.8 preserves the working discovery and PiP controller source. It adds continuous multipart JPEG streaming, a snapshot compatibility viewer, three video profiles, corrected frame cadence, and browser reconnect/full-screen controls. Device performance improvements remain unverified until compared on the phone. See [TESTING-0.8.md](TESTING-0.8.md).
 
-## Version 0.6: iPhone-side VPN discovery experiment
+## Use
 
-Version 0.6 adds iPhone VPN discovery, which publishes the virtual peer address and matching AirPlay/RAOP services on the phone itself. It tests whether the receiver can be selected without a Mac advertising it. This remains unverified on a physical iPhone; registering a DNS record is not proof of same-phone discovery. Native discovery and the reported working Mac VPN route remain selectable. Video quality is unchanged from 0.5. See [TESTING-0.6.md](TESTING-0.6.md).
+1. Install the unsigned IPA through your existing signing setup. An unsigned build still requires valid device signing; normal free-account expiry and app limits apply.
+2. Connect [LocalDevVPN](https://apps.apple.com/us/app/localdevvpn/id6755608044). The tested peer is 10.7.0.1; the interface address is a separate address.
+3. Enable Personal Hotspot and connect the viewing device to it. Stop any old Mac proxy advertisements.
+4. In ScreenLink select **iPhone VPN**, choose **Fast**, and tap **Start receiver**. Copy the complete hotspot viewer link, including its token.
+5. Open Control Center → Screen Mirroring → **ScreenLink VPN Phone**.
+6. Return to ScreenLink, tap **Start floating preview**, and wait for **ACTIVE** before switching apps.
+7. Open the complete viewer link on the other device. Use **Compatibility mode** if its browser does not display the continuous stream.
 
-## Version 0.5: VPN discovery and lower latency
+Keep the phone unlocked. Closing or pausing PiP can stop background sharing. Hiding the floating window at a screen edge is different from closing it and may help avoid repeated screen-within-screen content. Audio is not forwarded.
 
-The user reports same-iPhone video reaching the browser with LocalDevVPN and a Mac proxy advertisement. Discovery is intermittent and streaming lags. Version 0.5 moves JPEG encoding off the decoder callback, removes the browser's extra polling delay, reduces the browser output to a 960-pixel longest edge, and adds explicit Mac VPN discovery mode. That mode suppresses competing phone advertisements and exports the exact receiver metadata to `tools/mac_vpn_discovery.py`.
+Viewer tokens change each time the receiver starts. Use the current link and the actual hotspot address displayed by the app; do not assume every network uses the same address. A different device cannot use the iPhone's private VPN peer as its viewer address.
 
-The Mac is still required for discovery in this mode. The app does not create its own VPN. Continuous background operation and discovery reliability still require physical-device validation. See [TESTING-0.5.md](TESTING-0.5.md) for setup and limits.
+## Video profiles
 
+| Profile | Longest image edge | JPEG quality | Source-frame cap |
+| --- | --- | --- | --- |
+| Fast | 720 pixels | 0.45 | 20 fps |
+| Balanced | 960 pixels | 0.50 | 15 fps |
+| Sharp | 1280 pixels | 0.68 | 15 fps |
 
-## Version 0.4: invalid decoder recovery
+Profiles can change while sharing. Caps are not guaranteed achieved rates. The continuous viewer reports **source FPS** measured from generated JPEGs, not actual browser-rendered FPS. Compatibility mode additionally measures its display-loop FPS. A slow client receives the newest available frame rather than an unbounded queue. At most two continuous viewers are admitted.
 
-The user reported repeated `-12903` decode errors. The iOS SDK assertion confirms this is `kVTInvalidSessionErr`. Version 0.4 discards invalid decoder sessions, preserves valid H.264 configuration, waits for a keyframe, and recreates the session with bounded retries. Returning to active clears the background retry block. Repeated errors no longer flood the UI. This is a recovery/logging fix, not proof that iOS permits uninterrupted same-iPhone background decoding. Follow [TESTING-0.4.md](TESTING-0.4.md).
+## Discovery modes
 
-Version 0.4.0 build 4 passed: https://github.com/sophysim282-maker/screentesla/actions/runs/41299387390
+- **iPhone VPN**: local-only A, AirPlay and RAOP records point at the VPN peer. The app verifies browse, SRV resolve and IPv4 lookup separately. This is the mode confirmed by the user on 0.7.
+- **Mac VPN**: suppresses phone advertisements; `bash tools/mac_vpn_discovery.command` advertises the peer from the Mac using metadata fetched from the current viewer link. This is the earlier working fallback. A Python helper is also included.
+- **Native**: ordinary phone-host Bonjour advertisements, primarily useful for receiving from other senders. Same-phone behavior varies.
 
-## Version 0.3: connect before enabling PiP
+Stop sharing before changing discovery mode. Do not run the Mac advertiser while testing iPhone VPN mode. Successful DNS publication, Control Center visibility, handshake, and decoded video are distinct checkpoints.
 
-The user reports that version 0.1 now appears in the iPhone's casting list and the iPhone screen reaches the Mac browser, but leaving the receiver app stops sharing. Version 0.3 keeps receiver discovery code unchanged and defers all preview-view, PiP-controller and playback-session creation until the user explicitly taps Start floating preview after actual frames arrive. This is a hypothesis-driven background fix, not a verified runtime result. Follow [TESTING-0.3.md](TESTING-0.3.md).
+## Build without Xcode on your own Mac
 
-Version 0.3.0 build 3 passed: https://github.com/sophysim282-maker/screentesla/actions/runs/41298397307
+The included GitHub Actions workflow builds an unsigned arm64 IPA on a Mac runner when main changes, or via workflow_dispatch. Check the Actions result and your GitHub runner allowance. Free device signing is a separate installation step.
 
-## Version 0.2: floating preview
+For a local build, use macOS with full Xcode and `brew install xcodegen autoconf automake libtool`, then run:
 
-Version 0.2.0 build 2 adds Copy viewer link (hotspot address first) and an AVKit Picture in Picture preview driven by real received frames. Background reception with active PiP is EXPERIMENTAL and still needs a device test. See [TESTING-0.2.md](TESTING-0.2.md). The user verified Mac -> iPhone receiver -> browser video using version 0.1. That does not verify sustained same-iPhone mirroring.
+```bash
+bash tools/build.sh
+```
 
-Successful version 0.2 build: https://github.com/sophysim282-maker/screentesla/actions/runs/41296246836
+The build fetches pinned RPiPlay sources and cross-compiles its dependencies, runs portable cadence/multipart tests and a real local-only Bonjour lookup test on macOS, then compiles the iOS app. There is no custom Network Extension, App Groups entitlement, or ReplayKit capture in this app. LocalDevVPN supplies the separately signed VPN provider.
 
+## Validation and limits
 
-Goal: on ONE iPhone, choose ScreenLink in Control Center → Screen Mirroring, then deliver the received video to another device's browser over the iPhone hotspot.
+- Portable tests cover Annex B parsing, frame cadence under jitter, binary multipart framing and disconnected clients.
+- Viewer JavaScript checks cover continuous mode, snapshot fallback, mode switching and expired-link cleanup.
+- The native Mac test exercises local-only Bonjour registration, browse, service resolution, IPv4 lookup and teardown. It does not test the iPhone's AirPlay picker.
+- Successful iOS compilation does not prove device signing, discovery, sustained background operation, or a frame-rate improvement.
+- No audio forwarding, lock-screen capture or protected-content bypass is provided. The AirPlay protocol core is old; current-iOS compatibility is not established across devices.
 
-**This goal has not been demonstrated. This archive is a real receiver prototype for testing the blocking assumptions, not a working or verified replacement for APTV.** The unsigned iOS device build passed on GitHub's Mac runner: https://github.com/sophysim282-maker/screentesla/actions/runs/41287018360 . A physical-iPhone test has NOT been performed. Successful compilation does not establish that same-phone AirPlay works.
-
-## Implemented in source
-
-- Native UIKit interface with start/stop, local browser links, and copyable test logs.
-- Vendored RPiPlay AirPlay protocol core: Bonjour advertisements, RTSP, pairing, encrypted mirror-stream handling.
-- H.264 Annex B parsing and VideoToolbox decode into JPEG snapshots.
-- A local token-protected browser viewer at port 8080, up to 10 frames per second, video only.
-- Status messages distinguish listener startup, control connections, decoder configuration, and actual decoded video frames.
-- Bounded incoming-video queue, HTTP request limits and socket timeouts, stop clears frames.
-- Experimental live Picture in Picture mode; a short background grace remains when PiP is inactive. Sustained reception must be tested on the phone.
-
-## Not established or implemented
-
-- iOS discovering its own advertised receiver on the same iPhone.
-- A same-phone AirPlay handshake and actual video delivery.
-- Compatibility of this older receiver core with your current iOS version.
-- Verified continuous operation while other apps are foreground; the experimental PiP path may still be rejected or interrupted by iOS.
-- Personal Hotspot allowing the other device to reach port 8080.
-- Audio forwarding, VPN routing, a VPN extension, or a signed IPA. The cloud build produces an UNSIGNED IPA that needs device signing.
-- No captured-screen fallback: this app does not use ReplayKit.
-
-## Free build routes
-
-### Mac with full Xcode
-
-1. Install full Xcode and accept its license. Xcode is free; this does not require buying Apple Developer Program membership.
-2. Install Homebrew prerequisites: `brew install xcodegen autoconf automake libtool`.
-3. In this folder run `bash tools/build.sh`. This fetches and cross-compiles OpenSSL and libplist and generates the Xcode project with XcodeGen.
-4. If the build succeeds, open `ScreenLinkAirPlayLab.xcodeproj` in Xcode.
-5. In Signing & Capabilities select your free Personal Team and a unique bundle identifier, connect your iPhone, and run.
-6. Enable Developer Mode on the iPhone if Xcode asks. Standard free profiles expire after seven days and must be renewed.
-
-This project intentionally requests no Network Extension, App Groups, or paid capability. That does not guarantee free signing or runtime success on your specific setup.
-
-### No Xcode on your own computer
-
-The included `.github/workflows/build.yml` can build an UNSIGNED IPA on a GitHub Mac runner. Upload the contents of this folder to the root of a repository you control; then Actions → Build unsigned iPhone AirPlay lab → Run workflow. GitHub runner availability and charges depend on your account/repository; check your allowance before running it. The workflow also runs when main is updated. Check the Actions tab for the actual build result.
-
-A successful cloud build is NOT an installation. An unsigned IPA still needs valid device signing. An existing compatible free sideloading setup could sign it with your Apple account, with its normal expiry and extension limits. Do not purchase a certificate on the assumption this experimental design works.
-
-## Physical-device test — do these in order
-
-1. Enable Personal Hotspot and connect the viewing device.
-2. Launch ScreenLink Lab; tap Start receiver. Allow Local Network access.
-3. Open Control Center → Screen Mirroring. Does ScreenLink appear? Copy the app log either way. A published Bonjour name is NOT proof that iOS discovered it.
-4. If present, select ScreenLink. A control connection is NOT proof that video works. Look for `Actual video received` in the app log.
-5. Tap Show browser links. On the other device open the complete link including `?token=...`. If several interface addresses are shown, test the hotspot bridge first. Do not assume a fixed hotspot IP.
-6. Confirm the browser shows actual changing screen content, not just the waiting page.
-7. Leave the app for another app. Check whether frames continue. Expect that iOS may suspend the receiver after a short background grace period. That result means the complete requested app is NOT working yet.
-8. Stop sharing when finished. The link token changes the next time you start.
-
-If test 3 fails, do not assume that changing the advertised name or toggling a generic VPN will fix it. The receiver discovery/routing design needs further investigation. A custom packet-tunnel extension requires Apple's Network Extension entitlement, unavailable to free Personal Team signing. Another VPN app does not lend its entitlement to this app.
-
-## Validation performed here
-
-- Portable Annex B parser compiled with warnings as errors and AddressSanitizer/UndefinedBehaviorSanitizer; range, mixed start-code, truncated-input and capacity tests passed (LeakSanitizer disabled because of container restrictions).
-- Build script shell syntax checked.
-- XcodeGen configuration parsed as YAML and receiver webpage JavaScript syntax checked.
-- GitHub macOS runner successfully cross-compiled dependencies, compiled the Objective-C/C app, linked it for arm64 iPhone, and packaged an unsigned IPA. Initial Linux-specific TCP options and macOS-only Bonjour linkage were corrected.
-- Device signing, AirPlay discovery, same-phone pairing, live decoding, sustained background reception and hotspot browser streaming remain untested.
+Earlier experiment details: [0.7](TESTING-0.7.md), [0.6](TESTING-0.6.md), [0.5](TESTING-0.5.md), [0.4](TESTING-0.4.md), [0.3](TESTING-0.3.md), [0.2](TESTING-0.2.md).
 
 ## Sources and licenses
 
-The build fetches the receiver library from https://github.com/FD-/RPiPlay at commit 64d0341ed3bef098c940c9ed0675948870a271f9 (the upstream project is GPL-3.0; subcomponents retain their own notices). See LICENSE and the downloaded Vendor/RPiPlay/LICENSE. tools/prepare_receiver.py fetches the pinned revision and applies the DNS error-handling change. Source modifications: dnssd.c now returns immediate DNSServiceRegister errors; raop_rtp_mirror.c maps Linux TCP keepalive option names to Darwin equivalents. The application advertises the actual control-listener port for both AirPlay and RAOP. It does not copy APTV's code or claim to reproduce its undocumented internals.
+The build fetches [RPiPlay](https://github.com/FD-/RPiPlay) at commit `64d0341ed3bef098c940c9ed0675948870a271f9`. Its GPL-3.0 license and subcomponent notices apply; see LICENSE and the downloaded Vendor/RPiPlay/LICENSE. `tools/prepare_receiver.py` surfaces registration errors, adds Darwin socket compatibility, and supports external discovery metadata without competing advertisements. The app advertises the actual listener port and uses matching receiver metadata. It does not copy APTV code or claim to reproduce its undocumented implementation.
 
-OpenSSL 1.1.1w and libplist 2.2.0 are fetched at build time; their licenses remain applicable. This uses an older protocol core and dependencies for an isolated feasibility test, not a production release. No dependency security audit was performed.
+OpenSSL 1.1.1w and libplist 2.2.0 are fetched at build time; their licenses remain applicable. This is an experimental receiver based on older dependencies, with no completed security audit.
