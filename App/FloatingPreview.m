@@ -5,6 +5,8 @@
 @property(nonatomic,strong) AVPictureInPictureController *pip;
 @property(nonatomic) BOOL hasFrame;
 @property(nonatomic) BOOL paused;
+@property(nonatomic) BOOL requested;
+@property(nonatomic) NSUInteger attempts;
 @end
 @implementation FloatingPreview
 + (Class)layerClass { return AVSampleBufferDisplayLayer.class; }
@@ -13,13 +15,6 @@
     if((self=[super initWithFrame:frame])) {
         self.backgroundColor=UIColor.blackColor;
         [self displayLayer].videoGravity=AVLayerVideoGravityResizeAspect;
-        if(AVPictureInPictureController.isPictureInPictureSupported) {
-            AVPictureInPictureControllerContentSource *source=[[AVPictureInPictureControllerContentSource alloc] initWithSampleBufferDisplayLayer:[self displayLayer] playbackDelegate:self];
-            self.pip=[[AVPictureInPictureController alloc]initWithContentSource:source];
-            self.pip.delegate=self;
-            self.pip.requiresLinearPlayback=YES;
-            self.pip.canStartPictureInPictureAutomaticallyFromInline=YES;
-        }
     }return self;
 }
 - (void)report:(NSString *)message { if(self.status)self.status(message); }
@@ -51,31 +46,48 @@
     if(sample)CFRelease(sample);CFRelease(format);
 }
 - (void)startFloating {
-    if(!self.pip){[self report:@"Picture in Picture is not supported on this device."];return;}
+    if(self.active){[self report:@"Floating preview is already active."];return;}
+    if(self.requested)return;
+    if(!AVPictureInPictureController.isPictureInPictureSupported){[self report:@"Picture in Picture is not supported on this device."];return;}
     if(!self.hasFrame){[self report:@"Connect AirPlay and return here first. Floating preview needs a real received video frame."];return;}
     NSError *error=nil;AVAudioSession *session=AVAudioSession.sharedInstance;
     if(![session setCategory:AVAudioSessionCategoryPlayback mode:AVAudioSessionModeMoviePlayback options:AVAudioSessionCategoryOptionMixWithOthers error:&error] || ![session setActive:YES error:&error]) {
         [self report:[NSString stringWithFormat:@"Could not prepare video playback: %@",error.localizedDescription]];return;
     }
-    self.paused=NO;[self.pip invalidatePlaybackState];
-    if(!self.pip.isPictureInPicturePossible){[self report:@"Floating preview is not ready. Keep incoming video playing and try again. Check Settings → General → Picture in Picture if needed."];return;}
-    [self.pip startPictureInPicture];
-    [self report:@"Requesting floating preview. Wait for its visible window before leaving ScreenLink."];
+    if(!self.pip) {
+        AVPictureInPictureControllerContentSource *source=[[AVPictureInPictureControllerContentSource alloc] initWithSampleBufferDisplayLayer:[self displayLayer] playbackDelegate:self];
+        self.pip=[[AVPictureInPictureController alloc]initWithContentSource:source];self.pip.delegate=self;
+        self.pip.requiresLinearPlayback=YES;self.pip.canStartPictureInPictureAutomaticallyFromInline=YES;
+    }
+    self.paused=NO;self.requested=YES;self.attempts=0;[self.pip invalidatePlaybackState];
+    [self report:@"Preparing floating preview from received video. Stay in ScreenLink until ACTIVE or an error appears."];
+    [self attemptFloating];
+}
+- (void)attemptFloating {
+    if(!self.requested || self.active)return;
+    if(UIApplication.sharedApplication.applicationState!=UIApplicationStateActive){self.requested=NO;[self report:@"Return to ScreenLink and request floating preview before leaving the app."];return;}
+    if(self.pip.isPictureInPicturePossible){[self.pip startPictureInPicture];return;}
+    if(++self.attempts>=20){self.requested=NO;[self report:@"PiP did not become available within 5 seconds. Check General → Picture in Picture. Save the test log if it is enabled."];return;}
+    __weak FloatingPreview *weak=self;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW,(int64_t)(0.25*NSEC_PER_SEC)),dispatch_get_main_queue(),^{[weak attemptFloating];});
 }
 - (void)reset {
-    [self.pip stopPictureInPicture];self.hasFrame=NO;self.paused=NO;
+    self.requested=NO;[self.pip stopPictureInPicture];self.hasFrame=NO;self.paused=NO;
     [[self displayLayer] flushAndRemoveImage];
     [self.pip invalidatePlaybackState];
 }
 - (void)pictureInPictureControllerDidStartPictureInPicture:(AVPictureInPictureController *)controller {
+    self.requested=NO;
     [self report:@"Floating preview ACTIVE. You can try switching apps; background reception still needs a device test. Closing or pausing it can stop sharing."];
     if(self.activityChanged)self.activityChanged(YES);
 }
 - (void)pictureInPictureControllerDidStopPictureInPicture:(AVPictureInPictureController *)controller {
+    self.requested=NO;
     [self report:@"Floating preview stopped."];
     if(self.activityChanged)self.activityChanged(NO);
 }
 - (void)pictureInPictureController:(AVPictureInPictureController *)controller failedToStartPictureInPictureWithError:(NSError *)error {
+    self.requested=NO;
     [self report:[NSString stringWithFormat:@"Floating preview failed: %@",error.localizedDescription]];
     if(self.activityChanged)self.activityChanged(NO);
 }

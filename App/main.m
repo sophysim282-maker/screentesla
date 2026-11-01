@@ -3,10 +3,11 @@
 #import <arpa/inet.h>
 #import "Receiver.h"
 #import "FloatingPreview.h"
-@interface Controller : UIViewController
+@interface Controller : UIViewController { CVPixelBufferRef _lastPixel; }
 @property(nonatomic,strong) Receiver *receiver;
 @property(nonatomic,strong) UITextView *text;
 @property(nonatomic,strong) FloatingPreview *preview;
+@property(nonatomic,strong) UIView *previewSlot;
 @property UIBackgroundTaskIdentifier backgroundTask;
 @end
 @implementation Controller
@@ -16,11 +17,11 @@
     UIStackView *stack=[UIStackView new];stack.axis=UILayoutConstraintAxisVertical;stack.spacing=6;stack.translatesAutoresizingMaskIntoConstraints=NO;
     [self.view addSubview:stack];
     [NSLayoutConstraint activateConstraints:@[[stack.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor constant:8],[stack.bottomAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.bottomAnchor constant:-8],[stack.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor constant:16],[stack.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor constant:-16]]];
-    UILabel *title=[UILabel new];title.text=@"ScreenLink · AirPlay Lab 0.2";title.font=[UIFont boldSystemFontOfSize:21];[stack addArrangedSubview:title];
+    UILabel *title=[UILabel new];title.text=@"ScreenLink · AirPlay Lab 0.3";title.font=[UIFont boldSystemFontOfSize:21];[stack addArrangedSubview:title];
     UILabel *help=[UILabel new];help.numberOfLines=0;help.font=[UIFont systemFontOfSize:13];help.text=@"Start → copy viewer link before casting → connect AirPlay → return here → start floating preview before switching apps.";[stack addArrangedSubview:help];
-    self.preview=[[FloatingPreview alloc]initWithFrame:CGRectZero];
-    NSLayoutConstraint *previewHeight=[self.preview.heightAnchor constraintEqualToConstant:100];previewHeight.priority=750;previewHeight.active=YES;
-    [stack addArrangedSubview:self.preview];
+    self.previewSlot=[UIView new];self.previewSlot.backgroundColor=UIColor.blackColor;
+    NSLayoutConstraint *previewHeight=[self.previewSlot.heightAnchor constraintEqualToConstant:100];previewHeight.priority=750;previewHeight.active=YES;
+    [stack addArrangedSubview:self.previewSlot];
     NSArray *labels=@[@"Start receiver",@"Copy viewer link",@"Start floating preview",@"Show browser links",@"Copy test log",@"Stop sharing"];
     NSArray *actions=@[NSStringFromSelector(@selector(start)),NSStringFromSelector(@selector(copyViewer)),NSStringFromSelector(@selector(startFloating)),NSStringFromSelector(@selector(links)),NSStringFromSelector(@selector(copyLog)),NSStringFromSelector(@selector(stop))];
     for(NSUInteger i=0;i<labels.count;i++) {
@@ -30,21 +31,36 @@
     self.text=[UITextView new];self.text.editable=NO;self.text.font=[UIFont monospacedSystemFontOfSize:12 weight:UIFontWeightRegular];[stack addArrangedSubview:self.text];
     self.receiver=[Receiver new];__weak Controller *weak=self;
     self.receiver.status=^(NSString *message){[weak append:message];};
-    self.receiver.preview=^(CVPixelBufferRef pixel){[weak.preview receivePixelBuffer:pixel];};
-    self.preview.status=^(NSString *message){[weak append:message];};
-    self.preview.activityChanged=^(BOOL active){
-        Controller *owner=weak;if(!owner)return;
-        if(active)[owner endGrace];
-        else if(UIApplication.sharedApplication.applicationState==UIApplicationStateBackground && owner.receiver.isRunning)[owner beginGrace];
-    };
-    [self append:@"Experimental floating video mode uses actual received AirPlay frames. Background reception is not yet verified. No VPN and no audio forwarding. Copy the viewer link before starting mirroring."];
+    self.receiver.preview=^(CVPixelBufferRef pixel){[weak receivedPixel:pixel];};
+    [self append:@"Version 0.3: receiver discovery starts without a PiP controller or playback audio session. Connect AirPlay, return here, then tap Start floating preview. Wait for ACTIVE before switching apps. Background reception remains experimental; no audio forwarding."];
     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(background) name:UIApplicationDidEnterBackgroundNotification object:nil];
     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(foreground) name:UIApplicationWillEnterForegroundNotification object:nil];
 }
 - (void)append:(NSString *)s { self.text.text=[self.text.text stringByAppendingFormat:@"\n%@ %@\n",[NSDate date],s];if(self.text.text.length>24000)self.text.text=[self.text.text substringFromIndex:self.text.text.length-18000];[self.text scrollRangeToVisible:NSMakeRange(self.text.text.length,0)]; }
 - (void)start { if([self.receiver start]){UIApplication.sharedApplication.idleTimerDisabled=YES;[self links];} }
-- (void)stop { [self endGrace];[self.receiver stop];[self.preview reset];UIApplication.sharedApplication.idleTimerDisabled=NO;[self append:@"Stopped. Video frames cleared."]; }
-- (void)startFloating { [self.preview startFloating]; }
+- (void)stop { [self endGrace];[self.receiver stop];[self.preview reset];[self.preview removeFromSuperview];self.preview=nil;if(_lastPixel){CVPixelBufferRelease(_lastPixel);_lastPixel=NULL;}UIApplication.sharedApplication.idleTimerDisabled=NO;[self append:@"Stopped. Video frames cleared."]; }
+- (void)receivedPixel:(CVPixelBufferRef)pixel {
+    CVPixelBufferRetain(pixel);if(_lastPixel)CVPixelBufferRelease(_lastPixel);_lastPixel=pixel;
+    [self.preview receivePixelBuffer:pixel];
+}
+- (void)startFloating {
+    if(!self.receiver.isRunning || !_lastPixel){[self append:@"Connect AirPlay first and wait for actual video received. Then return here and start floating preview."];return;}
+    if(!self.preview){
+        self.preview=[[FloatingPreview alloc]initWithFrame:CGRectZero];self.preview.translatesAutoresizingMaskIntoConstraints=NO;
+        [self.previewSlot addSubview:self.preview];
+        [NSLayoutConstraint activateConstraints:@[[self.preview.topAnchor constraintEqualToAnchor:self.previewSlot.topAnchor],[self.preview.bottomAnchor constraintEqualToAnchor:self.previewSlot.bottomAnchor],[self.preview.leadingAnchor constraintEqualToAnchor:self.previewSlot.leadingAnchor],[self.preview.trailingAnchor constraintEqualToAnchor:self.previewSlot.trailingAnchor]]];
+        [self.previewSlot layoutIfNeeded];
+        __weak Controller *weak=self;
+        self.preview.status=^(NSString *message){[weak append:message];};
+        self.preview.activityChanged=^(BOOL active){
+            Controller *owner=weak;if(!owner)return;
+            if(active)[owner endGrace];
+            else if(UIApplication.sharedApplication.applicationState==UIApplicationStateBackground && owner.receiver.isRunning)[owner beginGrace];
+        };
+        [self.preview receivePixelBuffer:_lastPixel];
+    }
+    [self.preview startFloating];
+}
 - (void)copyLog { UIPasteboard.generalPasteboard.string=self.text.text;[self append:@"Test log copied."]; }
 - (NSArray<NSDictionary *> *)addresses {
     struct ifaddrs *head=NULL;if(getifaddrs(&head)!=0)return @[];

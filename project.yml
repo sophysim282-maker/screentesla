@@ -35,8 +35,8 @@ targets:
       path: App/Info.plist
       properties:
         CFBundleDisplayName: ScreenLink Lab
-        CFBundleShortVersionString: '0.2.0'
-        CFBundleVersion: '2'
+        CFBundleShortVersionString: '0.3.0'
+        CFBundleVersion: '3'
         UILaunchScreen: {}
         UIBackgroundModes: [audio]
         NSLocalNetworkUsageDescription: Advertise an experimental AirPlay receiver and share received video with your local browser.
