@@ -1,8 +1,8 @@
-# ScreenLink AirPlay Lab — experimental source, not an installable app
+# ScreenLink AirPlay Lab — experimental iPhone app
 
 Goal: on ONE iPhone, choose ScreenLink in Control Center → Screen Mirroring, then deliver the received video to another device's browser over the iPhone hotspot.
 
-**This goal has not been demonstrated. This archive is a real receiver prototype for testing the blocking assumptions, not a working or verified replacement for APTV.** No iOS build or physical-iPhone test was possible in the Linux environment used to create this package. Do not confuse passing the included portable tests with a successful iOS build.
+**This goal has not been demonstrated. This archive is a real receiver prototype for testing the blocking assumptions, not a working or verified replacement for APTV.** The unsigned iOS device build passed on GitHub's Mac runner: https://github.com/sophysim282-maker/screentesla/actions/runs/41287018360 . A physical-iPhone test has NOT been performed. Successful compilation does not establish that same-phone AirPlay works.
 
 ## Implemented in source
 
@@ -21,7 +21,7 @@ Goal: on ONE iPhone, choose ScreenLink in Control Center → Screen Mirroring, t
 - Compatibility of this older receiver core with your current iOS version.
 - Continuous operation while other apps are foreground; iOS can suspend this app.
 - Personal Hotspot allowing the other device to reach port 8080.
-- Audio forwarding, VPN routing, a VPN extension, or an installable signed IPA.
+- Audio forwarding, VPN routing, a VPN extension, or a signed IPA. The cloud build produces an UNSIGNED IPA that needs device signing.
 - No captured-screen fallback: this app does not use ReplayKit.
 
 ## Free build routes
@@ -61,10 +61,11 @@ If test 3 fails, do not assume that changing the advertised name or toggling a g
 - Portable Annex B parser compiled with warnings as errors and AddressSanitizer/UndefinedBehaviorSanitizer; range, mixed start-code, truncated-input and capacity tests passed (LeakSanitizer disabled because of container restrictions).
 - Build script shell syntax checked.
 - XcodeGen configuration parsed as YAML and receiver webpage JavaScript syntax checked.
-- iOS Objective-C/C integration, cross-compilation scripts, device signing, AirPlay discovery, pairing, decoding and hotspot browser streaming remain untested.
+- GitHub macOS runner successfully cross-compiled dependencies, compiled the Objective-C/C app, linked it for arm64 iPhone, and packaged an unsigned IPA. Initial Linux-specific TCP options and macOS-only Bonjour linkage were corrected.
+- Device signing, AirPlay discovery, same-phone pairing, live decoding, sustained background reception and hotspot browser streaming remain untested.
 
 ## Sources and licenses
 
-The build fetches the receiver library from https://github.com/FD-/RPiPlay at commit 64d0341ed3bef098c940c9ed0675948870a271f9 (the upstream project is GPL-3.0; subcomponents retain their own notices). See LICENSE and the downloaded Vendor/RPiPlay/LICENSE. tools/prepare_receiver.py fetches the pinned revision and applies the DNS error-handling change. Source modifications in this package: dnssd.c now returns immediate DNSServiceRegister errors. The application advertises the actual control-listener port for both AirPlay and RAOP. It does not copy APTV's code or claim to reproduce its undocumented internals.
+The build fetches the receiver library from https://github.com/FD-/RPiPlay at commit 64d0341ed3bef098c940c9ed0675948870a271f9 (the upstream project is GPL-3.0; subcomponents retain their own notices). See LICENSE and the downloaded Vendor/RPiPlay/LICENSE. tools/prepare_receiver.py fetches the pinned revision and applies the DNS error-handling change. Source modifications: dnssd.c now returns immediate DNSServiceRegister errors; raop_rtp_mirror.c maps Linux TCP keepalive option names to Darwin equivalents. The application advertises the actual control-listener port for both AirPlay and RAOP. It does not copy APTV's code or claim to reproduce its undocumented internals.
 
 OpenSSL 1.1.1w and libplist 2.2.0 are fetched at build time; their licenses remain applicable. This uses an older protocol core and dependencies for an isolated feasibility test, not a production release. No dependency security audit was performed.
