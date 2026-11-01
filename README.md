@@ -1,5 +1,11 @@
 # ScreenLink AirPlay Lab — experimental iPhone app
 
+## Version 0.4: invalid decoder recovery
+
+The user reported repeated `-12903` decode errors. The iOS SDK assertion confirms this is `kVTInvalidSessionErr`. Version 0.4 discards invalid decoder sessions, preserves valid H.264 configuration, waits for a keyframe, and recreates the session with bounded retries. Returning to active clears the background retry block. Repeated errors no longer flood the UI. This is a recovery/logging fix, not proof that iOS permits uninterrupted same-iPhone background decoding. Follow [TESTING-0.4.md](TESTING-0.4.md).
+
+Version 0.4.0 build 4 passed: https://github.com/sophysim282-maker/screentesla/actions/runs/41299387390
+
 ## Version 0.3: connect before enabling PiP
 
 The user reports that version 0.1 now appears in the iPhone's casting list and the iPhone screen reaches the Mac browser, but leaving the receiver app stops sharing. Version 0.3 keeps receiver discovery code unchanged and defers all preview-view, PiP-controller and playback-session creation until the user explicitly taps Start floating preview after actual frames arrive. This is a hypothesis-driven background fix, not a verified runtime result. Follow [TESTING-0.3.md](TESTING-0.3.md).
