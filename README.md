@@ -1,5 +1,12 @@
 # ScreenLink AirPlay Lab — experimental iPhone app
 
+## Version 0.2: floating preview
+
+Version 0.2.0 build 2 adds Copy viewer link (hotspot address first) and an AVKit Picture in Picture preview driven by real received frames. Background reception with active PiP is EXPERIMENTAL and still needs a device test. See [TESTING-0.2.md](TESTING-0.2.md). The user verified Mac -> iPhone receiver -> browser video using version 0.1. That does not verify sustained same-iPhone mirroring.
+
+Successful version 0.2 build: https://github.com/sophysim282-maker/screentesla/actions/runs/41296246836
+
+
 Goal: on ONE iPhone, choose ScreenLink in Control Center → Screen Mirroring, then deliver the received video to another device's browser over the iPhone hotspot.
 
 **This goal has not been demonstrated. This archive is a real receiver prototype for testing the blocking assumptions, not a working or verified replacement for APTV.** The unsigned iOS device build passed on GitHub's Mac runner: https://github.com/sophysim282-maker/screentesla/actions/runs/41287018360 . A physical-iPhone test has NOT been performed. Successful compilation does not establish that same-phone AirPlay works.
@@ -12,14 +19,14 @@ Goal: on ONE iPhone, choose ScreenLink in Control Center → Screen Mirroring, t
 - A local token-protected browser viewer at port 8080, up to 10 frames per second, video only.
 - Status messages distinguish listener startup, control connections, decoder configuration, and actual decoded video frames.
 - Bounded incoming-video queue, HTTP request limits and socket timeouts, stop clears frames.
-- Brief standard background-task grace only. There is NO sustained background workaround.
+- Experimental live Picture in Picture mode; a short background grace remains when PiP is inactive. Sustained reception must be tested on the phone.
 
 ## Not established or implemented
 
 - iOS discovering its own advertised receiver on the same iPhone.
 - A same-phone AirPlay handshake and actual video delivery.
 - Compatibility of this older receiver core with your current iOS version.
-- Continuous operation while other apps are foreground; iOS can suspend this app.
+- Verified continuous operation while other apps are foreground; the experimental PiP path may still be rejected or interrupted by iOS.
 - Personal Hotspot allowing the other device to reach port 8080.
 - Audio forwarding, VPN routing, a VPN extension, or a signed IPA. The cloud build produces an UNSIGNED IPA that needs device signing.
 - No captured-screen fallback: this app does not use ReplayKit.
