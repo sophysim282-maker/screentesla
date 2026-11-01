@@ -4,11 +4,11 @@ script=re.search(r'<script>(.*?)</script>',(Path(__file__).resolve().parent.pare
 harness=r'''
 const vm=require('vm'),assert=require('assert');
 function setup(expire=false){
- const elements={};for(const key of ['video','player','status','mode','reconnect','fullscreen'])elements[key]={src:'',textContent:'',removeAttribute(name){this[name]='';},decode:async()=>{},pause(){},load(){}};
+ const elements={};for(const key of ['video','player','status','detail','mode','reconnect','fullscreen'])elements[key]={src:'',textContent:'',removeAttribute(name){this[name]='';},decode:async()=>{},pause(){},load(){}};
  let frameRequests=0,urls=[];const timers=new Map();let timer=0;
  const context={URL:Object.assign(class extends URL{},{createObjectURL:()=> 'blob:frame',revokeObjectURL:()=>{}}),URLSearchParams,AbortController,
- location:{search:'?token=secret'},performance:{now:()=>Date.now()},localStorage:{getItem:()=>null,setItem(){}},
- document:{getElementById:id=>elements[id],documentElement:{requestFullscreen:()=>Promise.resolve()},body:{classList:{add(){},toggle(){}}}},
+ window:{addEventListener(){}},location:{search:'?token=secret'},performance:{now:()=>Date.now()},localStorage:{getItem:()=>null,setItem(){}},
+ document:{addEventListener(){},getElementById:id=>elements[id],documentElement:{requestFullscreen:()=>Promise.resolve()},body:{classList:{add(){},toggle(){}}}},
  setTimeout:fn=>{timers.set(++timer,fn);return timer;},clearTimeout:id=>timers.delete(id),
  fetch:async url=>{urls.push(url);if(url.startsWith('/status.json'))return expire?{status:403,ok:false}:new Promise(()=>{});
  frameRequests++;if(frameRequests===1)return {status:200,ok:true,blob:async()=>new Blob(['jpeg']),headers:{get:()=> '99'}};

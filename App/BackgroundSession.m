@@ -18,7 +18,7 @@
     NSTimer *_timer;
     NSTimeInterval _started;
     NSString *_identifier;
-    BOOL _registered,_pending;
+    BOOL _registered,_pending,_reportedHealth;
 }
 @property(nonatomic,readwrite) BOOL active;
 @end
@@ -59,7 +59,7 @@
         _pending=NO;[task setTaskCompletedWithSuccess:NO];
         [self log:@"Background request was accepted, but the AirPlay video disconnected before launch. Reconnect ScreenLink VPN Phone in Screen Mirroring, wait for live video, then start the background test again."];return;
     }
-    _pending=NO;_task=task;_started=NSProcessInfo.processInfo.systemUptime;self.active=YES;
+    _pending=NO;_reportedHealth=NO;_task=task;_started=NSProcessInfo.processInfo.systemUptime;self.active=YES;
     task.progress.totalUnitCount=1800;task.progress.completedUnitCount=0;
     __weak BackgroundSession *weak=self;
     task.expirationHandler=^{dispatch_async(dispatch_get_main_queue(),^{
@@ -69,11 +69,15 @@
     });};
     _timer=[NSTimer scheduledTimerWithTimeInterval:1 repeats:YES block:^(NSTimer *timer){[weak tick];}];
     if(self.activityChanged)self.activityChanged(YES);
-    [self log:@"BACKGROUND SESSION ACTIVE: up to 30 minutes without floating preview. Use H.264 in the viewer. System controls can cancel it. JPEG fallback needs floating preview while backgrounded. Unlimited background operation is not promised."];
+    [self log:@"BACKGROUND SESSION ACTIVE: runtime task started; background video is NOT verified yet. Use H.264 in the viewer. System controls can cancel it. JPEG fallback needs floating preview while backgrounded. Unlimited background operation is not promised."];
 }
 - (void)tick {
     NSTimeInterval elapsed=NSProcessInfo.processInfo.systemUptime-_started;
     BOOL live=self.videoIsLive && self.videoIsLive();
+    if(!_reportedHealth && elapsed>=10 && UIApplication.sharedApplication.applicationState==UIApplicationStateBackground){
+        _reportedHealth=YES;
+        [self log:live?@"BACKGROUND SOURCE CHECK: fresh AirPlay packets are still arriving. Check browser display FPS to verify playback.":@"BACKGROUND SOURCE STALLED: the task started, but fresh AirPlay packets are no longer arriving. Return to ScreenLink; use floating preview for the previously working background path. No additional permission prompt can restore a stopped source."];
+    }
     // Progress is the completed part of this explicitly timed, live session;
     // a disconnected stream never claims useful progress.
     if(live)_task.progress.completedUnitCount=MIN(1799,(int64_t)elapsed);

@@ -1,0 +1,14 @@
+const http=require('http'),fs=require('fs'),{chromium}=require('playwright');
+const bytes=fs.readFileSync(process.argv[3]);let pos=0,initEnd=0,frames=[];
+while(pos<bytes.length){let size=bytes.readUInt32BE(pos),type=bytes.toString('ascii',pos+4,pos+8);if(type==='moof'){const mdat=pos+size;frames.push(bytes.subarray(pos,mdat+bytes.readUInt32BE(mdat)));pos=mdat+bytes.readUInt32BE(mdat);}else {pos+=size;initEnd=pos;}}
+const init=bytes.subarray(0,initEnd);let started,received=0;const avcc=bytes.indexOf(Buffer.from('avcC'));const codec='avc1.'+bytes.subarray(avcc+5,avcc+8).toString('hex').toUpperCase();
+const viewer=process.argv[2];
+const server=http.createServer((req,res)=>{const u=new URL(req.url,'http://localhost');res.setHeader('Cache-Control','no-store');
+if(u.pathname==='/'){started=Date.now();res.setHeader('Content-Type','text/html');return res.end(fs.readFileSync(viewer));}
+const available=Math.min(frames.length,Math.floor((Date.now()-started)*60/1000));
+if(u.pathname==='/h264/info'){res.setHeader('Content-Type','application/json');return res.end(JSON.stringify({ready:true,codec,epoch:'test'}));}
+if(u.pathname==='/h264/init.mp4'){res.setHeader('X-Stream-Epoch','test');return res.end(init);}
+if(u.pathname==='/h264/segments'){const after=+u.searchParams.get('after');res.setHeader('X-Stream-Epoch','test');if(after>=available){res.statusCode=204;return setTimeout(()=>res.end(),15);}res.setHeader('X-Last-ID',available);received=available;return res.end(Buffer.concat(frames.slice(after,available)));}
+if(u.pathname==='/status.json')return res.end(JSON.stringify({running:true,mirrorConnected:true,h264Frames:available,compressedAgeMs:0}));
+res.statusCode=404;res.end();});
+(async()=>{await new Promise(r=>server.listen(0,'127.0.0.1',r));const b=await chromium.launch({headless:true,executablePath:process.env.CHROME_PATH||undefined,args:['--no-sandbox','--autoplay-policy=no-user-gesture-required']});const page=await b.newPage();let samples=[];page.on('pageerror',e=>console.log('JS ERROR',e.message));await page.goto('http://127.0.0.1:'+server.address().port+'/?token=test');for(let i=0;i<10;i++){await page.waitForTimeout(1000);const sample=await page.evaluate(()=>{const v=document.getElementById('player');return {time:v.currentTime,frames:v.getVideoPlaybackQuality().totalVideoFrames,dropped:v.getVideoPlaybackQuality().droppedVideoFrames,ready:v.readyState,seeking:v.seeking,paused:v.paused,error:v.error?.message,status:document.getElementById('status').textContent}});samples.push(sample);console.log(JSON.stringify(sample));}await b.close();server.close();const assert=require('assert');assert(samples[9].frames-samples[2].frames>250,'60fps fixture must keep decoding beyond startup');assert(samples[9].time-samples[2].time>5,'playback clock must advance');assert(!samples.some(s=>s.error),'no media decoder errors');console.log('Real browser streaming passed');})().catch(e=>{console.error(e);process.exit(1)});
