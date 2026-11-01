@@ -1,0 +1,10 @@
+This ZIP contains experimental iPhone app SOURCE CODE.
+It is NOT an IPA and cannot be installed by tapping the ZIP.
+The exact same-iPhone AirPlay behavior you requested is not verified yet.
+
+If you have a Mac with Xcode: follow README.md → Free build routes.
+If you do not: the included GitHub workflow can attempt an unsigned cloud build.
+Signing and a real-iPhone test are still necessary after that build.
+
+The app needs no custom VPN entitlement. We test native local discovery first.
+Do not pay $99 to try this experiment.

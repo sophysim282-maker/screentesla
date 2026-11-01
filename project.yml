@@ -1,0 +1,48 @@
+name: ScreenLinkAirPlayLab
+options:
+  deploymentTarget:
+    iOS: '15.0'
+settings:
+  base:
+    PRODUCT_BUNDLE_IDENTIFIER: local.screenlink.airplaylab
+    CLANG_ENABLE_OBJC_ARC: YES
+    GCC_PREPROCESSOR_DEFINITIONS: ['$(inherited)', 'OPENSSL_API_COMPAT=0x10100000L']
+    HEADER_SEARCH_PATHS: ['$(SRCROOT)/deps/include', '$(SRCROOT)/Vendor/RPiPlay/lib', '$(SRCROOT)/Vendor/RPiPlay/lib/playfair', '$(SRCROOT)/Vendor/RPiPlay/lib/llhttp']
+    LIBRARY_SEARCH_PATHS: ['$(SRCROOT)/deps/lib']
+    OTHER_LDFLAGS: ['$(inherited)', '-lcrypto', '-lplist-2.0', '-ldns_sd']
+    ENABLE_BITCODE: NO
+    TARGETED_DEVICE_FAMILY: '1,2'
+targets:
+  ScreenLinkAirPlayLab:
+    type: application
+    platform: iOS
+    sources:
+      - path: App
+      - path: Vendor/RPiPlay/lib
+        excludes: ['**/CMakeLists.txt', '**/*.md']
+    dependencies:
+      - sdk: UIKit.framework
+      - sdk: Foundation.framework
+      - sdk: VideoToolbox.framework
+      - sdk: CoreMedia.framework
+      - sdk: CoreVideo.framework
+      - sdk: CoreImage.framework
+      - sdk: ImageIO.framework
+      - sdk: QuartzCore.framework
+    info:
+      path: App/Info.plist
+      properties:
+        CFBundleDisplayName: ScreenLink Lab
+        CFBundleShortVersionString: '0.1.0'
+        CFBundleVersion: '1'
+        UILaunchScreen: {}
+        NSLocalNetworkUsageDescription: Advertise an experimental AirPlay receiver and share received video with your local browser.
+        NSBonjourServices: ['_airplay._tcp', '_raop._tcp']
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+schemes:
+  ScreenLinkAirPlayLab:
+    build:
+      targets:
+        ScreenLinkAirPlayLab: all

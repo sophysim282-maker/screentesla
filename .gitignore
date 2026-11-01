@@ -1,0 +1,7 @@
+Vendor/
+.deps-src/
+deps/
+build/
+*.xcodeproj/
+__pycache__/
+.DS_Store

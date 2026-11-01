@@ -1,0 +1,24 @@
+name: Build unsigned iPhone AirPlay lab
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build prerequisites
+        run: brew install xcodegen autoconf automake libtool
+      - name: Build
+        run: bash tools/build.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ScreenLink-AirPlay-Lab
+          path: |
+            build/*.ipa
+            build/xcodebuild.log

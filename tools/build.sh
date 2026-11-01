@@ -1,0 +1,43 @@
+#!/bin/bash
+set -euo pipefail
+cd "$(dirname "$0")/.."
+if [[ "$(uname -s)" != Darwin ]] || ! command -v xcodebuild >/dev/null; then
+  echo 'This source needs macOS with full Xcode, or the included GitHub Actions Mac runner.' >&2
+  exit 1
+fi
+for tool in xcodegen autoconf automake glibtoolize; do
+  command -v "$tool" >/dev/null || { echo "Missing $tool. Install prerequisites: brew install xcodegen autoconf automake libtool" >&2; exit 1; }
+done
+python3 tools/prepare_receiver.py
+root="$PWD"
+sdk="$(xcrun --sdk iphoneos --show-sdk-path)"
+compiler="$(xcrun --sdk iphoneos --find clang)"
+mkdir -p .deps-src deps build
+if [[ ! -f deps/lib/libcrypto.a ]]; then
+  if [[ ! -d .deps-src/openssl ]]; then
+    git clone --depth 1 --branch OpenSSL_1_1_1w https://github.com/openssl/openssl.git .deps-src/openssl
+  fi
+  (
+    cd .deps-src/openssl
+    ./Configure ios64-cross no-shared no-tests --prefix="$root/deps" --openssldir="$root/deps/ssl" -miphoneos-version-min=15.0
+    make -j3 CC="$compiler" CROSS_TOP="$(xcode-select -p)/Platforms/iPhoneOS.platform/Developer" CROSS_SDK="$(basename "$sdk")"
+    make install_dev
+  )
+fi
+if [[ ! -f deps/lib/libplist-2.0.a ]]; then
+  if [[ ! -d .deps-src/libplist ]]; then
+    git clone --depth 1 --branch 2.2.0 https://github.com/libimobiledevice/libplist.git .deps-src/libplist
+  fi
+  (
+    cd .deps-src/libplist
+    CC="$compiler" CFLAGS="-arch arm64 -isysroot $sdk -miphoneos-version-min=15.0" LDFLAGS="-arch arm64 -isysroot $sdk -miphoneos-version-min=15.0" ./autogen.sh --host=aarch64-apple-darwin --prefix="$root/deps" --disable-shared --enable-static --without-cython
+    make -j3
+    make install
+  )
+fi
+xcodegen generate
+xcodebuild -project ScreenLinkAirPlayLab.xcodeproj -scheme ScreenLinkAirPlayLab -configuration Release -destination 'generic/platform=iOS' -derivedDataPath build/DerivedData CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build 2>&1 | tee build/xcodebuild.log
+mkdir -p build/Payload
+cp -R build/DerivedData/Build/Products/Release-iphoneos/ScreenLinkAirPlayLab.app build/Payload/
+(cd build && zip -qry ScreenLink-AirPlay-Lab-unsigned.ipa Payload)
+echo 'Unsigned IPA built. Free signing still required. Same-phone AirPlay has NOT been tested by this build.'
