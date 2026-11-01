@@ -19,6 +19,8 @@
     CIContext *_ci;
     int _socket;
     BOOL _running;
+    BOOL _previewPending;
+    NSUInteger _generation;
     uint64_t _frames;
     CFTimeInterval _lastJPEG;
     dispatch_queue_t _decodeQueue;
@@ -51,6 +53,7 @@ static BOOL send_all(int fd, const void *bytes,size_t length) {
 }
 @implementation Receiver
 - (instancetype)init { if((self=[super init])) { _socket=-1;_ci=[CIContext contextWithOptions:nil];_decodeQueue=dispatch_queue_create("ScreenLink.decode",DISPATCH_QUEUE_SERIAL);_pendingVideo=dispatch_semaphore_create(4);_token=NSUUID.UUID.UUIDString; } return self; }
+- (BOOL)isRunning { return _running; }
 - (void)emit:(NSString *)s { dispatch_async(dispatch_get_main_queue(),^{ if(self.status)self.status(s); }); }
 - (void)receive:(NSData *)data {
     if(dispatch_semaphore_wait(_pendingVideo,DISPATCH_TIME_NOW)!=0)return;
@@ -94,6 +97,17 @@ static BOOL send_all(int fd, const void *bytes,size_t length) {
     @autoreleasepool {
         CFTimeInterval now=CACurrentMediaTime();
         @synchronized(self) { if(now-_lastJPEG<0.1)return;_lastJPEG=now; }
+        BOOL deliver=NO; NSUInteger generation;
+        @synchronized(self) { generation=_generation; if(!_previewPending && self.preview){_previewPending=YES;deliver=YES;} }
+        if(deliver) {
+            CVPixelBufferRetain(pixel);
+            dispatch_async(dispatch_get_main_queue(),^{
+                BOOL current; @synchronized(self){current=self->_running && generation==self->_generation;}
+                if(current && self.preview)self.preview(pixel);
+                CVPixelBufferRelease(pixel);
+                @synchronized(self){self->_previewPending=NO;}
+            });
+        }
         CIImage *im=[CIImage imageWithCVPixelBuffer:pixel];
         CGFloat scale=MIN(1.0,1280.0/MAX(im.extent.size.width,im.extent.size.height));
         im=[im imageByApplyingTransform:CGAffineTransformMakeScale(scale,scale)];
@@ -106,6 +120,7 @@ static BOOL send_all(int fd, const void *bytes,size_t length) {
 }
 - (BOOL)start {
     if(_running)return YES;
+    @synchronized(self){_generation++;}
     _token=NSUUID.UUID.UUIDString;
     raop_callbacks_t cb={0};cb.cls=(__bridge void *)self;cb.audio_process=audio;cb.video_process=video;cb.video_flush=flush;cb.audio_flush=flush;cb.conn_init=connection;
     _raop=raop_init(4,&cb);if(!_raop){[self emit:@"Receiver initialization failed."];return NO;}
@@ -165,7 +180,7 @@ static BOOL send_all(int fd, const void *bytes,size_t length) {
     });return YES;
 }
 - (void)stop {
-    _running=NO;
+    @synchronized(self){_running=NO;_generation++;}
     if(_socket>=0){shutdown(_socket,SHUT_RDWR);close(_socket);_socket=-1;}
     if(_raop){raop_stop(_raop);raop_destroy(_raop);_raop=NULL;}
     if(_dns){dnssd_unregister_airplay(_dns);dnssd_unregister_raop(_dns);dnssd_destroy(_dns);_dns=NULL;}

@@ -21,6 +21,8 @@ targets:
       - path: Vendor/RPiPlay/lib
         excludes: ['**/CMakeLists.txt', '**/*.md']
     dependencies:
+      - sdk: AVKit.framework
+      - sdk: AVFoundation.framework
       - sdk: UIKit.framework
       - sdk: Foundation.framework
       - sdk: VideoToolbox.framework
@@ -33,9 +35,10 @@ targets:
       path: App/Info.plist
       properties:
         CFBundleDisplayName: ScreenLink Lab
-        CFBundleShortVersionString: '0.1.0'
-        CFBundleVersion: '1'
+        CFBundleShortVersionString: '0.2.0'
+        CFBundleVersion: '2'
         UILaunchScreen: {}
+        UIBackgroundModes: [audio]
         NSLocalNetworkUsageDescription: Advertise an experimental AirPlay receiver and share received video with your local browser.
         NSBonjourServices: ['_airplay._tcp', '_raop._tcp']
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
