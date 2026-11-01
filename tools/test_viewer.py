@@ -4,7 +4,7 @@ script=re.search(r'<script>(.*?)</script>',(Path(__file__).resolve().parent.pare
 harness=r'''
 const vm=require('vm'),assert=require('assert');
 function setup(expire=false){
- const elements={};for(const key of ['video','status','mode','reconnect','fullscreen'])elements[key]={src:'',textContent:'',removeAttribute(name){this[name]='';},decode:async()=>{}};
+ const elements={};for(const key of ['video','player','status','mode','reconnect','fullscreen'])elements[key]={src:'',textContent:'',removeAttribute(name){this[name]='';},decode:async()=>{},pause(){},load(){}};
  let frameRequests=0,urls=[];const timers=new Map();let timer=0;
  const context={URL:Object.assign(class extends URL{},{createObjectURL:()=> 'blob:frame',revokeObjectURL:()=>{}}),URLSearchParams,AbortController,
  location:{search:'?token=secret'},performance:{now:()=>Date.now()},localStorage:{getItem:()=>null,setItem(){}},

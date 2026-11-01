@@ -15,14 +15,18 @@ Version 0.8 preserves the working discovery and PiP controller source. It adds c
 3. Enable Personal Hotspot and connect the viewing device to it. Stop any old Mac proxy advertisements.
 4. In ScreenLink select **iPhone VPN**, choose **Fast**, and tap **Start receiver**. Copy the complete hotspot viewer link, including its token.
 5. Open Control Center → Screen Mirroring → **ScreenLink VPN Phone**.
-6. Return to ScreenLink, tap **Start floating preview**, and wait for **ACTIVE** before switching apps.
-7. Open the complete viewer link on the other device. Use **Compatibility mode** if its browser does not display the continuous stream.
+6. Return to ScreenLink. On iOS 26+, try **Start 30-minute background test** and wait for **BACKGROUND SESSION ACTIVE**. This new no-PiP mode needs a device test; iOS can reject/end it. Alternatively use **Start floating preview** and wait for **ACTIVE**, as in the previously confirmed session.
+7. Open the complete viewer link on the other device. Default **H.264** forwards the original video. **JPEG fallback** and **Snapshot mode** are compatibility options and need PiP when backgrounded.
 
 Keep the phone unlocked. Closing or pausing PiP can stop background sharing. Hiding the floating window at a screen edge is different from closing it and may help avoid repeated screen-within-screen content. Audio is not forwarded.
 
-Viewer tokens change each time the receiver starts. Use the current link and the actual hotspot address displayed by the app; do not assume every network uses the same address. A different device cannot use the iPhone's private VPN peer as its viewer address.
+Viewer tokens persist across receiver restarts. Use the complete link and the actual hotspot address displayed by the app; do not assume every network uses the same address. A different device cannot use the iPhone's private VPN peer as its viewer address.
 
-## Video profiles
+## Original video and JPEG fallback
+
+The default H.264 viewer remuxes compressed video into fragmented MP4 for MediaSource, without JPEG conversion or a 15–20fps throttle. It retains source timing and resolution. Browser buffering, source frame rate, network conditions and thermal limits still affect performance. A generated 60fps fixture retained all 60 matching frames through the muxer; an end-to-end 60fps iPhone result is not yet established.
+
+The following profiles apply only to JPEG fallback:
 
 | Profile | Longest image edge | JPEG quality | Source-frame cap |
 | --- | --- | --- | --- |
@@ -30,7 +34,7 @@ Viewer tokens change each time the receiver starts. Use the current link and the
 | Balanced | 960 pixels | 0.50 | 15 fps |
 | Sharp | 1280 pixels | 0.68 | 15 fps |
 
-Profiles can change while sharing. Caps are not guaranteed achieved rates. The continuous viewer reports **source FPS** measured from generated JPEGs, not actual browser-rendered FPS. Compatibility mode additionally measures its display-loop FPS. A slow client receives the newest available frame rather than an unbounded queue. At most two continuous viewers are admitted.
+Profiles can change while sharing. Caps are not guaranteed achieved rates. H.264 reports incoming compressed-frame FPS and the browser video-frame counter. JPEG reports generated-frame FPS; snapshot mode additionally measures its display-loop FPS. A slow client receives the newest available frame rather than an unbounded queue. At most two continuous viewers are admitted.
 
 ## Discovery modes
 
@@ -50,7 +54,7 @@ For a local build, use macOS with full Xcode and `brew install xcodegen autoconf
 bash tools/build.sh
 ```
 
-The build fetches pinned RPiPlay sources and cross-compiles its dependencies, runs portable cadence/multipart tests and a real local-only Bonjour lookup test on macOS, then compiles the iOS app. There is no custom Network Extension, App Groups entitlement, or ReplayKit capture in this app. LocalDevVPN supplies the separately signed VPN provider.
+The build fetches pinned RPiPlay sources and cross-compiles its dependencies, runs portable cadence/multipart tests and a real local-only Bonjour lookup test on macOS, and native H.264 cache tests, then compiles the iOS app. There is no custom Network Extension, App Groups entitlement, or ReplayKit capture in this app. LocalDevVPN supplies the separately signed VPN provider.
 
 ## Validation and limits
 
@@ -59,6 +63,8 @@ The build fetches pinned RPiPlay sources and cross-compiles its dependencies, ru
 - The native Mac test exercises local-only Bonjour registration, browse, service resolution, IPv4 lookup and teardown. It does not test the iPhone's AirPlay picker.
 - Successful iOS compilation does not prove device signing, discovery, sustained background operation, or a frame-rate improvement.
 - No audio forwarding, lock-screen capture or protected-content bypass is provided. The AirPlay protocol core is old; current-iOS compatibility is not established across devices.
+
+Current device procedure and limits: [0.9](TESTING-0.9.md). Native YouTube video-only/HLS casting is not implemented.
 
 Earlier experiment details: [0.7](TESTING-0.7.md), [0.6](TESTING-0.6.md), [0.5](TESTING-0.5.md), [0.4](TESTING-0.4.md), [0.3](TESTING-0.3.md), [0.2](TESTING-0.2.md).
 

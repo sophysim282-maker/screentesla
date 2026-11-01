@@ -15,6 +15,9 @@ typedef NS_ENUM(NSInteger, SLVideoProfile) { SLVideoFast=0, SLVideoBalanced=1, S
 /// Set before start. Both VPN modes use the external peer as the service target.
 @property(nonatomic) SLDiscoveryMode discoveryMode;
 @property(nonatomic) SLVideoProfile videoProfile;
+/// H.264 forwarding without local GPU/VideoToolbox work in a continued task.
+@property(nonatomic) BOOL compressedOnlyInBackground;
+@property(nonatomic,readonly) BOOL videoIsLive;
 @property(nonatomic,readonly) BOOL externalDiscovery;
 @property(nonatomic,copy,readonly) NSDictionary *discoveryProfile;
 - (BOOL)start;

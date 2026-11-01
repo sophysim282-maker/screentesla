@@ -3,10 +3,12 @@
 #import <arpa/inet.h>
 #import "Receiver.h"
 #import "FloatingPreview.h"
+#import "BackgroundSession.h"
 @interface Controller : UIViewController { CVPixelBufferRef _lastPixel; }
 @property(nonatomic,strong) Receiver *receiver;
 @property(nonatomic,strong) UITextView *text;
 @property(nonatomic,strong) FloatingPreview *preview;
+@property(nonatomic,strong) BackgroundSession *session;
 @property(nonatomic,strong) UIView *previewSlot;
 @property UIBackgroundTaskIdentifier backgroundTask;
 @property(nonatomic,strong) UISegmentedControl *discoveryMode;
@@ -19,15 +21,15 @@
     UIStackView *stack=[UIStackView new];stack.axis=UILayoutConstraintAxisVertical;stack.spacing=6;stack.translatesAutoresizingMaskIntoConstraints=NO;
     [self.view addSubview:stack];
     [NSLayoutConstraint activateConstraints:@[[stack.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor constant:8],[stack.bottomAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.bottomAnchor constant:-8],[stack.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor constant:16],[stack.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor constant:-16]]];
-    UILabel *title=[UILabel new];title.text=@"ScreenLink · AirPlay Lab 0.8";title.font=[UIFont boldSystemFontOfSize:21];[stack addArrangedSubview:title];
-    UILabel *help=[UILabel new];help.numberOfLines=0;help.font=[UIFont systemFontOfSize:13];help.text=@"Start → copy viewer link before casting → connect AirPlay → return here → start floating preview before switching apps.";[stack addArrangedSubview:help];
+    UILabel *title=[UILabel new];title.text=@"ScreenLink · AirPlay Lab 0.9";title.font=[UIFont boldSystemFontOfSize:21];[stack addArrangedSubview:title];
+    UILabel *help=[UILabel new];help.numberOfLines=0;help.font=[UIFont systemFontOfSize:13];help.text=@"Start → copy link → connect AirPlay → return here → start a background session (iOS 26 test), or floating preview. Viewer: use H.264 for full source frame rate.";[stack addArrangedSubview:help];
     self.discoveryMode=[[UISegmentedControl alloc]initWithItems:@[@"iPhone VPN",@"Mac VPN",@"Native"]];
     id savedMode=[NSUserDefaults.standardUserDefaults objectForKey:@"discoveryMode"];
     NSInteger mode=savedMode?[savedMode integerValue]:SLDiscoveryPhoneVPN;
     self.discoveryMode.selectedSegmentIndex=2-MAX(0,MIN(2,mode));
     [self.discoveryMode addTarget:self action:@selector(discoveryChanged) forControlEvents:UIControlEventValueChanged];
     [stack addArrangedSubview:self.discoveryMode];
-    self.videoProfile=[[UISegmentedControl alloc]initWithItems:@[@"Fast",@"Balanced",@"Sharp"]];
+    self.videoProfile=[[UISegmentedControl alloc]initWithItems:@[@"Fast JPEG",@"Balanced JPEG",@"Sharp JPEG"]];
     id savedProfile=[NSUserDefaults.standardUserDefaults objectForKey:@"videoProfile"];
     self.videoProfile.selectedSegmentIndex=savedProfile?MAX(0,MIN(2,[savedProfile integerValue])):SLVideoFast;
     [self.videoProfile addTarget:self action:@selector(profileChanged) forControlEvents:UIControlEventValueChanged];
@@ -35,8 +37,8 @@
     self.previewSlot=[UIView new];self.previewSlot.backgroundColor=UIColor.blackColor;
     NSLayoutConstraint *previewHeight=[self.previewSlot.heightAnchor constraintEqualToConstant:100];previewHeight.priority=750;previewHeight.active=YES;
     [stack addArrangedSubview:self.previewSlot];
-    NSArray *labels=@[@"Start receiver",@"Copy viewer link",@"Start floating preview",@"Show browser links",@"Copy test log",@"Refresh discovery",@"Stop sharing"];
-    NSArray *actions=@[NSStringFromSelector(@selector(start)),NSStringFromSelector(@selector(copyViewer)),NSStringFromSelector(@selector(startFloating)),NSStringFromSelector(@selector(links)),NSStringFromSelector(@selector(copyLog)),NSStringFromSelector(@selector(refreshDiscovery)),NSStringFromSelector(@selector(stop))];
+    NSArray *labels=@[@"Start receiver",@"Copy viewer link",@"Start 30-minute background test",@"Start floating preview",@"Show browser links",@"Copy test log",@"Refresh discovery",@"Stop sharing"];
+    NSArray *actions=@[NSStringFromSelector(@selector(start)),NSStringFromSelector(@selector(copyViewer)),NSStringFromSelector(@selector(startSession)),NSStringFromSelector(@selector(startFloating)),NSStringFromSelector(@selector(links)),NSStringFromSelector(@selector(copyLog)),NSStringFromSelector(@selector(refreshDiscovery)),NSStringFromSelector(@selector(stop))];
     for(NSUInteger i=0;i<labels.count;i++) {
         UIButton *button=[UIButton buttonWithType:UIButtonTypeSystem];[button setTitle:labels[i] forState:UIControlStateNormal];[button.heightAnchor constraintEqualToConstant:34].active=YES;
         [button addTarget:self action:NSSelectorFromString(actions[i]) forControlEvents:UIControlEventTouchUpInside];[stack addArrangedSubview:button];
@@ -46,8 +48,14 @@
     self.receiver.status=^(NSString *message){[weak append:message];};
     self.receiver.preview=^(CVPixelBufferRef pixel){[weak receivedPixel:pixel];};
     self.receiver.videoProfile=self.videoProfile.selectedSegmentIndex;
-    [self append:@"Version 0.8: preserves the working local-only VPN discovery. New continuous MJPEG browser stream with compatibility snapshots, Fast/Balanced/Sharp profiles and viewer reconnect controls. Start with Fast. Keep LocalDevVPN connected and wait for floating preview ACTIVE before switching apps. No audio forwarding."];
+    self.session=[BackgroundSession new];
+    self.session.status=^(NSString *message){[weak append:message];};
+    self.session.videoIsLive=^BOOL{return weak.receiver.videoIsLive;};
+    self.session.activityChanged=^(BOOL active){Controller *owner=weak;if(!owner)return;owner.receiver.compressedOnlyInBackground=active && !owner.preview.active;if(active)[owner endGrace];};
+    self.session.ended=^{[weak stop];};
+    [self append:@"Version 0.9: original H.264 video, no 20fps browser cap; JPEG fallback retained. Viewer link survives restarts. iOS 26: a user-started 30-minute background session can be tested without PiP; it needs ACTIVE and a device test. PiP remains the proven option from your earlier session. Native YouTube media casting is not implemented. Keep LocalDevVPN connected."];
     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(background) name:UIApplicationDidEnterBackgroundNotification object:nil];
+    [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(active) name:UIApplicationDidBecomeActiveNotification object:nil];
     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(foreground) name:UIApplicationWillEnterForegroundNotification object:nil];
 }
 - (void)append:(NSString *)s { self.text.text=[self.text.text stringByAppendingFormat:@"\n%@ %@\n",[NSDate date],s];if(self.text.text.length>24000)self.text.text=[self.text.text substringFromIndex:self.text.text.length-18000];[self.text scrollRangeToVisible:NSMakeRange(self.text.text.length,0)]; }
@@ -62,9 +70,13 @@
 - (void)refreshDiscovery { [self.receiver refreshDiscovery]; }
 - (void)start {
     if(!self.receiver.isRunning)self.receiver.discoveryMode=2-self.discoveryMode.selectedSegmentIndex;
-    if([self.receiver start]){UIApplication.sharedApplication.idleTimerDisabled=YES;[self links];}
+    if([self.receiver start]){[NSUserDefaults.standardUserDefaults setBool:YES forKey:@"receiverArmed"];UIApplication.sharedApplication.idleTimerDisabled=YES;[self links];}
 }
-- (void)stop { [self endGrace];[self.receiver stop];[self.preview reset];[self.preview removeFromSuperview];self.preview=nil;if(_lastPixel){CVPixelBufferRelease(_lastPixel);_lastPixel=NULL;}UIApplication.sharedApplication.idleTimerDisabled=NO;[self append:@"Stopped. Video frames cleared."]; }
+- (void)stop { [NSUserDefaults.standardUserDefaults setBool:NO forKey:@"receiverArmed"];[self.session finish];[self endGrace];[self.receiver stop];[self.preview reset];[self.preview removeFromSuperview];self.preview=nil;if(_lastPixel){CVPixelBufferRelease(_lastPixel);_lastPixel=NULL;}UIApplication.sharedApplication.idleTimerDisabled=NO;[self append:@"Stopped. Video frames cleared."]; }
+- (void)startSession {
+    if(!self.receiver.videoIsLive){[self append:@"Connect Screen Mirroring and wait for real video before starting the background test."];return;}
+    [self.session start];
+}
 - (void)receivedPixel:(CVPixelBufferRef)pixel {
     CVPixelBufferRetain(pixel);if(_lastPixel)CVPixelBufferRelease(_lastPixel);_lastPixel=pixel;
     [self.preview receivePixelBuffer:pixel];
@@ -80,8 +92,9 @@
         self.preview.status=^(NSString *message){[weak append:message];};
         self.preview.activityChanged=^(BOOL active){
             Controller *owner=weak;if(!owner)return;
+            owner.receiver.compressedOnlyInBackground=owner.session.active && !active;
             if(active)[owner endGrace];
-            else if(UIApplication.sharedApplication.applicationState==UIApplicationStateBackground && owner.receiver.isRunning)[owner beginGrace];
+            else if(!owner.session.active && UIApplication.sharedApplication.applicationState==UIApplicationStateBackground && owner.receiver.isRunning)[owner beginGrace];
         };
         [self.preview receivePixelBuffer:_lastPixel];
     }
@@ -119,18 +132,25 @@
 - (void)beginGrace {
     if(self.backgroundTask!=UIBackgroundTaskInvalid || !self.receiver.isRunning)return;
     self.backgroundTask=[UIApplication.sharedApplication beginBackgroundTaskWithName:@"Finish AirPlay transition" expirationHandler:^{
-        if(self.preview.active){[self append:@"Transition time ended; floating video is active. Continuing the receiver."];[self endGrace];return;}
-        [self stop];[self append:@"No active floating video: background time expired and the receiver stopped."];
+        if(self.preview.active || self.session.active){[self append:@"Transition time ended; PiP or background session is active. Continuing the receiver."];[self endGrace];return;}
+        [self endGrace];[self append:@"PiP is inactive and background grace expired. Receiver remains armed, but iOS may suspend it. Return to ScreenLink to resume listening; a VPN alone does not grant background execution."];
     }];
 }
 - (void)endGrace {
     if(self.backgroundTask!=UIBackgroundTaskInvalid){[UIApplication.sharedApplication endBackgroundTask:self.backgroundTask];self.backgroundTask=UIBackgroundTaskInvalid;}
 }
 - (void)background {
-    if(self.preview.active){[self append:@"App backgrounded with floating preview active. Test whether the viewer keeps updating."];[self endGrace];}
+    if(self.session.active){[self append:@"App backgrounded with a timed session active. Verify the H.264 viewer keeps updating without PiP."];[self endGrace];}
+    else if(self.preview.active){[self append:@"App backgrounded with floating preview active. Test whether the viewer keeps updating."];[self endGrace];}
     else {[self append:@"Floating preview is not active. Only a short background grace is available. Return and start floating preview before switching apps."];[self beginGrace];}
 }
-- (void)foreground { [self endGrace];[self append:@"App returned to foreground."]; }
+- (void)active {
+    if([NSUserDefaults.standardUserDefaults boolForKey:@"receiverArmed"] && !self.receiver.isRunning)[self start];
+}
+- (void)foreground {
+    [self endGrace];[self append:@"App returned to foreground."];
+    if(self.receiver.isRunning && self.receiver.discoveryMode==SLDiscoveryPhoneVPN && !self.receiver.videoIsLive)[self.receiver refreshDiscovery];
+}
 @end
 @interface AppDelegate : UIResponder <UIApplicationDelegate>
 @property(nonatomic,strong) UIWindow *window;

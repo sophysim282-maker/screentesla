@@ -3,6 +3,7 @@
 #import "AnnexB.h"
 #import "FrameCadence.h"
 #import "MJPEG.h"
+#import "H264Stream.h"
 #import <VideoToolbox/VideoToolbox.h>
 #import <CoreImage/CoreImage.h>
 #import <UIKit/UIKit.h>
@@ -21,6 +22,10 @@ _Static_assert(kVTInvalidSessionErr == -12903, "Check decoder error mapping agai
 @interface Receiver () {
     raop_t *_raop; dnssd_t *_dns;
     VPNDiscovery *_vpnDiscovery;
+    H264Stream *_h264;
+    uint64_t _decodedFrames;
+    CFTimeInterval _lastDecodedTime,_lastCompressedTime,_jpegDemandUntil;
+    uint64_t _compressedFrames;
     VTDecompressionSessionRef _decoder;
     CMVideoFormatDescriptionRef _format;
     NSData *_sps,*_pps,*_jpeg;
@@ -49,14 +54,13 @@ _Static_assert(kVTInvalidSessionErr == -12903, "Check decoder error mapping agai
     uint64_t _frames;
     CFTimeInterval _nextJPEG;
     dispatch_queue_t _decodeQueue;
-    dispatch_semaphore_t _pendingVideo;
 }
 @property(nonatomic,copy,readwrite) NSString *token;
 @property(nonatomic,copy,readwrite) NSDictionary *discoveryProfile;
 - (void)emit:(NSString *)message;
-- (void)receive:(NSData *)data;
+- (void)receive:(NSData *)data timestamp:(uint64_t)timestamp;
 - (void)image:(CVImageBufferRef)pixel;
-- (void)decode:(NSData *)data;
+- (void)decode:(NSData *)data timestamp:(uint64_t)timestamp;
 - (BOOL)startWeb;
 - (void)serveClient:(int)client generation:(NSUInteger)generation;
 - (void)streamClient:(int)client generation:(NSUInteger)generation;
@@ -73,7 +77,7 @@ static void flush(void *c) {}
 static void connection(void *c) { [(__bridge Receiver *)c emit:@"AirPlay control connection received. Waiting for video."]; }
 static void video(void *c,raop_ntp_t *n,h264_decode_struct *d) {
     if(d->data_len>0 && d->data_len<16*1024*1024)
-        [(__bridge Receiver *)c receive:[NSData dataWithBytes:d->data length:d->data_len]];
+        [(__bridge Receiver *)c receive:[NSData dataWithBytes:d->data length:d->data_len] timestamp:d->pts];
 }
 static void decoded(void *c,void *source,OSStatus status,VTDecodeInfoFlags flags,CVImageBufferRef image,CMTime pts,CMTime duration) {
     if(status==noErr && image) [(__bridge Receiver *)c image:image];
@@ -92,15 +96,16 @@ static SLVideoSettings videoSettings(SLVideoProfile profile) {
     }
 }
 @implementation Receiver
-- (instancetype)init { if((self=[super init])) { _socket=-1;_ci=[CIContext contextWithOptions:nil];_decodeQueue=dispatch_queue_create("ScreenLink.decode",DISPATCH_QUEUE_SERIAL);_pendingVideo=dispatch_semaphore_create(4);_jpegQueue=dispatch_queue_create("ScreenLink.jpeg",DISPATCH_QUEUE_SERIAL);_httpSlots=dispatch_semaphore_create(4);_streamSlots=dispatch_semaphore_create(2);_frameReady=[NSCondition new];_token=NSUUID.UUID.UUIDString;[self installLifecycleObservers]; } return self; }
+- (instancetype)init { if((self=[super init])) { _socket=-1;_h264=[H264Stream new];_ci=[CIContext contextWithOptions:nil];_decodeQueue=dispatch_queue_create("ScreenLink.decode",DISPATCH_QUEUE_SERIAL);_jpegQueue=dispatch_queue_create("ScreenLink.jpeg",DISPATCH_QUEUE_SERIAL);_httpSlots=dispatch_semaphore_create(4);_streamSlots=dispatch_semaphore_create(2);_frameReady=[NSCondition new];_token=NSUUID.UUID.UUIDString;[self installLifecycleObservers]; } return self; }
 - (BOOL)isRunning { return _running; }
 - (SLVideoProfile)videoProfile { @synchronized(self){return _videoProfile;} }
 - (void)setVideoProfile:(SLVideoProfile)profile {
     @synchronized(self){_videoProfile=MAX(SLVideoFast,MIN(SLVideoSharp,profile));}
     SLVideoSettings settings=videoSettings(self.videoProfile);
-    [self emit:[NSString stringWithFormat:@"Video profile: %s, %.0f-pixel longest edge, up to %.0f source fps. Actual output depends on device and network.",settings.name,settings.edge,settings.fps]];
+    [self emit:[NSString stringWithFormat:@"Video profile: %s, %.0f-pixel longest edge, JPEG fallback up to %.0f fps. H.264 forwards source timing without this cap.",settings.name,settings.edge,settings.fps]];
 }
 - (BOOL)externalDiscovery { return self.discoveryMode!=SLDiscoveryNative; }
+- (BOOL)videoIsLive { @synchronized(self){return _running && _lastCompressedTime>0 && CACurrentMediaTime()-_lastCompressedTime<5;} }
 - (void)emit:(NSString *)s { dispatch_async(dispatch_get_main_queue(),^{ if(self.status)self.status(s); }); }
 - (void)installLifecycleObservers {
     __weak Receiver *weak=self;
@@ -116,13 +121,14 @@ static SLVideoSettings videoSettings(SLVideoProfile profile) {
         });
     }];
 }
-- (void)receive:(NSData *)data {
-    if(dispatch_semaphore_wait(_pendingVideo,DISPATCH_TIME_NOW)!=0)return;
+- (void)receive:(NSData *)data timestamp:(uint64_t)timestamp {
     NSUInteger generation;@synchronized(self){generation=_generation;}
-    dispatch_async(_decodeQueue,^{
+    // The native compressed stream depends on every reference frame. Apply
+    // bounded backpressure to the receiver thread instead of dropping packets
+    // before the H.264 browser muxer. JPEG work remains on its separate queue.
+    dispatch_sync(_decodeQueue,^{
         BOOL current;@synchronized(self){current=generation==self->_generation;}
-        @autoreleasepool { if(current)[self decode:data]; }
-        dispatch_semaphore_signal(self->_pendingVideo);
+        @autoreleasepool { if(current)[self decode:data timestamp:timestamp]; }
     });
 }
 - (void)discardDecoder {
@@ -149,7 +155,7 @@ static SLVideoSettings videoSettings(SLVideoProfile profile) {
     }
     if(_appBackgrounded && _backgroundFailures==2)[self emit:@"iOS rejected two decoder sessions in background. Pausing decoder recreation until the app is active again. AirPlay/network listeners are not stopped by this decoder error. A frozen browser image is not proof of a live stream."];
 }
-- (void)decode:(NSData *)data {
+- (void)decode:(NSData *)data timestamp:(uint64_t)timestamp {
     const uint8_t *p=data.bytes;size_t offsets[256],sizes[256];
     size_t count=sl_nals(p,data.length,offsets,sizes,256);if(count>256)return;
     BOOL changed=NO,hasIDR=NO,hasVCL=NO;
@@ -169,9 +175,14 @@ static SLVideoSettings videoSettings(SLVideoProfile profile) {
         OSStatus error=CMVideoFormatDescriptionCreateFromH264ParameterSets(NULL,2,sets,lengths,4,&_format);
         if(error){[self decoderFailed:error];return;}
         _waitingForIDR=YES;
+        CMVideoDimensions dimensions=CMVideoFormatDescriptionGetDimensions(_format);
+        [_h264 configureSPS:_sps PPS:_pps width:(uint16_t)dimensions.width height:(uint16_t)dimensions.height];
         [self emit:@"H.264 configuration received. Waiting for a keyframe."];
     }
     if(!_format || !hasVCL || !avcc.length)return;
+    @synchronized(self){_lastCompressedTime=CACurrentMediaTime();_compressedFrames++;}
+    [_h264 appendAVCC:avcc timestamp:timestamp ?: (uint64_t)(CACurrentMediaTime()*1000000) keyframe:hasIDR];
+    if(_appBackgrounded && self.compressedOnlyInBackground){_waitingForIDR=YES;return;}
     if(_waitingForIDR && !hasIDR)return;
     if(!_decoder) {
         if(_appBackgrounded && _backgroundFailures>=2)return;
@@ -196,11 +207,13 @@ static SLVideoSettings videoSettings(SLVideoProfile profile) {
     BOOL deliver=NO, encode=NO;NSUInteger generation;SLVideoSettings settings;
     @synchronized(self) {
         if(!_running)return;
-        generation=_generation;settings=videoSettings(_videoProfile);
+        generation=_generation;settings=videoSettings(_videoProfile);_decodedFrames++;_lastDecodedTime=now;
         if(!_previewPending && self.preview && now-_lastPreview>=1.0/15.0){_lastPreview=now;_previewPending=YES;deliver=YES;}
         // Drop rendered output under pressure, never build a JPEG work backlog.
-        if(!_jpegBusy && sl_frame_due(now,settings.fps,&_nextJPEG)){_jpegBusy=YES;encode=YES;}
+        if((_streamClients || now<_jpegDemandUntil) && !_jpegBusy && sl_frame_due(now,settings.fps,&_nextJPEG)){_jpegBusy=YES;encode=YES;}
     }
+    uint64_t decodedCount;@synchronized(self){decodedCount=_decodedFrames;}
+    if(decodedCount==1 || decodedCount%300==0)[self emit:[NSString stringWithFormat:@"Actual decoded video: %llu frames. H.264 passthrough is available; JPEG conversion runs only for fallback viewers.",(unsigned long long)decodedCount]];
     if(deliver) {
         CVPixelBufferRetain(pixel);
         dispatch_async(dispatch_get_main_queue(),^{
@@ -244,7 +257,9 @@ static NSArray *txtStrings(const char *bytes,int length) {
 - (BOOL)start {
     if(_running)return YES;
     @synchronized(self){_generation++;}
-    _token=NSUUID.UUID.UUIDString;
+    NSString *saved=[NSUserDefaults.standardUserDefaults stringForKey:@"viewerToken"];
+    if(!saved.length){saved=NSUUID.UUID.UUIDString;[NSUserDefaults.standardUserDefaults setObject:saved forKey:@"viewerToken"];}
+    _token=saved;
     raop_callbacks_t cb={0};cb.cls=(__bridge void *)self;cb.audio_process=audio;cb.video_process=video;cb.video_flush=flush;cb.audio_flush=flush;cb.conn_init=connection;
     _raop=raop_init(4,&cb);if(!_raop){[self emit:@"Receiver initialization failed."];return NO;}
     raop_set_log_level(_raop,RAOP_LOG_INFO);raop_set_log_callback(_raop,log_message,(__bridge void *)self);
@@ -311,23 +326,32 @@ static NSArray *txtStrings(const char *bytes,int length) {
     NSString *line=[[NSString alloc]initWithData:request encoding:NSUTF8StringEncoding] ?: @"";
     NSArray *parts=[line componentsSeparatedByString:@" "];NSString *target=parts.count>1?parts[1]:@"";
     NSURLComponents *url=[NSURLComponents componentsWithString:[@"http://localhost" stringByAppendingString:target]];
-    NSString *token=nil;uint64_t after=0;BOOL longPoll=NO;
-    for(NSURLQueryItem *item in url.queryItems){if([item.name isEqual:@"token"])token=item.value;else if([item.name isEqual:@"after"]){after=strtoull(item.value.UTF8String,NULL,10);longPoll=YES;}}
+    NSString *token=nil,*epoch=nil;uint64_t after=0;BOOL longPoll=NO;
+    for(NSURLQueryItem *item in url.queryItems){if([item.name isEqual:@"epoch"])epoch=item.value;else if([item.name isEqual:@"token"])token=item.value;else if([item.name isEqual:@"after"]){after=strtoull(item.value.UTF8String,NULL,10);longPoll=YES;}}
     NSString *mime=@"text/plain; charset=utf-8",*status=@"200 OK",*extra=@"";NSData *body=[NSData data];
     BOOL current;@synchronized(self){current=_generation==generation;}
     if(!current || ![parts.firstObject isEqual:@"GET"] || ![token isEqual:self.token]){status=@"403 Forbidden";body=[@"Use the complete current link from ScreenLink." dataUsingEncoding:NSUTF8StringEncoding];}
+    else if([url.path isEqual:@"/h264/info"]){mime=@"application/json";body=[NSJSONSerialization dataWithJSONObject:[_h264 info] options:0 error:NULL];}
+    else if([url.path isEqual:@"/h264/init.mp4"]){NSDictionary *part=[_h264 initialization];body=part[@"data"];mime=@"video/mp4";extra=[NSString stringWithFormat:@"X-Stream-Epoch: %@\r\n",part[@"epoch"]];if(!body.length)status=@"503 Service Unavailable";}
+    else if([url.path isEqual:@"/h264/segments"]) {
+        NSDictionary *part=[_h264 readAfter:after epoch:epoch ?: @""];
+        if([part[@"reset"] boolValue])status=@"409 Conflict";
+        else {body=part[@"data"];if(!body.length)status=@"204 No Content";}
+        mime=@"video/mp4";extra=[NSString stringWithFormat:@"X-Stream-Epoch: %@\r\nX-Last-ID: %@\r\n",part[@"epoch"],part[@"id"] ?: @0];
+    }
     else if([url.path isEqual:@"/stream.mjpg"]){[self streamClient:client generation:generation];return;}
     else if([url.path isEqual:@"/status.json"]) {
         NSDictionary *snapshot;
         @synchronized(self){
             SLVideoSettings settings=videoSettings(_videoProfile);
-            double age=_frameTime?MAX(0,CACurrentMediaTime()-_frameTime)*1000:999999;
-            snapshot=@{@"running":@(_running),@"frames":@(_frames),@"frameAgeMs":@(age),@"profile":[NSString stringWithUTF8String:settings.name],@"maxFPS":@(settings.fps),@"streamClients":@(_streamClients)};
+            double age=_lastDecodedTime?MAX(0,CACurrentMediaTime()-_lastDecodedTime)*1000:999999;
+            snapshot=@{@"running":@(_running),@"frames":@(_decodedFrames),@"jpegFrames":@(_frames),@"h264Frames":@(_compressedFrames),@"compressedAgeMs":@(_lastCompressedTime?MAX(0,CACurrentMediaTime()-_lastCompressedTime)*1000:999999),@"frameAgeMs":@(age),@"profile":[NSString stringWithUTF8String:settings.name],@"maxFPS":@(settings.fps),@"streamClients":@(_streamClients)};
         }
         mime=@"application/json";body=[NSJSONSerialization dataWithJSONObject:snapshot options:0 error:NULL];
     }
     else if([url.path isEqual:@"/discovery.json"]){mime=@"application/json";body=[NSJSONSerialization dataWithJSONObject:self.discoveryProfile ?: @{} options:0 error:NULL];}
     else if([url.path isEqual:@"/frame.jpg"]) {
+        @synchronized(self){_jpegDemandUntil=CACurrentMediaTime()+3;}
         uint64_t sequence=0;CFTimeInterval captured=0;
         [_frameReady lock];NSDate *deadline=[NSDate dateWithTimeIntervalSinceNow:1.0];
         while(YES){
@@ -383,7 +407,7 @@ static NSArray *txtStrings(const char *bytes,int length) {
     }
 }
 - (void)stop {
-    [_vpnDiscovery stop];_vpnDiscovery=nil;
+    [_vpnDiscovery stop];_vpnDiscovery=nil;[_h264 reset];
     @synchronized(self){_running=NO;_generation++;}
     [_frameReady lock];[_frameReady broadcast];[_frameReady unlock];
     if(_socket>=0){shutdown(_socket,SHUT_RDWR);close(_socket);_socket=-1;}
@@ -395,6 +419,7 @@ static NSArray *txtStrings(const char *bytes,int length) {
         self->_sps=nil;self->_pps=nil;self->_waitingForIDR=YES;self->_backgroundFailures=0;self->_nextDecoderAttempt=0;self->_lastDecoderErrorLog=0;self->_decoderErrors=0;
     });
     dispatch_sync(_jpegQueue,^{});
-    @synchronized(self){_jpeg=nil;_frames=0;_nextJPEG=0;_frameTime=0;}
+    [_h264 reset];
+    @synchronized(self){_jpeg=nil;_frames=0;_nextJPEG=0;_frameTime=0;_decodedFrames=0;_lastDecodedTime=0;_jpegDemandUntil=0;_compressedFrames=0;_lastCompressedTime=0;}
 }
 @end

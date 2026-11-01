@@ -2,15 +2,17 @@
 <html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>ScreenLink</title>
 <style>
-*{box-sizing:border-box}body{margin:0;background:#10141c;color:#fff;font:14px system-ui;text-align:center}header{height:84px;padding:8px;display:flex;flex-direction:column;justify-content:center;gap:7px}p{margin:0}button{background:#25354b;color:white;border:1px solid #547091;border-radius:7px;padding:6px 10px;margin:0 3px;cursor:pointer}img{display:block;width:100vw;height:calc(100vh - 84px);height:calc(100dvh - 84px);object-fit:contain;background:#000}body.stale img{opacity:.35}button:disabled{opacity:.4}
+*{box-sizing:border-box}body{margin:0;background:#10141c;color:#fff;font:14px system-ui;text-align:center}header{height:84px;padding:8px;display:flex;flex-direction:column;justify-content:center;gap:7px}p{margin:0}button{background:#25354b;color:white;border:1px solid #547091;border-radius:7px;padding:6px 10px;margin:0 3px;cursor:pointer}[hidden]{display:none!important}img,video{display:block;width:100vw;height:calc(100vh - 84px);height:calc(100dvh - 84px);object-fit:contain;background:#000}body.stale img,body.stale video{opacity:.35}button:disabled{opacity:.4}
 </style>
 <header><p id="status">Waiting for live video…</p><div><button id="reconnect">Reconnect</button><button id="mode">Compatibility mode</button><button id="fullscreen">Full screen</button></div></header>
-<img id="video" alt="Shared iPhone screen">
+<img id="video" alt="Shared iPhone screen"><video id="player" autoplay muted playsinline disableRemotePlayback hidden></video>
 <script>
 const token=new URLSearchParams(location.search).get('token');
 const video=document.getElementById('video'),status=document.getElementById('status'),modeButton=document.getElementById('mode');
-let mode='stream',epoch=0,retryTimer=null,controller=null,objectURL=null,expired=false;
-let sourceFPS=0,lastSource=null,displayFPS=0,displayFrames=0,displayStart=performance.now();
+const player=document.getElementById('player');
+let mediaURL=null;
+let mode='h264',epoch=0,retryTimer=null,controller=null,objectURL=null,expired=false;
+let sourceFPS=0,lastSource=null,lastRendered=null,displayFPS=0,displayFrames=0,displayStart=performance.now();
 const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 const endpoint=path=>path+'?token='+encodeURIComponent(token);
 async function request(path,cancellable=false){
@@ -18,14 +20,19 @@ async function request(path,cancellable=false){
  const timeout=setTimeout(()=>task.abort(),4000);
  try{return await fetch(path,{cache:'no-store',signal:task.signal});}finally{clearTimeout(timeout);}
 }
-function saveMode(){try{localStorage.setItem('screenlink-viewer-mode',mode);}catch(error){}}
+function saveMode(){try{localStorage.setItem('screenlink-viewer-v09',mode);}catch(error){}}
 function startViewer(){
  epoch++;const mine=epoch;clearTimeout(retryTimer);if(controller)controller.abort();
- video.removeAttribute('src');if(objectURL){URL.revokeObjectURL(objectURL);objectURL=null;}
- displayFPS=0;displayFrames=0;displayStart=performance.now();
- modeButton.textContent=mode==='stream'?'Compatibility mode':'Continuous mode';
+ video.removeAttribute('src');player.pause();player.removeAttribute('src');player.load();
+ if(mediaURL){URL.revokeObjectURL(mediaURL);mediaURL=null;}
+ if(mode==='h264' && typeof MediaSource==='undefined')mode='stream';
+ video.hidden=mode==='h264';player.hidden=mode!=='h264';
+ if(objectURL){URL.revokeObjectURL(objectURL);objectURL=null;}
+ lastSource=null;lastRendered=null;displayFPS=0;displayFrames=0;displayStart=performance.now();
+ modeButton.textContent=mode==='h264'?'JPEG fallback':(mode==='stream'?'Snapshot mode':'H.264 mode');
  if(expired)return;
- if(mode==='stream')video.src=endpoint('/stream.mjpg')+'&v='+Date.now();
+ if(mode==='h264')h264(mine);
+ else if(mode==='stream')video.src=endpoint('/stream.mjpg')+'&v='+Date.now();
  else snapshots(mine);
 }
 video.onerror=()=>{if(mode==='stream'&&!expired){document.body.classList.add('stale');status.textContent='Viewer disconnected — reconnecting…';clearTimeout(retryTimer);retryTimer=setTimeout(startViewer,1200);}};
@@ -43,26 +50,64 @@ async function snapshots(mine){
   }catch(error){if(mine!==epoch)return;await delay(250);}
  }
 }
+function appendBuffer(buffer,data){return new Promise((resolve,reject)=>{
+ const timeout=setTimeout(()=>finish(Error('Video buffer timed out')),5000);
+ function finish(error){clearTimeout(timeout);buffer.removeEventListener('updateend',done);buffer.removeEventListener('error',failed);error?reject(error):resolve();}
+ function done(){finish();}function failed(){finish(Error('Video decoder rejected stream'));}
+ buffer.addEventListener('updateend',done);buffer.addEventListener('error',failed);
+ try{buffer.appendBuffer(data);}catch(error){finish(error);}
+});}
+async function h264(mine){
+ while(mode==='h264' && mine===epoch && !expired){
+  try{
+   const metaResponse=await request(endpoint('/h264/info'),true);if(!metaResponse.ok)throw Error('Receiver unavailable');
+   const meta=await metaResponse.json();if(mine!==epoch)return;if(!meta.ready){await delay(500);continue;}
+   const mime='video/mp4; codecs="'+meta.codec+'"';
+   if(!MediaSource.isTypeSupported(mime)){mode='stream';saveMode();startViewer();return;}
+   const source=new MediaSource();mediaURL=URL.createObjectURL(source);player.src=mediaURL;
+   await new Promise((resolve,reject)=>{const timeout=setTimeout(()=>reject(Error('Video source timed out')),5000);source.addEventListener('sourceopen',()=>{clearTimeout(timeout);resolve();},{once:true});});
+   if(mine!==epoch)return;
+   const buffer=source.addSourceBuffer(mime);source.duration=Infinity;
+   const init=await request(endpoint('/h264/init.mp4'),true);
+   if(!init.ok || init.headers.get('X-Stream-Epoch')!==meta.epoch)throw Error('Stream changed');
+   await appendBuffer(buffer,await init.arrayBuffer());let sequence='0';
+   while(mode==='h264' && mine===epoch && !expired){
+    const response=await request(endpoint('/h264/segments')+'&after='+sequence+'&epoch='+encodeURIComponent(meta.epoch),true);
+    if(mine!==epoch)return;if(response.status===204)continue;
+    if(!response.ok || response.headers.get('X-Stream-Epoch')!==meta.epoch)throw Error('Stream restarted');
+    await appendBuffer(buffer,await response.arrayBuffer());sequence=response.headers.get('X-Last-ID')||sequence;
+    if(player.buffered.length){const end=player.buffered.end(player.buffered.length-1),start=player.buffered.start(player.buffered.length-1);
+     if(player.currentTime<start || end-player.currentTime>0.35)player.currentTime=Math.max(start,end-0.10);
+     if(end-player.buffered.start(0)>6 && !buffer.updating){await new Promise(resolve=>{buffer.addEventListener('updateend',resolve,{once:true});buffer.remove(0,end-4);});}
+    }
+    if(player.paused)player.play().catch(()=>{});
+   }
+  }catch(error){if(mine!==epoch || expired)return;status.textContent='Reconnecting compressed video…';await delay(750);if(mediaURL){player.removeAttribute('src');player.load();URL.revokeObjectURL(mediaURL);mediaURL=null;}}
+ }
+}
 async function pollStatus(){
  while(!expired){
   try{
    const response=await request(endpoint('/status.json'));
    if(response.status===403){expired=true;startViewer();status.textContent='This viewer link expired. Copy the current link from ScreenLink.';document.body.classList.add('stale');return;}
    if(!response.ok)throw Error();const state=await response.json(),now=performance.now();
-   if(lastSource && state.frames>=lastSource.frames)sourceFPS=Math.round((state.frames-lastSource.frames)*1000/(now-lastSource.time));
-   else sourceFPS=0;
-   lastSource={frames:state.frames,time:now};
-   const live=state.running && state.frames>0 && state.frameAgeMs<2000;
+   const count=mode==='h264'?state.h264Frames:state.jpegFrames;
+   if(lastSource && count>=lastSource.frames)sourceFPS=Math.round((count-lastSource.frames)*1000/(now-lastSource.time));else sourceFPS=0;
+   lastSource={frames:count,time:now};
+   if(mode==='h264' && player.getVideoPlaybackQuality){const rendered=player.getVideoPlaybackQuality().totalVideoFrames;
+    displayFPS=lastRendered&&rendered>=lastRendered.frames?Math.round((rendered-lastRendered.frames)*1000/(now-lastRendered.time)):0;lastRendered={frames:rendered,time:now};}
+   const age=mode==='h264'?state.compressedAgeMs:state.frameAgeMs;
+   const live=state.running && count>0 && age<2000;
    document.body.classList.toggle('stale',!live);
-   status.textContent=live?state.profile+' · source '+sourceFPS+' fps'+(mode==='snapshots'?' · display '+displayFPS+' fps':'')+' · video only':'Video paused — check ScreenLink and the floating preview.';
+   status.textContent=live?(mode==='h264'?'H.264':state.profile)+' · source '+sourceFPS+' fps'+((mode==='snapshots'||mode==='h264')?' · display '+displayFPS+' fps':'')+' · no audio':'Waiting for video — keep this page open; check ScreenLink and its background session or floating preview.';
   }catch(error){document.body.classList.add('stale');status.textContent='Cannot reach ScreenLink. Check the hotspot and current viewer link.';}
   await delay(1500);
  }
 }
-modeButton.onclick=()=>{mode=mode==='stream'?'snapshots':'stream';saveMode();startViewer();};
+modeButton.onclick=()=>{mode=mode==='h264'?'stream':(mode==='stream'?'snapshots':'h264');saveMode();startViewer();};
 document.getElementById('reconnect').onclick=startViewer;
 const full=document.getElementById('fullscreen'),requestFull=document.documentElement.requestFullscreen||document.documentElement.webkitRequestFullscreen;
 full.disabled=!requestFull;full.onclick=()=>{const result=requestFull.call(document.documentElement);if(result&&result.catch)result.catch(()=>{});};
-try{if(localStorage.getItem('screenlink-viewer-mode')==='snapshots')mode='snapshots';}catch(error){}
+try{const saved=localStorage.getItem('screenlink-viewer-v09');if(['h264','stream','snapshots'].includes(saved))mode=saved;}catch(error){}
 startViewer();pollStatus();
 </script></html>

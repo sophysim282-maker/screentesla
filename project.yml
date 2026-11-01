@@ -31,14 +31,20 @@ targets:
       - sdk: CoreImage.framework
       - sdk: ImageIO.framework
       - sdk: QuartzCore.framework
+      - sdk: BackgroundTasks.framework
     info:
       path: App/Info.plist
       properties:
         CFBundleDisplayName: ScreenLink Lab
-        CFBundleShortVersionString: '0.8.0'
-        CFBundleVersion: '8'
+        CFBundleShortVersionString: '0.9.0'
+        CFBundleVersion: '9'
         UILaunchScreen: {}
-        UIBackgroundModes: [audio]
+        UIBackgroundModes: [audio, processing]
+        BGTaskSchedulerPermittedIdentifiers:
+          - local.screenlink.airplaylab.casting.*
+          - local.screenlink.airplaylab.3TY7CJCWLP.casting.*
+          - 3TY7CJCWLP.local.screenlink.airplaylab.casting.*
+          - 3TY7CJCWLP.local.screenlink.airplaylab.3TY7CJCWLP.casting.*
         NSLocalNetworkUsageDescription: Advertise an experimental AirPlay receiver and share received video with your local browser.
         NSBonjourServices: ['_airplay._tcp', '_raop._tcp']
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
