@@ -9,7 +9,7 @@ settings:
     GCC_PREPROCESSOR_DEFINITIONS: ['$(inherited)', 'OPENSSL_API_COMPAT=0x10100000L']
     HEADER_SEARCH_PATHS: ['$(SRCROOT)/deps/include', '$(SRCROOT)/Vendor/RPiPlay/lib', '$(SRCROOT)/Vendor/RPiPlay/lib/playfair', '$(SRCROOT)/Vendor/RPiPlay/lib/llhttp']
     LIBRARY_SEARCH_PATHS: ['$(SRCROOT)/deps/lib']
-    OTHER_LDFLAGS: ['$(inherited)', '-lcrypto', '-lplist-2.0', '-ldns_sd']
+    OTHER_LDFLAGS: ['$(inherited)', '-lcrypto', '-lplist-2.0']
     ENABLE_BITCODE: NO
     TARGETED_DEVICE_FAMILY: '1,2'
 targets:
