@@ -18,7 +18,7 @@
     UIStackView *stack=[UIStackView new];stack.axis=UILayoutConstraintAxisVertical;stack.spacing=6;stack.translatesAutoresizingMaskIntoConstraints=NO;
     [self.view addSubview:stack];
     [NSLayoutConstraint activateConstraints:@[[stack.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor constant:8],[stack.bottomAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.bottomAnchor constant:-8],[stack.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor constant:16],[stack.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor constant:-16]]];
-    UILabel *title=[UILabel new];title.text=@"ScreenLink · AirPlay Lab 0.6";title.font=[UIFont boldSystemFontOfSize:21];[stack addArrangedSubview:title];
+    UILabel *title=[UILabel new];title.text=@"ScreenLink · AirPlay Lab 0.7";title.font=[UIFont boldSystemFontOfSize:21];[stack addArrangedSubview:title];
     UILabel *help=[UILabel new];help.numberOfLines=0;help.font=[UIFont systemFontOfSize:13];help.text=@"Start → copy viewer link before casting → connect AirPlay → return here → start floating preview before switching apps.";[stack addArrangedSubview:help];
     self.discoveryMode=[[UISegmentedControl alloc]initWithItems:@[@"iPhone VPN",@"Mac VPN",@"Native"]];
     id savedMode=[NSUserDefaults.standardUserDefaults objectForKey:@"discoveryMode"];
@@ -39,7 +39,7 @@
     self.receiver=[Receiver new];__weak Controller *weak=self;
     self.receiver.status=^(NSString *message){[weak append:message];};
     self.receiver.preview=^(CVPixelBufferRef pixel){[weak receivedPixel:pixel];};
-    [self append:@"Version 0.6: iPhone VPN discovery test. Stop old Mac helper commands, keep LocalDevVPN connected, select iPhone VPN, and start receiver. Look for ScreenLink VPN Phone. If it remains hidden, Mac VPN mode preserves the previous working setup. Video quality is unchanged from 0.5."];
+    [self append:@"Version 0.7: LOCAL-ONLY iPhone VPN discovery test with an internal browse/resolve check. Stop old Mac helper commands, keep LocalDevVPN connected, select iPhone VPN, and start receiver. Look for ScreenLink VPN Phone. If it remains hidden, Mac VPN mode preserves the previous working setup. Video quality is unchanged from 0.5."];
     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(background) name:UIApplicationDidEnterBackgroundNotification object:nil];
     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(foreground) name:UIApplicationWillEnterForegroundNotification object:nil];
 }

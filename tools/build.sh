@@ -8,6 +8,9 @@ fi
 for tool in xcodegen autoconf automake glibtoolize; do
   command -v "$tool" >/dev/null || { echo "Missing $tool. Install prerequisites: brew install xcodegen autoconf automake libtool" >&2; exit 1; }
 done
+mkdir -p build
+xcrun --sdk macosx clang -fobjc-arc -fblocks -IApp tools/test_vpn_discovery.m App/VPNDiscovery.m -framework Foundation -o build/test-vpn-discovery
+build/test-vpn-discovery | tee build/xcodebuild.log
 python3 tools/prepare_receiver.py
 root="$PWD"
 sdk="$(xcrun --sdk iphoneos --show-sdk-path)"
@@ -36,7 +39,7 @@ if [[ ! -f deps/lib/libplist-2.0.a ]]; then
   )
 fi
 xcodegen generate
-xcodebuild -project ScreenLinkAirPlayLab.xcodeproj -scheme ScreenLinkAirPlayLab -configuration Release -destination 'generic/platform=iOS' -derivedDataPath build/DerivedData CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build 2>&1 | tee build/xcodebuild.log
+xcodebuild -project ScreenLinkAirPlayLab.xcodeproj -scheme ScreenLinkAirPlayLab -configuration Release -destination 'generic/platform=iOS' -derivedDataPath build/DerivedData CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build 2>&1 | tee -a build/xcodebuild.log
 mkdir -p build/Payload
 cp -R build/DerivedData/Build/Products/Release-iphoneos/ScreenLinkAirPlayLab.app build/Payload/
 (cd build && zip -qry ScreenLink-AirPlay-Lab-unsigned.ipa Payload)

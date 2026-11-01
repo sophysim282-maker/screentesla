@@ -1,5 +1,9 @@
 # ScreenLink AirPlay Lab
 
+## Version 0.7: local-only proxy scope and lookup verification
+
+The user reports 0.6 successfully registered its A, AirPlay and RAOP records but the iPhone did not list the receiver. Version 0.7 changes that proxy to Bonjour's local-only scope and adds an internal browse → SRV resolve → IPv4 lookup check. This tests a specific registration-scope difference described by local proxy implementations; it does not establish compatibility with the current iPhone route picker. The build also runs a real local-only Bonjour lookup test on the Mac runner. See [TESTING-0.7.md](TESTING-0.7.md). Video quality and the Mac fallback remain unchanged.
+
 ## Version 0.6: iPhone-side VPN discovery experiment
 
 Version 0.6 adds iPhone VPN discovery, which publishes the virtual peer address and matching AirPlay/RAOP services on the phone itself. It tests whether the receiver can be selected without a Mac advertising it. This remains unverified on a physical iPhone; registering a DNS record is not proof of same-phone discovery. Native discovery and the reported working Mac VPN route remain selectable. Video quality is unchanged from 0.5. See [TESTING-0.6.md](TESTING-0.6.md).
