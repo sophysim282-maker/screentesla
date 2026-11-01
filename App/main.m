@@ -9,6 +9,7 @@
 @property(nonatomic,strong) FloatingPreview *preview;
 @property(nonatomic,strong) UIView *previewSlot;
 @property UIBackgroundTaskIdentifier backgroundTask;
+@property(nonatomic,strong) UISwitch *vpnDiscovery;
 @end
 @implementation Controller
 - (void)viewDidLoad {
@@ -17,8 +18,14 @@
     UIStackView *stack=[UIStackView new];stack.axis=UILayoutConstraintAxisVertical;stack.spacing=6;stack.translatesAutoresizingMaskIntoConstraints=NO;
     [self.view addSubview:stack];
     [NSLayoutConstraint activateConstraints:@[[stack.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor constant:8],[stack.bottomAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.bottomAnchor constant:-8],[stack.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor constant:16],[stack.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor constant:-16]]];
-    UILabel *title=[UILabel new];title.text=@"ScreenLink · AirPlay Lab 0.4";title.font=[UIFont boldSystemFontOfSize:21];[stack addArrangedSubview:title];
+    UILabel *title=[UILabel new];title.text=@"ScreenLink · AirPlay Lab 0.5";title.font=[UIFont boldSystemFontOfSize:21];[stack addArrangedSubview:title];
     UILabel *help=[UILabel new];help.numberOfLines=0;help.font=[UIFont systemFontOfSize:13];help.text=@"Start → copy viewer link before casting → connect AirPlay → return here → start floating preview before switching apps.";[stack addArrangedSubview:help];
+    UIStackView *vpnRow=[UIStackView new];vpnRow.axis=UILayoutConstraintAxisHorizontal;
+    UILabel *vpnLabel=[UILabel new];vpnLabel.text=@"Mac VPN discovery";vpnLabel.font=[UIFont systemFontOfSize:14];
+    self.vpnDiscovery=[UISwitch new];id saved=[NSUserDefaults.standardUserDefaults objectForKey:@"externalDiscovery"];
+    self.vpnDiscovery.on=saved?[saved boolValue]:YES;
+    [self.vpnDiscovery addTarget:self action:@selector(discoveryChanged) forControlEvents:UIControlEventValueChanged];
+    [vpnRow addArrangedSubview:vpnLabel];[vpnRow addArrangedSubview:self.vpnDiscovery];[stack addArrangedSubview:vpnRow];
     self.previewSlot=[UIView new];self.previewSlot.backgroundColor=UIColor.blackColor;
     NSLayoutConstraint *previewHeight=[self.previewSlot.heightAnchor constraintEqualToConstant:100];previewHeight.priority=750;previewHeight.active=YES;
     [stack addArrangedSubview:self.previewSlot];
@@ -32,12 +39,19 @@
     self.receiver=[Receiver new];__weak Controller *weak=self;
     self.receiver.status=^(NSString *message){[weak append:message];};
     self.receiver.preview=^(CVPixelBufferRef pixel){[weak receivedPixel:pixel];};
-    [self append:@"Version 0.3: receiver discovery starts without a PiP controller or playback audio session. Connect AirPlay, return here, then tap Start floating preview. Wait for ACTIVE before switching apps. Background reception remains experimental; no audio forwarding."];
+    [self append:@"Version 0.5: lower-latency browser output. With Mac VPN discovery ON, keep LocalDevVPN connected and run the Mac helper using your viewer link. It advertises ScreenLink VPN; this mode still needs the Mac. Wait for floating preview ACTIVE before switching apps. No audio forwarding."];
     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(background) name:UIApplicationDidEnterBackgroundNotification object:nil];
     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(foreground) name:UIApplicationWillEnterForegroundNotification object:nil];
 }
 - (void)append:(NSString *)s { self.text.text=[self.text.text stringByAppendingFormat:@"\n%@ %@\n",[NSDate date],s];if(self.text.text.length>24000)self.text.text=[self.text.text substringFromIndex:self.text.text.length-18000];[self.text scrollRangeToVisible:NSMakeRange(self.text.text.length,0)]; }
-- (void)start { if([self.receiver start]){UIApplication.sharedApplication.idleTimerDisabled=YES;[self links];} }
+- (void)discoveryChanged {
+    if(self.receiver.isRunning){self.vpnDiscovery.on=self.receiver.externalDiscovery;[self append:@"Stop sharing before changing discovery mode."];return;}
+    [NSUserDefaults.standardUserDefaults setBool:self.vpnDiscovery.on forKey:@"externalDiscovery"];
+}
+- (void)start {
+    if(!self.receiver.isRunning)self.receiver.externalDiscovery=self.vpnDiscovery.on;
+    if([self.receiver start]){UIApplication.sharedApplication.idleTimerDisabled=YES;[self links];}
+}
 - (void)stop { [self endGrace];[self.receiver stop];[self.preview reset];[self.preview removeFromSuperview];self.preview=nil;if(_lastPixel){CVPixelBufferRelease(_lastPixel);_lastPixel=NULL;}UIApplication.sharedApplication.idleTimerDisabled=NO;[self append:@"Stopped. Video frames cleared."]; }
 - (void)receivedPixel:(CVPixelBufferRef)pixel {
     CVPixelBufferRetain(pixel);if(_lastPixel)CVPixelBufferRelease(_lastPixel);_lastPixel=pixel;

@@ -34,3 +34,35 @@ patch = """#include <netinet/tcp.h>
 if '#define TCP_KEEPIDLE TCP_KEEPALIVE' not in s:
     assert marker in s
     p.write_text(s.replace(marker, patch, 1))
+
+# External discovery keeps protocol metadata available while a Mac advertises the
+# VPN peer. No phone-side duplicate services are published in this mode.
+p = vendor / 'lib' / 'dnssd.c'
+s = p.read_text()
+if 'sl_dnssd_set_external' not in s:
+    s = s.replace('struct dnssd_s {', 'struct dnssd_s {\n    int sl_external, sl_raop_ready, sl_airplay_ready;', 1)
+    for record in ('raop', 'airplay'):
+        marker = f'    dnssd->TXTRecordCreate(&dnssd->{record}_record, 0, NULL);'
+        assert marker in s
+        s = s.replace(marker, marker + f'\n    dnssd->sl_{record}_ready = 1;', 1)
+    marker = '    /* Register the service */'
+    assert s.count(marker) == 2
+    s = s.replace(marker, '    if (dnssd->sl_external) return 1;\n\n' + marker)
+    marker = '    if (dnssd) {\n#ifdef WIN32'
+    assert marker in s
+    s = s.replace(marker, '''    if (dnssd) {
+        if (dnssd->sl_external) {
+            if (dnssd->sl_raop_ready) dnssd->TXTRecordDeallocate(&dnssd->raop_record);
+            if (dnssd->sl_airplay_ready) dnssd->TXTRecordDeallocate(&dnssd->airplay_record);
+            free(dnssd->name);
+            free(dnssd->hw_addr);
+        }
+#ifdef WIN32''', 1)
+    s += '''
+void sl_dnssd_set_external(dnssd_t *dnssd, int enabled) { dnssd->sl_external = enabled; }
+const char *sl_dnssd_get_raop_txt(dnssd_t *dnssd, int *length) {
+    *length = dnssd->TXTRecordGetLength(&dnssd->raop_record);
+    return dnssd->TXTRecordGetBytesPtr(&dnssd->raop_record);
+}
+'''
+    p.write_text(s)

@@ -1,4 +1,11 @@
-# ScreenLink AirPlay Lab — experimental iPhone app
+# ScreenLink AirPlay Lab
+
+## Version 0.5: VPN discovery and lower latency
+
+The user reports same-iPhone video reaching the browser with LocalDevVPN and a Mac proxy advertisement. Discovery is intermittent and streaming lags. Version 0.5 moves JPEG encoding off the decoder callback, removes the browser's extra polling delay, reduces the browser output to a 960-pixel longest edge, and adds explicit Mac VPN discovery mode. That mode suppresses competing phone advertisements and exports the exact receiver metadata to `tools/mac_vpn_discovery.py`.
+
+The Mac is still required for discovery in this mode. The app does not create its own VPN. Continuous background operation and discovery reliability still require physical-device validation. See [TESTING-0.5.md](TESTING-0.5.md) for setup and limits.
+
 
 ## Version 0.4: invalid decoder recovery
 

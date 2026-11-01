@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ScreenLink</title>
+<style>body{margin:0;background:#10141c;color:#fff;font:15px system-ui;text-align:center}img{display:block;width:100vw;height:90vh;object-fit:contain}p{margin:0;padding:10px}body.stale img{opacity:.35}</style>
+<p id="status">Waiting for live video…</p><img id="video" alt="Shared iPhone screen">
+<script>
+const token=new URLSearchParams(location.search).get('token');
+const video=document.getElementById('video'),status=document.getElementById('status');
+let sequence='0',objectURL=null,lastFrame=0,frames=0,rateStart=performance.now(),fps=0;
+const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+setInterval(()=>{if(lastFrame && performance.now()-lastFrame>2000){document.body.classList.add('stale');status.textContent='Video paused — check ScreenLink and the floating preview.';}},500);
+async function run(){
+ while(true){
+  try{
+   const response=await fetch('/frame.jpg?token='+encodeURIComponent(token)+'&after='+sequence,{cache:'no-store',signal:AbortSignal.timeout(4000)});
+   if(response.status===204)continue;
+   if(!response.ok)throw Error('No live frame');
+   const next=URL.createObjectURL(await response.blob());
+   video.src=next;
+   try{await video.decode();}catch(error){URL.revokeObjectURL(next);throw error;}
+   if(objectURL)URL.revokeObjectURL(objectURL);objectURL=next;
+   sequence=response.headers.get('X-Frame-ID')||sequence;
+   lastFrame=performance.now();frames++;
+   if(lastFrame-rateStart>=1000){fps=Math.round(frames*1000/(lastFrame-rateStart));frames=0;rateStart=lastFrame;}
+   document.body.classList.remove('stale');status.textContent='ScreenLink · '+fps+' fps · video only';
+  }catch(error){document.body.classList.add('stale');status.textContent='Waiting for video. Check ScreenLink on the iPhone.';await delay(250);}
+ }
+}
+run();
+</script></html>
