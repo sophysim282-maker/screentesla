@@ -16,7 +16,7 @@ This build follows a user-reported successful same-iPhone AirPlay session throug
 1. Keep LocalDevVPN connected and the Mac on the iPhone hotspot.
 2. Update the IPA in place; leave Mac VPN discovery enabled. Start receiver and copy the viewer link.
 3. Stop old dns-sd proxy commands with Control-C.
-4. Run `python3 tools/mac_vpn_discovery.py 'FULL_VIEWER_URL'` on the Mac. Its default peer is 10.7.0.1; override with `--peer` if necessary. It publishes ScreenLink VPN and the matching RAOP identity. Keep it running.
+4. Run `bash tools/mac_vpn_discovery.command` on the Mac and paste the full viewer link when asked. It uses built-in macOS tools; Python and Xcode are not needed. Its default peer is 10.7.0.1; pass the viewer URL and a second IP argument to override. The Python helper is also available. It publishes ScreenLink VPN and the matching RAOP identity. Keep it running.
 5. Open Control Center immediately, select ScreenLink VPN, then verify changing content in the Mac browser.
 6. Return to ScreenLink and start floating preview. Wait for ACTIVE before switching apps. Try swiping the floating window to the edge; if sharing stops, restore it. This behavior still requires a device test.
 7. Compare motion delay and the viewer's frame-age status with 0.4 under the same network conditions. Do not infer improvement from a successful compile alone.
