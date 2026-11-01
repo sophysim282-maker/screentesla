@@ -1,4 +1,5 @@
 #import "Receiver.h"
+#import "VPNDiscovery.h"
 #import "AnnexB.h"
 #import <VideoToolbox/VideoToolbox.h>
 #import <CoreImage/CoreImage.h>
@@ -17,6 +18,7 @@ _Static_assert(kVTInvalidSessionErr == -12903, "Check decoder error mapping agai
 
 @interface Receiver () {
     raop_t *_raop; dnssd_t *_dns;
+    VPNDiscovery *_vpnDiscovery;
     VTDecompressionSessionRef _decoder;
     CMVideoFormatDescriptionRef _format;
     NSData *_sps,*_pps,*_jpeg;
@@ -78,6 +80,7 @@ static BOOL send_all(int fd, const void *bytes,size_t length) {
 @implementation Receiver
 - (instancetype)init { if((self=[super init])) { _socket=-1;_ci=[CIContext contextWithOptions:nil];_decodeQueue=dispatch_queue_create("ScreenLink.decode",DISPATCH_QUEUE_SERIAL);_pendingVideo=dispatch_semaphore_create(4);_jpegQueue=dispatch_queue_create("ScreenLink.jpeg",DISPATCH_QUEUE_SERIAL);_httpSlots=dispatch_semaphore_create(4);_frameReady=[NSCondition new];_token=NSUUID.UUID.UUIDString;[self installLifecycleObservers]; } return self; }
 - (BOOL)isRunning { return _running; }
+- (BOOL)externalDiscovery { return self.discoveryMode!=SLDiscoveryNative; }
 - (void)emit:(NSString *)s { dispatch_async(dispatch_get_main_queue(),^{ if(self.status)self.status(s); }); }
 - (void)installLifecycleObservers {
     __weak Receiver *weak=self;
@@ -241,11 +244,23 @@ static NSArray *txtStrings(const char *bytes,int length) {
     NSArray *airplayTXT=txtStrings(txt,txtLength);txt=sl_dnssd_get_raop_txt(_dns,&txtLength);
     NSMutableString *hex=[NSMutableString string];const uint8_t *idBytes=identity.bytes;
     for(int i=0;i<6;i++)[hex appendFormat:@"%02X",idBytes[i]];
-    self.discoveryProfile=@{@"name":@"ScreenLink VPN",@"host":@"screenlink-vpn.local.",@"port":@(port),@"peer":@"10.7.0.1",@"raopName":[hex stringByAppendingString:@"@ScreenLink VPN"],@"airplayTXT":airplayTXT,@"raopTXT":txtStrings(txt,txtLength),@"externalDiscovery":@(self.externalDiscovery)};
+    NSString *serviceName=self.discoveryMode==SLDiscoveryPhoneVPN?@"ScreenLink VPN Phone":@"ScreenLink VPN";
+    NSString *host=self.discoveryMode==SLDiscoveryPhoneVPN?[NSString stringWithFormat:@"screenlink-%@-vpn.local.",hex.lowercaseString]:@"screenlink-vpn.local.";
+    self.discoveryProfile=@{@"name":serviceName,@"host":host,@"port":@(port),@"peer":@"10.7.0.1",@"raopName":[NSString stringWithFormat:@"%@@%@",hex,serviceName],@"airplayTXT":airplayTXT,@"raopTXT":txtStrings(txt,txtLength),@"externalDiscovery":@(self.externalDiscovery),@"discoveryMode":@(self.discoveryMode)};
     if(![self startWeb]){[self stop];return NO;}
     _running=YES;
-    [self emit:self.externalDiscovery?@"Receiver ready in Mac VPN discovery mode. Start the Mac helper with your viewer link, then select ScreenLink VPN. Phone advertisements are disabled to avoid duplicates.":@"Receiver ready with native discovery. Look for ScreenLink in Screen Mirroring; same-phone discovery can vary."];
+    if(self.discoveryMode==SLDiscoveryPhoneVPN)[self refreshDiscovery];
+    else [self emit:self.externalDiscovery?@"Receiver ready in Mac VPN discovery mode. Start the Mac helper with your viewer link, then select ScreenLink VPN. Phone advertisements are disabled to avoid duplicates.":@"Receiver ready with native discovery. Look for ScreenLink in Screen Mirroring; same-phone discovery can vary."];
     return YES;
+}
+- (void)refreshDiscovery {
+    if(!_running){[self emit:@"Start the receiver before refreshing discovery."];return;}
+    if(self.discoveryMode!=SLDiscoveryPhoneVPN){[self emit:@"Refresh discovery applies to iPhone VPN mode. For Mac VPN mode, keep its helper running."];return;}
+    if(!_vpnDiscovery){
+        _vpnDiscovery=[VPNDiscovery new];__weak Receiver *weak=self;
+        _vpnDiscovery.status=^(NSString *message){[weak emit:message];};
+    }
+    [_vpnDiscovery startWithProfile:self.discoveryProfile];
 }
 - (BOOL)startWeb {
     _socket=socket(AF_INET,SOCK_STREAM,0);if(_socket<0)return NO;
@@ -304,6 +319,7 @@ static NSArray *txtStrings(const char *bytes,int length) {
     NSData *h=[header dataUsingEncoding:NSUTF8StringEncoding];if(send_all(client,h.bytes,h.length))send_all(client,body.bytes,body.length);
 }
 - (void)stop {
+    [_vpnDiscovery stop];_vpnDiscovery=nil;
     @synchronized(self){_running=NO;_generation++;}
     [_frameReady lock];[_frameReady broadcast];[_frameReady unlock];
     if(_socket>=0){shutdown(_socket,SHUT_RDWR);close(_socket);_socket=-1;}

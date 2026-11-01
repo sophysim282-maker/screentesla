@@ -1,14 +1,21 @@
 #import <Foundation/Foundation.h>
 #import <CoreVideo/CoreVideo.h>
+typedef NS_ENUM(NSInteger, SLDiscoveryMode) {
+    SLDiscoveryNative=0,
+    SLDiscoveryMacVPN=1,
+    SLDiscoveryPhoneVPN=2
+};
 @interface Receiver : NSObject
 @property(nonatomic,copy) void (^status)(NSString *);
 /// Delivered on the main queue, bounded to one pending live frame.
 @property(nonatomic,copy) void (^preview)(CVPixelBufferRef);
 @property(nonatomic,readonly,getter=isRunning) BOOL running;
 @property(nonatomic,copy,readonly) NSString *token;
-/// Set before start; the Mac helper advertises the VPN peer instead of the phone.
-@property(nonatomic) BOOL externalDiscovery;
+/// Set before start. Both VPN modes use the external peer as the service target.
+@property(nonatomic) SLDiscoveryMode discoveryMode;
+@property(nonatomic,readonly) BOOL externalDiscovery;
 @property(nonatomic,copy,readonly) NSDictionary *discoveryProfile;
 - (BOOL)start;
+- (void)refreshDiscovery;
 - (void)stop;
 @end

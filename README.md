@@ -1,5 +1,9 @@
 # ScreenLink AirPlay Lab
 
+## Version 0.6: iPhone-side VPN discovery experiment
+
+Version 0.6 adds iPhone VPN discovery, which publishes the virtual peer address and matching AirPlay/RAOP services on the phone itself. It tests whether the receiver can be selected without a Mac advertising it. This remains unverified on a physical iPhone; registering a DNS record is not proof of same-phone discovery. Native discovery and the reported working Mac VPN route remain selectable. Video quality is unchanged from 0.5. See [TESTING-0.6.md](TESTING-0.6.md).
+
 ## Version 0.5: VPN discovery and lower latency
 
 The user reports same-iPhone video reaching the browser with LocalDevVPN and a Mac proxy advertisement. Discovery is intermittent and streaming lags. Version 0.5 moves JPEG encoding off the decoder callback, removes the browser's extra polling delay, reduces the browser output to a 960-pixel longest edge, and adds explicit Mac VPN discovery mode. That mode suppresses competing phone advertisements and exports the exact receiver metadata to `tools/mac_vpn_discovery.py`.
