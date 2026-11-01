@@ -16,3 +16,21 @@ if 'DNSServiceErrorType registration_error =' not in s:
     s = s.replace('    return 1;', '    return registration_error == 0 ? 1 : -3;')
     p.write_text(s)
 print('Receiver core prepared at pinned revision', revision)
+
+# Darwin uses IPPROTO_TCP and TCP_KEEPALIVE for these Linux socket options.
+p = vendor / 'lib' / 'raop_rtp_mirror.c'
+s = p.read_text()
+marker = '#include <netinet/tcp.h>'
+patch = """#include <netinet/tcp.h>
+#include <netinet/in.h>
+#if defined(__APPLE__)
+#ifndef SOL_TCP
+#define SOL_TCP IPPROTO_TCP
+#endif
+#ifndef TCP_KEEPIDLE
+#define TCP_KEEPIDLE TCP_KEEPALIVE
+#endif
+#endif"""
+if '#define TCP_KEEPIDLE TCP_KEEPALIVE' not in s:
+    assert marker in s
+    p.write_text(s.replace(marker, patch, 1))
