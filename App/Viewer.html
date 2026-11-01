@@ -1,30 +1,68 @@
 <!doctype html>
 <html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>ScreenLink</title>
-<style>body{margin:0;background:#10141c;color:#fff;font:15px system-ui;text-align:center}img{display:block;width:100vw;height:90vh;object-fit:contain}p{margin:0;padding:10px}body.stale img{opacity:.35}</style>
-<p id="status">Waiting for live video…</p><img id="video" alt="Shared iPhone screen">
+<style>
+*{box-sizing:border-box}body{margin:0;background:#10141c;color:#fff;font:14px system-ui;text-align:center}header{height:84px;padding:8px;display:flex;flex-direction:column;justify-content:center;gap:7px}p{margin:0}button{background:#25354b;color:white;border:1px solid #547091;border-radius:7px;padding:6px 10px;margin:0 3px;cursor:pointer}img{display:block;width:100vw;height:calc(100vh - 84px);height:calc(100dvh - 84px);object-fit:contain;background:#000}body.stale img{opacity:.35}button:disabled{opacity:.4}
+</style>
+<header><p id="status">Waiting for live video…</p><div><button id="reconnect">Reconnect</button><button id="mode">Compatibility mode</button><button id="fullscreen">Full screen</button></div></header>
+<img id="video" alt="Shared iPhone screen">
 <script>
 const token=new URLSearchParams(location.search).get('token');
-const video=document.getElementById('video'),status=document.getElementById('status');
-let sequence='0',objectURL=null,lastFrame=0,frames=0,rateStart=performance.now(),fps=0;
+const video=document.getElementById('video'),status=document.getElementById('status'),modeButton=document.getElementById('mode');
+let mode='stream',epoch=0,retryTimer=null,controller=null,objectURL=null,expired=false;
+let sourceFPS=0,lastSource=null,displayFPS=0,displayFrames=0,displayStart=performance.now();
 const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
-setInterval(()=>{if(lastFrame && performance.now()-lastFrame>2000){document.body.classList.add('stale');status.textContent='Video paused — check ScreenLink and the floating preview.';}},500);
-async function run(){
- while(true){
+const endpoint=path=>path+'?token='+encodeURIComponent(token);
+async function request(path,cancellable=false){
+ const task=new AbortController();if(cancellable)controller=task;
+ const timeout=setTimeout(()=>task.abort(),4000);
+ try{return await fetch(path,{cache:'no-store',signal:task.signal});}finally{clearTimeout(timeout);}
+}
+function saveMode(){try{localStorage.setItem('screenlink-viewer-mode',mode);}catch(error){}}
+function startViewer(){
+ epoch++;const mine=epoch;clearTimeout(retryTimer);if(controller)controller.abort();
+ video.removeAttribute('src');if(objectURL){URL.revokeObjectURL(objectURL);objectURL=null;}
+ displayFPS=0;displayFrames=0;displayStart=performance.now();
+ modeButton.textContent=mode==='stream'?'Compatibility mode':'Continuous mode';
+ if(expired)return;
+ if(mode==='stream')video.src=endpoint('/stream.mjpg')+'&v='+Date.now();
+ else snapshots(mine);
+}
+video.onerror=()=>{if(mode==='stream'&&!expired){document.body.classList.add('stale');status.textContent='Viewer disconnected — reconnecting…';clearTimeout(retryTimer);retryTimer=setTimeout(startViewer,1200);}};
+async function snapshots(mine){
+ let sequence='0';
+ while(mode==='snapshots' && mine===epoch && !expired){
   try{
-   const response=await fetch('/frame.jpg?token='+encodeURIComponent(token)+'&after='+sequence,{cache:'no-store',signal:AbortSignal.timeout(4000)});
-   if(response.status===204)continue;
-   if(!response.ok)throw Error('No live frame');
-   const next=URL.createObjectURL(await response.blob());
-   video.src=next;
-   try{await video.decode();}catch(error){URL.revokeObjectURL(next);throw error;}
-   if(objectURL)URL.revokeObjectURL(objectURL);objectURL=next;
-   sequence=response.headers.get('X-Frame-ID')||sequence;
-   lastFrame=performance.now();frames++;
-   if(lastFrame-rateStart>=1000){fps=Math.round(frames*1000/(lastFrame-rateStart));frames=0;rateStart=lastFrame;}
-   document.body.classList.remove('stale');status.textContent='ScreenLink · '+fps+' fps · video only';
-  }catch(error){document.body.classList.add('stale');status.textContent='Waiting for video. Check ScreenLink on the iPhone.';await delay(250);}
+   const response=await request(endpoint('/frame.jpg')+'&after='+sequence,true);
+   if(mine!==epoch)return;if(response.status===204)continue;if(!response.ok)throw Error();
+   const next=URL.createObjectURL(await response.blob());if(mine!==epoch){URL.revokeObjectURL(next);return;}
+   video.src=next;try{await video.decode();}catch(error){URL.revokeObjectURL(next);throw error;}
+   if(mine!==epoch){URL.revokeObjectURL(next);return;}
+   if(objectURL)URL.revokeObjectURL(objectURL);objectURL=next;sequence=response.headers.get('X-Frame-ID')||sequence;
+   displayFrames++;const now=performance.now();if(now-displayStart>=1000){displayFPS=Math.round(displayFrames*1000/(now-displayStart));displayFrames=0;displayStart=now;}
+  }catch(error){if(mine!==epoch)return;await delay(250);}
  }
 }
-run();
+async function pollStatus(){
+ while(!expired){
+  try{
+   const response=await request(endpoint('/status.json'));
+   if(response.status===403){expired=true;startViewer();status.textContent='This viewer link expired. Copy the current link from ScreenLink.';document.body.classList.add('stale');return;}
+   if(!response.ok)throw Error();const state=await response.json(),now=performance.now();
+   if(lastSource && state.frames>=lastSource.frames)sourceFPS=Math.round((state.frames-lastSource.frames)*1000/(now-lastSource.time));
+   else sourceFPS=0;
+   lastSource={frames:state.frames,time:now};
+   const live=state.running && state.frames>0 && state.frameAgeMs<2000;
+   document.body.classList.toggle('stale',!live);
+   status.textContent=live?state.profile+' · source '+sourceFPS+' fps'+(mode==='snapshots'?' · display '+displayFPS+' fps':'')+' · video only':'Video paused — check ScreenLink and the floating preview.';
+  }catch(error){document.body.classList.add('stale');status.textContent='Cannot reach ScreenLink. Check the hotspot and current viewer link.';}
+  await delay(1500);
+ }
+}
+modeButton.onclick=()=>{mode=mode==='stream'?'snapshots':'stream';saveMode();startViewer();};
+document.getElementById('reconnect').onclick=startViewer;
+const full=document.getElementById('fullscreen'),requestFull=document.documentElement.requestFullscreen||document.documentElement.webkitRequestFullscreen;
+full.disabled=!requestFull;full.onclick=()=>{const result=requestFull.call(document.documentElement);if(result&&result.catch)result.catch(()=>{});};
+try{if(localStorage.getItem('screenlink-viewer-mode')==='snapshots')mode='snapshots';}catch(error){}
+startViewer();pollStatus();
 </script></html>

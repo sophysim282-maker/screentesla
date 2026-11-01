@@ -1,5 +1,9 @@
 # ScreenLink AirPlay Lab
 
+## Version 0.8: follow-up to the confirmed local-only VPN session
+
+The user's 0.7 log and browser confirmation establish a working same-iPhone session through LocalDevVPN, including video frames after entering background with PiP active. Version 0.8 preserves that discovery and PiP code and improves the browser path: one continuous JPEG connection, a snapshot compatibility mode, three video profiles, cadence correction, reconnect/full-screen controls, and honest source/display FPS labels. Physical performance improvements still need comparison. See [TESTING-0.8.md](TESTING-0.8.md).
+
 ## Version 0.7: local-only proxy scope and lookup verification
 
 The user reports 0.6 successfully registered its A, AirPlay and RAOP records but the iPhone did not list the receiver. Version 0.7 changes that proxy to Bonjour's local-only scope and adds an internal browse → SRV resolve → IPv4 lookup check. This tests a specific registration-scope difference described by local proxy implementations; it does not establish compatibility with the current iPhone route picker. The build also runs a real local-only Bonjour lookup test on the Mac runner. See [TESTING-0.7.md](TESTING-0.7.md). Video quality and the Mac fallback remain unchanged.

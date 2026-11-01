@@ -9,6 +9,10 @@ for tool in xcodegen autoconf automake glibtoolize; do
   command -v "$tool" >/dev/null || { echo "Missing $tool. Install prerequisites: brew install xcodegen autoconf automake libtool" >&2; exit 1; }
 done
 mkdir -p build
+cc -Wall -Wextra -Werror tools/test_frame_cadence.c -o build/test-frame-cadence
+build/test-frame-cadence
+cc -Wall -Wextra -Werror tools/test_mjpeg.c -o build/test-mjpeg
+build/test-mjpeg
 xcrun --sdk macosx clang -fobjc-arc -fblocks -IApp tools/test_vpn_discovery.m App/VPNDiscovery.m -framework Foundation -o build/test-vpn-discovery
 build/test-vpn-discovery | tee build/xcodebuild.log
 python3 tools/prepare_receiver.py

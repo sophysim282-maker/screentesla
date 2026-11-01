@@ -5,6 +5,7 @@ typedef NS_ENUM(NSInteger, SLDiscoveryMode) {
     SLDiscoveryMacVPN=1,
     SLDiscoveryPhoneVPN=2
 };
+typedef NS_ENUM(NSInteger, SLVideoProfile) { SLVideoFast=0, SLVideoBalanced=1, SLVideoSharp=2 };
 @interface Receiver : NSObject
 @property(nonatomic,copy) void (^status)(NSString *);
 /// Delivered on the main queue, bounded to one pending live frame.
@@ -13,6 +14,7 @@ typedef NS_ENUM(NSInteger, SLDiscoveryMode) {
 @property(nonatomic,copy,readonly) NSString *token;
 /// Set before start. Both VPN modes use the external peer as the service target.
 @property(nonatomic) SLDiscoveryMode discoveryMode;
+@property(nonatomic) SLVideoProfile videoProfile;
 @property(nonatomic,readonly) BOOL externalDiscovery;
 @property(nonatomic,copy,readonly) NSDictionary *discoveryProfile;
 - (BOOL)start;
