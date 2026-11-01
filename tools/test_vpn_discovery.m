@@ -11,7 +11,7 @@ int main(void) {
             puts(message.UTF8String);
             if([message hasPrefix:@"Local proxy address verified:"])verified=YES;
         };
-        NSString *suffix=NSUUID.UUID.UUIDString.lowercaseString;
+        NSString *suffix=[NSUUID.UUID.UUIDString.lowercaseString substringToIndex:12];
         NSDictionary *profile=@{@"name":[@"ScreenLink Test " stringByAppendingString:suffix],
             @"raopName":[@"02534C000001@ScreenLink Test " stringByAppendingString:suffix],
             @"host":[NSString stringWithFormat:@"screenlink-test-%@.local.",suffix],
