@@ -73,7 +73,7 @@ async function h264(mine){
    await appendBuffer(buffer,await init.arrayBuffer());let sequence='0';
    while(mode==='h264' && mine===epoch && !expired){
     const response=await request(endpoint('/h264/segments')+'&after='+sequence+'&epoch='+encodeURIComponent(meta.epoch),true);
-    if(mine!==epoch)return;if(response.status===204)continue;
+    if(mine!==epoch)return;if(response.status===204){await delay(30);continue;}
     if(!response.ok || response.headers.get('X-Stream-Epoch')!==meta.epoch)throw Error('Stream restarted');
     await appendBuffer(buffer,await response.arrayBuffer());sequence=response.headers.get('X-Last-ID')||sequence;
     if(player.buffered.length){const end=player.buffered.end(player.buffered.length-1),start=player.buffered.start(player.buffered.length-1);

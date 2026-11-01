@@ -36,8 +36,13 @@
         if(length) {
             fragment.length=length;
             if(_pendingKey){[_units removeAllObjects];_bytes=0;}
-            if(_bytes+length>12*1024*1024 || _units.count>=360){[_units removeAllObjects];_bytes=0;_needKey=YES;_sequence=0;_epoch=NSUUID.UUID.UUIDString;}
-            else {[_units addObject:@{@"id":@(++_sequence),@"data":fragment}];_bytes+=length;}
+            [_units addObject:@{@"id":@(++_sequence),@"data":fragment,@"key":@(_pendingKey)}];_bytes+=length;
+            // Evict cache history without interrupting clients that are already
+            // decoding. A new client waits for a retained keyframe; it must
+            // never bootstrap using a dependent frame after eviction.
+            while(_units.count>1 && (_bytes>12*1024*1024 || _units.count>360)){
+                _bytes-=[_units.firstObject[@"data"] length];[_units removeObjectAtIndex:0];
+            }
         }
     }
     _pending=sample;_pendingTime=time;_pendingKey=key;[_ready broadcast];[_ready unlock];
@@ -46,12 +51,15 @@
 - (NSDictionary *)initialization {[_ready lock];NSDictionary *result=@{@"epoch":_epoch,@"data":_initialization ?: [NSData data]};[_ready unlock];return result;}
 - (NSDictionary *)readAfter:(uint64_t)after epoch:(NSString *)epoch {
     [_ready lock];NSDate *deadline=[NSDate dateWithTimeIntervalSinceNow:1];
-    while([epoch isEqual:_epoch] && (!_units.count || after>=_sequence))if(![_ready waitUntilDate:deadline])break;
+    while([epoch isEqual:_epoch] && (!_units.count || after>=_sequence || (!after && ![_units.firstObject[@"key"] boolValue])))if(![_ready waitUntilDate:deadline])break;
     uint64_t first=[_units.firstObject[@"id"] unsignedLongLongValue];
     if(![epoch isEqual:_epoch] || after>_sequence || (after && first && after+1<first)) {
         NSDictionary *result=@{@"reset":@YES,@"epoch":_epoch};[_ready unlock];return result;
     }
     NSMutableData *data=[NSMutableData data];uint64_t last=after;
+    if(!after && _units.count && ![_units.firstObject[@"key"] boolValue]){
+        NSDictionary *result=@{@"reset":@NO,@"epoch":_epoch,@"id":@0,@"data":data};[_ready unlock];return result;
+    }
     for(NSDictionary *unit in _units)if([unit[@"id"] unsignedLongLongValue]>after){[data appendData:unit[@"data"]];last=[unit[@"id"] unsignedLongLongValue];if(data.length>=2*1024*1024)break;}
     NSDictionary *result=@{@"reset":@NO,@"epoch":_epoch,@"id":@(last),@"data":data};[_ready unlock];return result;
 }

@@ -18,6 +18,13 @@ int main(void) {
         epoch=[stream info][@"epoch"];
         [stream appendAVCC:sample timestamp:516667 keyframe:NO];
         part=[stream readAfter:0 epoch:epoch];assert([part[@"id"] intValue]==1);assert([part[@"data"] length]>100);
+        for(uint64_t i=2;i<=402;i++)[stream appendAVCC:sample timestamp:500000+i*16667 keyframe:NO];
+        assert([epoch isEqual:[stream info][@"epoch"]]);
+        part=[stream readAfter:400 epoch:epoch];assert(![part[@"reset"] boolValue]);assert([part[@"id"] intValue]==402);
+        part=[stream readAfter:0 epoch:epoch];assert([part[@"data"] length]==0);
+        [stream appendAVCC:sample timestamp:500000+403*16667 keyframe:YES];
+        [stream appendAVCC:sample timestamp:500000+404*16667 keyframe:NO];
+        part=[stream readAfter:0 epoch:epoch];assert([part[@"id"] intValue]==404);assert([part[@"data"] length]>100);
         [stream reset];assert(![[stream info][@"ready"] boolValue]);assert([[stream readAfter:1 epoch:epoch][@"reset"] boolValue]);
         puts("H.264 stream passed: keyframe startup, fragment batching, timestamp reset, epoch recovery and stop reset.");
     }
