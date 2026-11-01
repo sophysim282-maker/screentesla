@@ -16,7 +16,7 @@ int main(int argc,char **argv) {
     if(argc==3) {
         FILE *input=fopen(argv[1],"rb");assert(input);fseek(input,0,SEEK_END);long length=ftell(input);rewind(input);assert(length>0);
         uint8_t *data=malloc((size_t)length);assert(data);assert(fread(data,1,(size_t)length,input)==(size_t)length);fclose(input);
-        size_t offsets[1024],sizes[1024];size_t count=sl_nals(data,(size_t)length,offsets,sizes,1024);assert(count<=1024);
+        size_t offsets[16384],sizes[16384];size_t count=sl_nals(data,(size_t)length,offsets,sizes,16384);assert(count<=16384);
         const uint8_t *sp=NULL,*pp=NULL;size_t sn=0,pn=0;
         for(size_t i=0;i<count;i++){int type=data[offsets[i]]&31;if(type==7){sp=data+offsets[i];sn=sizes[i];}if(type==8){pp=data+offsets[i];pn=sizes[i];}}
         assert(sp&&pp);uint8_t init[4096];size_t n=sl_mp4_init(init,sizeof init,sp,sn,pp,pn,640,360);assert(n);

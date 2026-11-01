@@ -51,6 +51,7 @@ _Static_assert(kVTInvalidSessionErr == -12903, "Check decoder error mapping agai
     NSUInteger _generation;
     BOOL _waitingForIDR;
     BOOL _appBackgrounded;
+    uint64_t _backgroundPackets;
     NSUInteger _backgroundFailures;
     CFTimeInterval _nextDecoderAttempt;
     CFTimeInterval _lastDecoderErrorLog;
@@ -157,7 +158,7 @@ static SLVideoSettings videoSettings(SLVideoProfile profile) {
     __weak Receiver *weak=self;
     _backgroundObserver=[NSNotificationCenter.defaultCenter addObserverForName:UIApplicationDidEnterBackgroundNotification object:nil queue:NSOperationQueue.mainQueue usingBlock:^(NSNotification *note){
         Receiver *owner=weak;if(!owner)return;
-        dispatch_async(owner->_decodeQueue,^{owner->_appBackgrounded=YES;owner->_backgroundFailures=0;});
+        dispatch_async(owner->_decodeQueue,^{owner->_appBackgrounded=YES;owner->_backgroundPackets=0;owner->_backgroundFailures=0;});
     }];
     _foregroundObserver=[NSNotificationCenter.defaultCenter addObserverForName:UIApplicationDidBecomeActiveNotification object:nil queue:NSOperationQueue.mainQueue usingBlock:^(NSNotification *note){
         Receiver *owner=weak;if(!owner)return;
@@ -223,7 +224,11 @@ static SLVideoSettings videoSettings(SLVideoProfile profile) {
     uint64_t sessionFrames;@synchronized(self){if(hasIDR)_hasStreamKeyframe=YES;_lastCompressedTime=CACurrentMediaTime();_compressedFrames++;sessionFrames=++_sessionFrames;}
     if(sessionFrames==10)[self emit:@"AIRPLAY VIDEO LIVE: 10 fresh frames received. You can now request the background test. Verify motion in the browser first."];
     [_h264 appendAVCC:avcc timestamp:timestamp ?: (uint64_t)(CACurrentMediaTime()*1000000) keyframe:hasIDR];
-    if(_appBackgrounded && self.compressedOnlyInBackground){_waitingForIDR=YES;return;}
+    if(_appBackgrounded && self.compressedOnlyInBackground){
+        _backgroundPackets++;
+        if(_backgroundPackets==30 || _backgroundPackets%300==0)[self emit:[NSString stringWithFormat:@"BACKGROUND H.264 VERIFIED: %llu packets forwarded after leaving ScreenLink. No local video decoding or JPEG encoding on this path.",(unsigned long long)_backgroundPackets]];
+        _waitingForIDR=YES;return;
+    }
     if(_waitingForIDR && !hasIDR)return;
     if(!_decoder) {
         if(_appBackgrounded && _backgroundFailures>=2)return;
@@ -392,7 +397,7 @@ static NSArray *txtStrings(const char *bytes,int length) {
         @synchronized(self){
             SLVideoSettings settings=videoSettings(_videoProfile);
             double age=_lastDecodedTime?MAX(0,CACurrentMediaTime()-_lastDecodedTime)*1000:999999;
-            snapshot=@{@"mirrorConnected":@(_mirrorTransportOpen),@"disconnects":@(_disconnects),@"sessionFrames":@(_sessionFrames),@"running":@(_running),@"frames":@(_decodedFrames),@"jpegFrames":@(_frames),@"h264Frames":@(_compressedFrames),@"compressedAgeMs":@(_lastCompressedTime?MAX(0,CACurrentMediaTime()-_lastCompressedTime)*1000:999999),@"frameAgeMs":@(age),@"profile":[NSString stringWithUTF8String:settings.name],@"maxFPS":@(settings.fps),@"streamClients":@(_streamClients)};
+            snapshot=@{@"appBackgrounded":@(_appBackgrounded),@"compressedOnlyInBackground":@(self.compressedOnlyInBackground),@"backgroundPackets":@(_backgroundPackets),@"mirrorConnected":@(_mirrorTransportOpen),@"disconnects":@(_disconnects),@"sessionFrames":@(_sessionFrames),@"running":@(_running),@"frames":@(_decodedFrames),@"jpegFrames":@(_frames),@"h264Frames":@(_compressedFrames),@"compressedAgeMs":@(_lastCompressedTime?MAX(0,CACurrentMediaTime()-_lastCompressedTime)*1000:999999),@"frameAgeMs":@(age),@"profile":[NSString stringWithUTF8String:settings.name],@"maxFPS":@(settings.fps),@"streamClients":@(_streamClients)};
         }
         mime=@"application/json";body=[NSJSONSerialization dataWithJSONObject:snapshot options:0 error:NULL];
     }

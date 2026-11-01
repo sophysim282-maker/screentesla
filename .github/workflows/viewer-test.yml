@@ -1,0 +1,31 @@
+name: Real browser streaming regression
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  browser:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-save playwright@1.58.2
+      - run: npx playwright install --with-deps chromium
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: Generate and play sustained 60 fps compressed video
+        run: |
+          mkdir -p build
+          ffmpeg -v error -f lavfi -i testsrc2=size=640x360:rate=60 -t 12 -c:v libx264 -preset ultrafast -tune zerolatency -x264-params aud=1:keyint=120:scenecut=0 -f h264 build/source.h264
+          cc tools/test_fmp4.c -o build/mux
+          build/mux build/source.h264 build/live.mp4
+          node tools/test_browser_live.cjs App/Viewer.html build/live.mp4
+      - name: Viewer state and pacing checks
+        run: |
+          python3 tools/test_h264_viewer.py
+          python3 tools/test_viewer.py

@@ -35,12 +35,13 @@
         size_t length=sl_mp4_fragment(fragment.mutableBytes,fragment.length,_pending.bytes,_pending.length,(uint32_t)(_sequence+1),_pendingTime>=_base?_pendingTime-_base:0,duration,_pendingKey);
         if(length) {
             fragment.length=length;
-            if(_pendingKey){[_units removeAllObjects];_bytes=0;}
+            // Keep preceding GOPs for viewers briefly delayed by Wi-Fi or a
+            // browser scheduling pause. A keyframe alone is not eviction.
             [_units addObject:@{@"id":@(++_sequence),@"data":fragment,@"key":@(_pendingKey)}];_bytes+=length;
             // Evict cache history without interrupting clients that are already
             // decoding. A new client waits for a retained keyframe; it must
             // never bootstrap using a dependent frame after eviction.
-            while(_units.count>1 && (_bytes>12*1024*1024 || _units.count>360)){
+            while(_units.count>1 && (_bytes>24*1024*1024 || _units.count>720)){
                 _bytes-=[_units.firstObject[@"data"] length];[_units removeObjectAtIndex:0];
             }
         }
@@ -51,16 +52,21 @@
 - (NSDictionary *)initialization {[_ready lock];NSDictionary *result=@{@"epoch":_epoch,@"data":_initialization ?: [NSData data]};[_ready unlock];return result;}
 - (NSDictionary *)readAfter:(uint64_t)after epoch:(NSString *)epoch {
     [_ready lock];NSDate *deadline=[NSDate dateWithTimeIntervalSinceNow:1];
-    while([epoch isEqual:_epoch] && (!_units.count || after>=_sequence || (!after && ![_units.firstObject[@"key"] boolValue])))if(![_ready waitUntilDate:deadline])break;
+    while([epoch isEqual:_epoch] && (!_units.count || after>=_sequence))if(![_ready waitUntilDate:deadline])break;
     uint64_t first=[_units.firstObject[@"id"] unsignedLongLongValue];
     if(![epoch isEqual:_epoch] || after>_sequence || (after && first && after+1<first)) {
         NSDictionary *result=@{@"reset":@YES,@"epoch":_epoch};[_ready unlock];return result;
     }
     NSMutableData *data=[NSMutableData data];uint64_t last=after;
-    if(!after && _units.count && ![_units.firstObject[@"key"] boolValue]){
+    NSUInteger bootstrap=NSNotFound;
+    if(!after)for(NSUInteger i=0;i<_units.count;i++)if([_units[i][@"key"] boolValue])bootstrap=i;
+    if(!after && bootstrap==NSNotFound){
         NSDictionary *result=@{@"reset":@NO,@"epoch":_epoch,@"id":@0,@"data":data};[_ready unlock];return result;
     }
-    for(NSDictionary *unit in _units)if([unit[@"id"] unsignedLongLongValue]>after){[data appendData:unit[@"data"]];last=[unit[@"id"] unsignedLongLongValue];if(data.length>=2*1024*1024)break;}
+    for(NSUInteger i=after?0:bootstrap;i<_units.count;i++){
+        NSDictionary *unit=_units[i];
+        if([unit[@"id"] unsignedLongLongValue]>after){[data appendData:unit[@"data"]];last=[unit[@"id"] unsignedLongLongValue];if(data.length>=2*1024*1024)break;}
+    }
     NSDictionary *result=@{@"reset":@NO,@"epoch":_epoch,@"id":@(last),@"data":data};[_ready unlock];return result;
 }
 @end
