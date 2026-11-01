@@ -13,6 +13,8 @@ cc -Wall -Wextra -Werror tools/test_frame_cadence.c -o build/test-frame-cadence
 build/test-frame-cadence
 cc -Wall -Wextra -Werror tools/test_mjpeg.c -o build/test-mjpeg
 build/test-mjpeg
+cc -Wall -Wextra -Werror tools/test_hotspot_link.c -o build/test-hotspot-link
+build/test-hotspot-link
 cc -Wall -Wextra -Werror tools/test_fmp4.c -o build/test-fmp4
 build/test-fmp4
 xcrun --sdk macosx clang -fobjc-arc -fblocks -IApp tools/test_h264_stream.m App/H264Stream.m -framework Foundation -o build/test-h264-stream

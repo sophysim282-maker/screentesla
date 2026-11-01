@@ -5,6 +5,7 @@
 #import "MJPEG.h"
 #import "H264Stream.h"
 #import "VideoInbox.h"
+#import "HotspotLink.h"
 #import <VideoToolbox/VideoToolbox.h>
 #import <CoreImage/CoreImage.h>
 #import <UIKit/UIKit.h>
@@ -98,6 +99,18 @@ static BOOL send_all(int fd, const void *bytes,size_t length) {
     const char *p=bytes;
     while(length) { ssize_t n=send(fd,p,length,0); if(n<=0)return NO; p+=n;length-=(size_t)n; }
     return YES;
+}
+static BOOL hotspotClient(int client) {
+    struct sockaddr_in peer={0},local={0};socklen_t size=sizeof peer;
+    if(getpeername(client,(struct sockaddr *)&peer,&size)!=0 || peer.sin_family!=AF_INET)return NO;
+    size=sizeof local;if(getsockname(client,(struct sockaddr *)&local,&size)!=0 || local.sin_family!=AF_INET)return NO;
+    struct ifaddrs *head=NULL;if(getifaddrs(&head)!=0)return NO;BOOL allowed=NO;
+    for(struct ifaddrs *p=head;p;p=p->ifa_next){
+        if(!p->ifa_addr || !p->ifa_netmask || p->ifa_addr->sa_family!=AF_INET || strncmp(p->ifa_name,"bridge",6)!=0)continue;
+        struct sockaddr_in *bridge=(void *)p->ifa_addr,*mask=(void *)p->ifa_netmask;
+        if(sl_hotspot_peer(peer.sin_addr.s_addr,local.sin_addr.s_addr,bridge->sin_addr.s_addr,mask->sin_addr.s_addr)){allowed=YES;break;}
+    }
+    freeifaddrs(head);return allowed;
 }
 typedef struct { double fps, edge, quality; const char *name; } SLVideoSettings;
 static SLVideoSettings videoSettings(SLVideoProfile profile) {
@@ -360,7 +373,11 @@ static NSArray *txtStrings(const char *bytes,int length) {
     for(NSURLQueryItem *item in url.queryItems){if([item.name isEqual:@"epoch"])epoch=item.value;else if([item.name isEqual:@"token"])token=item.value;else if([item.name isEqual:@"after"]){after=strtoull(item.value.UTF8String,NULL,10);longPoll=YES;}}
     NSString *mime=@"text/plain; charset=utf-8",*status=@"200 OK",*extra=@"";NSData *body=[NSData data];
     BOOL current;@synchronized(self){current=_generation==generation;}
-    if(!current || ![parts.firstObject isEqual:@"GET"] || ![token isEqual:self.token]){status=@"403 Forbidden";body=[@"Use the complete current link from ScreenLink." dataUsingEncoding:NSUTF8StringEncoding];}
+    if(current && [parts.firstObject isEqual:@"GET"] && [url.path isEqual:@"/"] && !token && hotspotClient(client)){
+        status=@"302 Found";
+        extra=[NSString stringWithFormat:@"Location: /?token=%@\r\nReferrer-Policy: no-referrer\r\n",self.token];
+    }
+    else if(!current || ![parts.firstObject isEqual:@"GET"] || ![token isEqual:self.token]){status=@"403 Forbidden";body=[@"On the iPhone hotspot, open http://172.20.10.1:8080/ . On other Wi-Fi, use the complete viewer link from ScreenLink." dataUsingEncoding:NSUTF8StringEncoding];}
     else if([url.path isEqual:@"/h264/info"]){mime=@"application/json";body=[NSJSONSerialization dataWithJSONObject:[_h264 info] options:0 error:NULL];}
     else if([url.path isEqual:@"/h264/init.mp4"]){NSDictionary *part=[_h264 initialization];body=part[@"data"];mime=@"video/mp4";extra=[NSString stringWithFormat:@"X-Stream-Epoch: %@\r\n",part[@"epoch"]];if(!body.length)status=@"503 Service Unavailable";}
     else if([url.path isEqual:@"/h264/segments"]) {

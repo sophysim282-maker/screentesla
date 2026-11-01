@@ -73,3 +73,7 @@ Earlier experiment details: [0.7](TESTING-0.7.md), [0.6](TESTING-0.6.md), [0.5](
 The build fetches [RPiPlay](https://github.com/FD-/RPiPlay) at commit `64d0341ed3bef098c940c9ed0675948870a271f9`. Its GPL-3.0 license and subcomponent notices apply; see LICENSE and the downloaded Vendor/RPiPlay/LICENSE. `tools/prepare_receiver.py` surfaces registration errors, adds Darwin socket compatibility, and supports external discovery metadata without competing advertisements. The app advertises the actual listener port and uses matching receiver metadata. It does not copy APTV code or claim to reproduce its undocumented implementation.
 
 OpenSSL 1.1.1w and libplist 2.2.0 are fetched at build time; their licenses remain applicable. This is an experimental receiver based on older dependencies, with no completed security audit.
+
+## 0.9.2: bookmark the hotspot viewer
+
+On the iPhone Personal Hotspot, bookmark `http://172.20.10.1:8080/` (or the actual bridge address shown at the top of ScreenLink). The root address redirects hotspot clients to the current viewer token automatically. Start the receiver first. Anyone connected to this hotspot can use the short viewer address. Other Wi-Fi interfaces and media/API requests still require the token. This changes link convenience only; the 0.9.1 video/background fixes remain.

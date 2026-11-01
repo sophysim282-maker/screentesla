@@ -13,6 +13,7 @@
 @property UIBackgroundTaskIdentifier backgroundTask;
 @property(nonatomic,strong) UISegmentedControl *discoveryMode;
 @property(nonatomic,strong) UISegmentedControl *videoProfile;
+@property(nonatomic,strong) UILabel *bookmark;
 @end
 @implementation Controller
 - (void)viewDidLoad {
@@ -21,7 +22,8 @@
     UIStackView *stack=[UIStackView new];stack.axis=UILayoutConstraintAxisVertical;stack.spacing=6;stack.translatesAutoresizingMaskIntoConstraints=NO;
     [self.view addSubview:stack];
     [NSLayoutConstraint activateConstraints:@[[stack.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor constant:8],[stack.bottomAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.bottomAnchor constant:-8],[stack.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor constant:16],[stack.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor constant:-16]]];
-    UILabel *title=[UILabel new];title.text=@"ScreenLink · AirPlay Lab 0.9.1";title.font=[UIFont boldSystemFontOfSize:21];[stack addArrangedSubview:title];
+    UILabel *title=[UILabel new];title.text=@"ScreenLink · AirPlay Lab 0.9.2";title.font=[UIFont boldSystemFontOfSize:21];[stack addArrangedSubview:title];
+    self.bookmark=[UILabel new];self.bookmark.font=[UIFont monospacedSystemFontOfSize:14 weight:UIFontWeightMedium];self.bookmark.numberOfLines=0;self.bookmark.text=@"Connect your Mac to the hotspot, then start receiver.";[stack addArrangedSubview:self.bookmark];
     UILabel *help=[UILabel new];help.numberOfLines=0;help.font=[UIFont systemFontOfSize:13];help.text=@"Start → copy link → connect AirPlay → return here → start a background session (iOS 26 test), or floating preview. Viewer: use H.264 for full source frame rate.";[stack addArrangedSubview:help];
     self.discoveryMode=[[UISegmentedControl alloc]initWithItems:@[@"iPhone VPN",@"Mac VPN",@"Native"]];
     id savedMode=[NSUserDefaults.standardUserDefaults objectForKey:@"discoveryMode"];
@@ -53,7 +55,7 @@
     self.session.videoIsLive=^BOOL{return weak.receiver.videoIsLive;};
     self.session.activityChanged=^(BOOL active){Controller *owner=weak;if(!owner)return;owner.receiver.compressedOnlyInBackground=active && !owner.preview.active;if(active)[owner endGrace];};
     self.session.ended=^{[weak stop];};
-    [self append:@"Version 0.9.1: discovery stays published during app transitions; video intake does not wait for decoding. The background test requires 10 fresh video frames. BACKGROUND SESSION ACTIVE means background execution was granted; it does not establish an AirPlay connection. Use H.264 in the viewer and keep LocalDevVPN connected. No audio or native YouTube media casting."];
+    [self append:@"Version 0.9.2: bookmark the short hotspot address shown above; no token needs copying on your hotspot. Discovery stays published during app transitions; video intake does not wait for decoding. The background test requires 10 fresh video frames. BACKGROUND SESSION ACTIVE means background execution was granted; it does not establish an AirPlay connection. Use H.264 in the viewer and keep LocalDevVPN connected. No audio or native YouTube media casting."];
     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(background) name:UIApplicationDidEnterBackgroundNotification object:nil];
     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(active) name:UIApplicationDidBecomeActiveNotification object:nil];
     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(foreground) name:UIApplicationWillEnterForegroundNotification object:nil];
@@ -116,7 +118,10 @@
     }freeifaddrs(head);
     [result sortUsingComparator:^NSComparisonResult(NSDictionary *a,NSDictionary *b){return [a[@"priority"] compare:b[@"priority"]];}];return result;
 }
-- (NSString *)linkForAddress:(NSDictionary *)address { return [NSString stringWithFormat:@"http://%@:8080/?token=%@",address[@"host"],self.receiver.token]; }
+- (NSString *)linkForAddress:(NSDictionary *)address {
+    if([address[@"name"] hasPrefix:@"bridge"])return [NSString stringWithFormat:@"http://%@:8080/",address[@"host"]];
+    return [NSString stringWithFormat:@"http://%@:8080/?token=%@",address[@"host"],self.receiver.token];
+}
 - (void)copyViewer {
     if(!self.receiver.isRunning){[self append:@"Start the receiver first, then copy its active viewer link."];return;}
     NSDictionary *address=[self addresses].firstObject;
@@ -126,6 +131,7 @@
 }
 - (void)links {
     NSArray *addresses=[self addresses];
+    for(NSDictionary *address in addresses)if([address[@"name"] hasPrefix:@"bridge"]){self.bookmark.text=[NSString stringWithFormat:@"Bookmark on your Mac:\n%@",[self linkForAddress:address]];break;}
     for(NSDictionary *address in addresses)[self append:[NSString stringWithFormat:@"Browser link (%@):\n%@",address[@"name"],[self linkForAddress:address]]];
     if(!addresses.count)[self append:@"No Wi-Fi/hotspot IPv4 address found. Connect the viewer, then show links again."];
 }
