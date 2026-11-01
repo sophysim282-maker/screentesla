@@ -1,5 +1,11 @@
 # ScreenLink AirPlay Lab — experimental iPhone app
 
+## Version 0.3: connect before enabling PiP
+
+The user reports that version 0.1 now appears in the iPhone's casting list and the iPhone screen reaches the Mac browser, but leaving the receiver app stops sharing. Version 0.3 keeps receiver discovery code unchanged and defers all preview-view, PiP-controller and playback-session creation until the user explicitly taps Start floating preview after actual frames arrive. This is a hypothesis-driven background fix, not a verified runtime result. Follow [TESTING-0.3.md](TESTING-0.3.md).
+
+Version 0.3.0 build 3 passed: https://github.com/sophysim282-maker/screentesla/actions/runs/41298397307
+
 ## Version 0.2: floating preview
 
 Version 0.2.0 build 2 adds Copy viewer link (hotspot address first) and an AVKit Picture in Picture preview driven by real received frames. Background reception with active PiP is EXPERIMENTAL and still needs a device test. See [TESTING-0.2.md](TESTING-0.2.md). The user verified Mac -> iPhone receiver -> browser video using version 0.1. That does not verify sustained same-iPhone mirroring.
