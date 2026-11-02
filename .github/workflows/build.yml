@@ -15,9 +15,9 @@ jobs:
       - name: Install build prerequisites
         run: brew install xcodegen autoconf automake libtool
       - name: Build
-        env:
-          SCREENLINK_LIVE_SIGNALING_TEST: "1"
         run: bash tools/build.sh
+      - name: Production signaling integration (real native SDP and ping)
+        run: build/test-rtc-peer --live
       - uses: actions/upload-artifact@v4
         if: always()
         with:
