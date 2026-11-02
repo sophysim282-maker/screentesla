@@ -22,7 +22,7 @@
     UIStackView *stack=[UIStackView new];stack.axis=UILayoutConstraintAxisVertical;stack.spacing=6;stack.translatesAutoresizingMaskIntoConstraints=NO;
     [self.view addSubview:stack];
     [NSLayoutConstraint activateConstraints:@[[stack.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor constant:8],[stack.bottomAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.bottomAnchor constant:-8],[stack.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor constant:16],[stack.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor constant:-16]]];
-    UILabel *title=[UILabel new];title.text=@"ScreenLink · AirPlay Lab 0.10.0";title.font=[UIFont boldSystemFontOfSize:21];[stack addArrangedSubview:title];
+    UILabel *title=[UILabel new];title.text=@"ScreenLink · AirPlay Lab 0.10.1";title.font=[UIFont boldSystemFontOfSize:21];[stack addArrangedSubview:title];
     self.bookmark=[UILabel new];self.bookmark.font=[UIFont monospacedSystemFontOfSize:14 weight:UIFontWeightMedium];self.bookmark.numberOfLines=0;self.bookmark.text=@"Connect your Mac to the hotspot, then start receiver.";[stack addArrangedSubview:self.bookmark];
     UILabel *help=[UILabel new];help.numberOfLines=0;help.font=[UIFont systemFontOfSize:13];help.text=@"Start → copy link → connect AirPlay → return here → start a background session (iOS 26 test), or floating preview. Viewer: use H.264 for full source frame rate.";[stack addArrangedSubview:help];
     self.discoveryMode=[[UISegmentedControl alloc]initWithItems:@[@"iPhone VPN",@"Mac VPN",@"Native"]];
@@ -55,7 +55,7 @@
     self.session.videoIsLive=^BOOL{return weak.receiver.videoIsLive;};
     self.session.activityChanged=^(BOOL active){Controller *owner=weak;if(!owner)return;owner.receiver.compressedOnlyInBackground=active && !owner.preview.active;if(active)[owner endGrace];};
     self.session.ended=^{[weak stop];};
-    [self append:@"Version 0.10.0: experimental native YouTube video-only AirPlay. Tap Start YouTube video-only here first; wait for the background task to start, then open YouTube → Cast → AirPlay & Bluetooth devices → ScreenLink VPN Phone. Open the fixed hotspot viewer on your Mac and press Play with sound. This path carries the original media and audio, not screenshots. Discovery and screen mirroring remain available. Native YouTube, ads, and background behavior still require your iPhone test."];
+    [self append:@"Version 0.10.1: fixes empty HTTP responses that could leave YouTube waiting at 0:00; adds media handoff diagnostics. Experimental native YouTube video-only AirPlay. Tap Start YouTube video-only here first; wait for the background task to start, then open YouTube → Cast → AirPlay & Bluetooth devices → ScreenLink VPN Phone. Open the fixed hotspot viewer on your Mac and press Play with sound. This path carries the original media and audio, not screenshots. Discovery and screen mirroring remain available. Native YouTube, ads, and background behavior still require your iPhone test."];
     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(background) name:UIApplicationDidEnterBackgroundNotification object:nil];
     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(active) name:UIApplicationDidBecomeActiveNotification object:nil];
     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(foreground) name:UIApplicationWillEnterForegroundNotification object:nil];

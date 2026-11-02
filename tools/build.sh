@@ -25,6 +25,8 @@ xcrun --sdk macosx clang -fobjc-arc -fblocks -IApp tools/test_vpn_discovery.m Ap
 build/test-vpn-discovery | tee build/xcodebuild.log
 python3 tools/prepare_receiver.py
 python3 tools/fetch_hls.py
+cc -IVendor/RPiPlay/lib tools/test_http_completion.c Vendor/RPiPlay/lib/http_request.c Vendor/RPiPlay/lib/http_response.c Vendor/RPiPlay/lib/llhttp/api.c Vendor/RPiPlay/lib/llhttp/http.c Vendor/RPiPlay/lib/llhttp/llhttp.c -o build/test-http-completion
+build/test-http-completion
 xcrun --sdk macosx clang -fobjc-arc -fblocks -IApp -IVendor/RPiPlay/lib tools/test_media_cast.m App/MediaCast.m App/HLSPlaylist.m Vendor/RPiPlay/lib/http_request.c Vendor/RPiPlay/lib/http_response.c Vendor/RPiPlay/lib/llhttp/api.c Vendor/RPiPlay/lib/llhttp/http.c Vendor/RPiPlay/lib/llhttp/llhttp.c -framework Foundation -o build/test-media-cast
 build/test-media-cast
 root="$PWD"

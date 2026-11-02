@@ -9,7 +9,11 @@ static NSData *binary(id object){return [NSPropertyListSerialization dataWithPro
 static NSData *exchange(MediaCast *media,NSString *method,NSString *path,NSString *session,id plist,void *connection,int fd){
     NSData *body=plist?binary(plist):[NSData data];NSString *head=[NSString stringWithFormat:@"%@ %@ HTTP/1.1\r\nHost: receiver\r\nContent-Type: application/x-apple-binary-plist\r\nContent-Length: %lu\r\n%@%@\r\n",method,path,(unsigned long)body.length,session?[NSString stringWithFormat:@"X-Apple-Session-ID: %@\r\n",session]:@"",[path isEqual:@"/reverse"]?@"Connection: Upgrade\r\nUpgrade: PTTH/1.0\r\n":@""];
     NSMutableData *wire=[[head dataUsingEncoding:NSUTF8StringEncoding] mutableCopy];[wire appendData:body];http_request_t *request=http_request_init();http_request_add_data(request,wire.bytes,(int)wire.length);assert(!http_request_has_error(request));assert(http_request_is_complete(request));
-    http_response_t *response=NULL;assert([media handle:request connection:connection socket:fd response:&response]);http_request_destroy(request);assert(response);int length=0;const char *raw=http_response_get_data(response,&length);NSData *result=[NSData dataWithBytes:raw length:length];http_response_destroy(response);return result;
+    http_response_t *response=NULL;assert([media handle:request connection:connection socket:fd response:&response]);http_request_destroy(request);assert(response);int length=0;const char *raw=http_response_get_data(response,&length);NSData *result=[NSData dataWithBytes:raw length:length];http_response_destroy(response);
+    // Parse the complete wire response as a persistent-connection client. A
+    // missing zero Content-Length leaves HTTP 200 incomplete until EOF.
+    http_request_t *framing=http_request_init();http_request_add_data(framing,result.bytes,(int)result.length);assert(!http_request_has_error(framing));assert(http_request_is_complete(framing));http_request_destroy(framing);
+    return result;
 }
 static NSInteger status(NSData *wire){NSString *text=[[NSString alloc]initWithData:wire encoding:NSUTF8StringEncoding];return [[[text componentsSeparatedByString:@" "] objectAtIndex:1] integerValue];}
 static NSDictionary *responsePlist(NSData *wire){NSData *boundary=[@"\r\n\r\n" dataUsingEncoding:NSUTF8StringEncoding];NSRange r=[wire rangeOfData:boundary options:0 range:NSMakeRange(0,wire.length)];return parse([wire subdataWithRange:NSMakeRange(NSMaxRange(r),wire.length-NSMaxRange(r))]);}
@@ -44,5 +48,5 @@ int main(void){@autoreleasepool{
     // HTTP response acknowledgements on the upgraded PTTH socket must parse.
     http_request_t *ack=http_request_init();const char *wire="HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n";http_request_add_data(ack,wire,(int)strlen(wire));assert(!http_request_has_error(ack));http_response_t *none=NULL;assert([media handle:ack connection:connection socket:fds[0] response:&none]);assert(!none);http_request_destroy(ack);
     [media connectionClosed:connection];[media stop];assert(!media.active);assert([[media resource:identifier range:nil][@"code"] intValue]==404);close(fds[0]);close(fds[1]);
-    puts("Native media passed: HTTP/PTTH, FCUP master/variant handoff, condensed YouTube HLS, browser playback feedback, pause/seek and cleanup.");
+    puts("Native media passed: persistent HTTP response completion, HTTP/PTTH, FCUP master/variant handoff, condensed YouTube HLS, browser playback feedback, pause/seek and cleanup.");
 }return 0;}

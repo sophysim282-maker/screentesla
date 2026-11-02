@@ -76,6 +76,9 @@ static BOOL sendBytes(int fd,NSData *data){const char *p=data.bytes;NSUInteger n
 - (void)reply:(http_response_t **)response status:(int)code type:(NSString *)type data:(NSData *)data{
     *response=http_response_init("HTTP/1.1",code,code==200?"OK":(code==101?"Switching Protocols":"Request Failed"));
     if(type)http_response_add_header(*response,"Content-Type",type.UTF8String);
+    // HTTP/1.1 persistent responses with no body still need an explicit length.
+    // Otherwise the sender waits for connection close and /play never completes.
+    if(!data.length && code!=101)http_response_add_header(*response,"Content-Length","0");
     http_response_finish(*response,data.bytes,(int)data.length);
 }
 - (BOOL)handle:(http_request_t *)request connection:(void *)connection socket:(int)socket response:(http_response_t **)response{
@@ -89,11 +92,12 @@ static BOOL sendBytes(int fd,NSData *data){const char *p=data.bytes;NSUInteger n
     NSData *body=length?[NSData dataWithBytes:raw length:(NSUInteger)length]:[NSData data];NSDictionary *plist=readPlist(body);NSString *session=header(request,"X-Apple-Session-ID");
     NSDictionary *query;NSMutableDictionary *q=[NSMutableDictionary dictionary];for(NSURLQueryItem *item in url.queryItems)if(item.value)q[item.name]=item.value;query=q;
     if([path isEqual:@"/server-info"]){
+        [self log:@"MEDIA: native AirPlay server-info requested."];
         NSDictionary *info=@{@"features":@(0x5A7FFEFB),@"deviceid":self.deviceID?:@"",@"macAddress":self.deviceID?:@"",@"model":@"AppleTV2,1",@"srcvers":@"220.68",@"osBuildVersion":@"12B435",@"protovers":@"1.0",@"vv":@2};
         [self reply:response status:200 type:@"text/x-apple-plist+xml" data:plistData(info)];return YES;
     }
     if([path isEqual:@"/reverse"] && [method isEqual:@"POST"]){
-        if(socket<0 || ![header(request,"Upgrade").uppercaseString isEqual:@"PTTH/1.0"]){[self reply:response status:400 type:nil data:nil];return YES;}
+        if(socket<0 || ![header(request,"Upgrade").uppercaseString isEqual:@"PTTH/1.0"]){[self log:@"MEDIA REVERSE REJECTED: missing socket or PTTH upgrade header."];[self reply:response status:400 type:nil data:nil];return YES;}
         [_ready lock];if(_reverse>=0)close(_reverse);_reverse=dup(socket);_reverseConnection=connection;[_ready unlock];
         *response=http_response_init("HTTP/1.1",101,"Switching Protocols");http_response_add_header(*response,"Connection","Upgrade");http_response_add_header(*response,"Upgrade","PTTH/1.0");http_response_finish(*response,NULL,0);
         [self log:@"MEDIA: YouTube AirPlay reverse control channel connected."];return YES;
@@ -102,7 +106,7 @@ static BOOL sendBytes(int fd,NSData *data){const char *p=data.bytes;NSUInteger n
         NSString *location=[plist[@"Content-Location"] isKindOfClass:NSString.class]?plist[@"Content-Location"]:nil;
         if(!location){NSString *text=[[NSString alloc]initWithData:body encoding:NSUTF8StringEncoding];for(NSString *line in [text componentsSeparatedByCharactersInSet:NSCharacterSet.newlineCharacterSet])if([line hasPrefix:@"Content-Location:"])location=[[line substringFromIndex:17] stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceCharacterSet];}
         NSURL *target=[NSURL URLWithString:location?:@""];
-        if(!session.length || session.length>128 || [session rangeOfCharacterFromSet:NSCharacterSet.newlineCharacterSet].location!=NSNotFound || (!webURL(target)&&!virtualURL(target))){[self reply:response status:400 type:nil data:nil];return YES;}
+        if(!session.length || session.length>128 || [session rangeOfCharacterFromSet:NSCharacterSet.newlineCharacterSet].location!=NSNotFound || (!webURL(target)&&!virtualURL(target))){[self log:[NSString stringWithFormat:@"MEDIA PLAY REJECTED: session %@, content URL scheme %@, plist keys %@.",session.length?@"present":@"missing",target.scheme?:@"missing",[[plist.allKeys sortedArrayUsingSelector:@selector(compare:)] componentsJoinedByString:@", "]?:@"none"]];[self reply:response status:400 type:nil data:nil];return YES;}
         [_ready lock];_active=YES;_readyToPlay=NO;_paused=NO;_position=0;_duration=0;_heartbeat=0;_rate=1;_command=0;_commandKind=@"rate";_seekPosition=0;_start=MAX(0,[plist[@"Start-Position-Seconds"] doubleValue]);_fraction=MAX(0,MIN(1,[plist[@"Start-Position"] doubleValue]));_error=nil;_eventState=@"loading";_appleSession=session;_primary=target.absoluteString;_uuid=[plist[@"uuid"] isKindOfClass:NSString.class]?plist[@"uuid"]:NSUUID.UUID.UUIDString;_epoch=NSUUID.UUID.UUIDString;[_resources removeAllObjects];[_identifiers removeAllObjects];[_cache removeAllObjects];[_pending removeAllObjects];[_ready broadcast];[_ready unlock];
         [self reply:response status:200 type:nil data:nil];
         [self log:@"MEDIA PLAY REQUEST: native video-only handoff received. Open the hotspot viewer; its video player will show only the playing media."];
@@ -115,7 +119,7 @@ static BOOL sendBytes(int fd,NSData *data){const char *p=data.bytes;NSUInteger n
             NSString *location=[params[@"FCUP_Response_URL"] isKindOfClass:NSString.class]?params[@"FCUP_Response_URL"]:nil;NSData *data=[params[@"FCUP_Response_Data"] isKindOfClass:NSData.class]?params[@"FCUP_Response_Data"]:nil;
             [_ready lock];NSNumber *expected=location?_pending[location]:nil;BOOL valid=[session isEqual:_appleSession] && expected && [expected isEqual:params[@"FCUP_Response_RequestID"]];
             if(valid){NSInteger code=params[@"FCUP_Response_StatusCode"]?[params[@"FCUP_Response_StatusCode"] integerValue]:200;_cache[location]=@{@"data":data?:[NSData data],@"code":@(code),@"time":@(NSProcessInfo.processInfo.systemUptime)};[_pending removeObjectForKey:location];[_ready broadcast];}[_ready unlock];
-            [self reply:response status:valid?200:409 type:nil data:nil];if(valid)[self log:[NSString stringWithFormat:@"MEDIA PLAYLIST RESPONSE: %lu bytes received from YouTube's control channel.",(unsigned long)data.length]];return YES;
+            [self reply:response status:valid?200:409 type:nil data:nil];if(!valid)[self log:@"MEDIA PLAYLIST RESPONSE REJECTED: session, URL, or request ID did not match an outstanding request."];if(valid)[self log:[NSString stringWithFormat:@"MEDIA PLAYLIST RESPONSE: %lu bytes received from YouTube's control channel.",(unsigned long)data.length]];return YES;
         }
         if([type isEqual:@"playlistRemove"]){[_ready lock];NSDictionary *item=[params[@"item"] isKindOfClass:NSDictionary.class]?params[@"item"]:@{};if([session isEqual:_appleSession] && [item[@"uuid"] isEqual:_uuid]){_active=NO;_readyToPlay=NO;[_ready broadcast];}[_ready unlock];[self reply:response status:200 type:nil data:nil];return YES;}
         [self reply:response status:501 type:nil data:nil];[self log:@"MEDIA: sender requested an unsupported playlist action. Copy test log if playback stops here."];return YES;
@@ -149,7 +153,7 @@ static BOOL sendBytes(int fd,NSData *data){const char *p=data.bytes;NSUInteger n
         data=download;code=response?response.statusCode:502;mime=response.MIMEType;contentRange=response.allHeaderFields[@"Content-Range"];
         if(data.length>32*1024*1024)return @{@"code":@413};
     }else return @{@"code":@400};
-    if(code<200 || code>=300 || !data.length)return @{@"code":@(code>=400?code:502)};
+    if(code<200 || code>=300 || !data.length){[self log:[NSString stringWithFormat:@"MEDIA RESOURCE FAILED: HTTP %ld from %@, %lu bytes. No signed URLs are included in this log.",(long)code,url.host?:@"sender",(unsigned long)data.length]];return @{@"code":@(code>=400?code:502)};}
     NSString *text=[[NSString alloc]initWithData:data encoding:NSUTF8StringEncoding];
     if([text hasPrefix:@"#EXTM3U"]){
         NSError *error=nil;NSString *rewritten=SLRewritePlaylist(text,^NSString *(NSString *uri){

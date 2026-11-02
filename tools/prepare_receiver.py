@@ -116,3 +116,13 @@ extern void sl_media_closed(void *, void *);
 p = vendor / 'lib' / 'dnssdint.h'
 s = p.read_text().replace('"0x5A7FFEE6"', '"0x5A7FFEFB"')
 p.write_text(s)
+
+# Pair/control HTTP requests can also complete with an empty 200 response.
+# Keep original RTSP framing while making HTTP/1.1 completion unambiguous.
+p = vendor / 'lib' / 'raop.c'
+s = p.read_text()
+marker = '    http_response_finish(*response, response_data, response_datalen);'
+if 'if (!cseq && response_datalen == 0)' not in s:
+    assert marker in s
+    s = s.replace(marker, '    if (!cseq && response_datalen == 0) http_response_add_header(*response, "Content-Length", "0");\n' + marker, 1)
+    p.write_text(s)
