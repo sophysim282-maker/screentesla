@@ -3,9 +3,17 @@ const root=process.argv[2],file=process.argv[3],binary=fs.readFileSync(file);let
 for(let p=0;p<binary.length;){const size=binary.readUInt32BE(p);assert(size>=8);boxes.push({start:p,end:p+size,type:binary.toString('ascii',p+4,p+8)});p+=size;}
 const moof=boxes.findIndex(b=>b.type==='moof'),init=binary.subarray(0,boxes[moof].start),segments=[];
 for(let i=moof;i<boxes.length;i++)if(boxes[i].type==='moof'){const end=boxes[i+1]?.end||boxes[i].end;segments.push(binary.subarray(boxes[i].start,end));}
+const vod=[];for(let i=0;i<segments.length;i+=120)vod.push(Buffer.concat(segments.slice(i,i+120)));
+const scriptFiles={'/media/hls.js':'HLSPlayer.js','/media/canvas.js':'CanvasPlayer.js','/media/mp4box.js':'MP4Demux.js','/media/mux.js':'TSDemux.js'};
 const server=http.createServer((req,res)=>{const url=new URL(req.url,'http://localhost');res.setHeader('Cache-Control','no-store');
  if(url.searchParams.get('token')!=='fixture'){res.statusCode=403;return res.end();}
- if(['/split','/map','/video'].includes(url.pathname)){res.setHeader('Content-Type','text/html');return res.end(url.pathname==='/video'?'<p id="video-panel">Independent YouTube panel</p>':fs.readFileSync(path.join(root,url.pathname==='/split'?'SplitViewer.html':'MapPlayer.html')));}
+ if(['/split','/map','/video'].includes(url.pathname)){res.setHeader('Content-Type','text/html');return res.end(fs.readFileSync(path.join(root,url.pathname==='/video'?'MediaPlayer.html':url.pathname==='/split'?'SplitViewer.html':'MapPlayer.html')));}
+ if(scriptFiles[url.pathname]){res.setHeader('Content-Type','application/javascript');return res.end(fs.readFileSync(path.join(root,scriptFiles[url.pathname])));}
+ if(url.pathname==='/media/state'){res.setHeader('Content-Type','application/json');return res.end(JSON.stringify({active:true,epoch:'separate-media',url:'/fixture/media.m3u8?token=fixture',command:0,commandKind:'rate',paused:false,start:0,fraction:0}));}
+ if(url.pathname==='/media/report'){req.resume();res.setHeader('Content-Type','application/json');return res.end('{}');}
+ if(url.pathname==='/fixture/media.m3u8'){res.setHeader('Content-Type','application/vnd.apple.mpegurl');return res.end('#EXTM3U\n#EXT-X-TARGETDURATION:2\n#EXT-X-VERSION:7\n#EXT-X-MAP:URI="/fixture/init.mp4?token=fixture"\n'+vod.map((_,i)=>'#EXTINF:'+Math.min(2,(segments.length-i*120)/60)+',\n/fixture/part'+i+'.m4s?token=fixture\n').join('')+'#EXT-X-ENDLIST\n');}
+ if(url.pathname==='/fixture/init.mp4')return res.end(init);
+ if(url.pathname.startsWith('/fixture/part'))return res.end(vod[Number(url.pathname.match(/part(\d+)/)[1])]);
  if(url.pathname==='/screen/info'){res.setHeader('Content-Type','application/json');return res.end(JSON.stringify({epoch:restarted?'second':'first',ready:true,codec:'avc1.42C01E',orientation:rotation,frames:count,ageMs:0}));}
  if(url.pathname==='/screen/init.mp4'){res.setHeader('X-Stream-Epoch',restarted?'second':'first');return res.end(init);}
  if(url.pathname==='/screen/segments'){
@@ -21,11 +29,11 @@ const server=http.createServer((req,res)=>{const url=new URL(req.url,'http://loc
  await page.goto('http://127.0.0.1:'+server.address().port+'/split?token=fixture');const frame=page.frameLocator('#map');
  await frame.locator('#source').waitFor({state:'attached'});await page.waitForFunction(()=>{const f=document.getElementById('map').contentWindow;return f.document.getElementById('source').currentTime>1;},null,{timeout:18000});
  assert(await frame.locator('#screen').evaluate(canvas=>canvas.getContext('2d').getImageData(0,0,canvas.width,canvas.height).data.some((v,i)=>i%4!==3&&v>20)),'Live screen pixels must render');
- assert(await page.frameLocator('#media').locator('#video-panel').isVisible());console.log('Independent map screen and media panes load; live H.264 screen is painted on Canvas');
+ await page.waitForFunction(()=>document.getElementById('media').contentWindow.eval('media().currentTime')>1,null,{timeout:15000});assert(await page.frameLocator('#media').locator('#canvas').evaluate(c=>c.getContext('2d').getImageData(0,0,c.width,c.height).data.some((v,i)=>i%4!==3&&v>20)));console.log('Both live map screen and independent HLS media play simultaneously on Canvas');
  const divider=page.locator('#divider'),bounds=await divider.boundingBox();await page.mouse.move(bounds.x+7,bounds.y+80);await page.mouse.down();await page.mouse.move(880,400,{steps:8});await page.mouse.up();let value=Number(await divider.getAttribute('aria-valuenow'));assert(value>65&&value<75);assert(!await page.locator('#panels').evaluate(p=>p.classList.contains('dragging')));
  await page.reload();assert.equal(Number(await divider.getAttribute('aria-valuenow')),value);await divider.focus();await page.keyboard.press('Home');assert.equal(await divider.getAttribute('aria-valuenow'),'20');await page.keyboard.press('End');assert.equal(await divider.getAttribute('aria-valuenow'),'80');await page.click('#reset');assert.equal(await divider.getAttribute('aria-valuenow'),'50');
  await page.click('#layout');assert.equal(await divider.getAttribute('aria-orientation'),'horizontal');console.log('Pointer drag, ratio persistence, keyboard bounds, reset and stacked layout passed');
  rotation=6;await page.waitForFunction(()=>{const c=document.getElementById('map').contentWindow.document.getElementById('screen');return c.width===360&&c.height===640;},null,{timeout:7000});console.log('Screen orientation rotation passed');
- restarted=true;count=1;await page.waitForFunction(()=>{const v=document.getElementById('map').contentWindow.document.getElementById('source');return v.currentTime>0.5&&v.currentTime<3;},null,{timeout:12000});console.log('Capture epoch restart recovery passed');
+ restarted=true;count=1;await page.waitForFunction(()=>{const v=document.getElementById('map').contentWindow.document.getElementById('source');return document.getElementById('map').contentWindow.document.getElementById('screen').dataset.epoch==='second'&&v.currentTime>0.5&&v.currentTime<3;},null,{timeout:12000});console.log('Capture epoch restart recovery passed');
  clearInterval(timer);await browser.close();server.close();
 })().catch(e=>{console.error(e);server.close();process.exit(1)});

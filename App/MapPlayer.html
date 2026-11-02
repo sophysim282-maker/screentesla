@@ -18,7 +18,7 @@ async function run(mine){
    const media=new MediaSource();objectURL=URL.createObjectURL(media);video.src=objectURL;
    await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(Error('Map player startup timed out')),5000);media.addEventListener('sourceopen',()=>{clearTimeout(timer);resolve();},{once:true});});if(mine!==generation)return;
    const buffer=media.addSourceBuffer(type);media.duration=Infinity;
-   const init=await request('/screen/init.mp4');if(init.response.headers.get('X-Stream-Epoch')!==meta.epoch)throw Error('Screen stream restarted');await update(buffer,()=>buffer.appendBuffer(init.bytes));let after=0,started=false;
+   const init=await request('/screen/init.mp4');if(init.response.headers.get('X-Stream-Epoch')!==meta.epoch)throw Error('Screen stream restarted');await update(buffer,()=>buffer.appendBuffer(init.bytes));canvas.dataset.epoch=meta.epoch;let after=0,started=false;
    while(!closed&&mine===generation){
     const packet=await request('/screen/segments&after='+after+'&epoch='+encodeURIComponent(meta.epoch));if(mine!==generation)return;
     if(packet.response.status===204){await sleep(30);continue;}if(packet.response.headers.get('X-Stream-Epoch')!==meta.epoch)throw Error('Screen stream restarted');
