@@ -47,7 +47,7 @@ _Static_assert(kVTInvalidSessionErr == -12903, "Check decoder error mapping agai
     BOOL _previewPending;
     BOOL _jpegBusy;
     dispatch_queue_t _jpegQueue;
-    dispatch_semaphore_t _httpSlots;
+    dispatch_semaphore_t _httpSlots,_mediaSlots;
     dispatch_semaphore_t _streamSlots;
     NSUInteger _streamClients;
     SLVideoProfile _videoProfile;
@@ -138,7 +138,7 @@ static SLVideoSettings videoSettings(SLVideoProfile profile) {
 #else
         _ci=[CIContext contextWithOptions:nil];
 #endif
-_decodeQueue=dispatch_queue_create("ScreenLink.decode",DISPATCH_QUEUE_SERIAL);_jpegQueue=dispatch_queue_create("ScreenLink.jpeg",DISPATCH_QUEUE_SERIAL);_httpSlots=dispatch_semaphore_create(_screenStream?6:12);_streamSlots=dispatch_semaphore_create(2);_frameReady=[NSCondition new];_token=NSUUID.UUID.UUIDString;[self installLifecycleObservers];
+_decodeQueue=dispatch_queue_create("ScreenLink.decode",DISPATCH_QUEUE_SERIAL);_jpegQueue=dispatch_queue_create("ScreenLink.jpeg",DISPATCH_QUEUE_SERIAL);_httpSlots=dispatch_semaphore_create(12);_mediaSlots=dispatch_semaphore_create(_screenStream?3:8);_streamSlots=dispatch_semaphore_create(2);_frameReady=[NSCondition new];_token=NSUUID.UUID.UUIDString;[self installLifecycleObservers];
         __weak Receiver *weak=self;
         _media.status=^(NSString *text){[weak emit:text];};
         _inbox=[[VideoInbox alloc]initWithQueue:_decodeQueue maxBytes:(_screenStream?2:16)*1024*1024 maxPackets:(_screenStream?30:120) consume:^(NSData *data,uint64_t timestamp,NSUInteger generation){
@@ -434,7 +434,7 @@ static NSArray *txtStrings(const char *bytes,int length) {
         if([object isKindOfClass:NSDictionary.class]){[_media report:object];mime=@"application/json";body=[@"{}" dataUsingEncoding:NSUTF8StringEncoding];}else status=@"400 Bad Request";
     }
     else if([url.path hasPrefix:@"/media/resource/"]){
-        NSDictionary *part=[_media resource:[url.path substringFromIndex:16] range:byteRange];NSInteger code=[part[@"code"] integerValue];
+        NSDictionary *part;if(dispatch_semaphore_wait(_mediaSlots,dispatch_time(DISPATCH_TIME_NOW,2*NSEC_PER_SEC)))part=@{@"code":@503};else{@try{part=[_media resource:[url.path substringFromIndex:16] range:byteRange];}@finally{dispatch_semaphore_signal(_mediaSlots);}}NSInteger code=[part[@"code"] integerValue];
         status=[NSString stringWithFormat:@"%ld %@",(long)code,code==200?@"OK":(code==206?@"Partial Content":@"Media Request Failed")];mime=part[@"mime"]?:@"text/plain";body=part[@"data"]?:[NSData data];if(part[@"range"])extra=[NSString stringWithFormat:@"Content-Range: %@\r\n",part[@"range"]];
     }
     else if([url.path isEqual:@"/video"] || [@[@"/media/hls.js",@"/media/canvas.js",@"/media/mp4box.js",@"/media/mux.js"] containsObject:url.path]){

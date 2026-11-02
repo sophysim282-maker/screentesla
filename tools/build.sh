@@ -25,6 +25,8 @@ xcrun --sdk macosx clang -fobjc-arc -fblocks -IApp tools/test_h264_stream.m App/
 build/test-h264-stream
 xcrun --sdk macosx clang -fobjc-arc -fblocks -IApp -IBroadcast tools/test_screen_encoder.m Broadcast/ScreenEncoder.m App/H264Stream.m -framework Foundation -framework VideoToolbox -framework CoreMedia -framework CoreVideo -o build/test-screen-encoder
 build/test-screen-encoder
+xcrun --sdk macosx clang -fobjc-arc -fblocks -IApp tools/test_bounded_download.m App/BoundedDownload.m -framework Foundation -o build/test-bounded-download
+build/test-bounded-download
 xcrun --sdk macosx clang -fobjc-arc -fblocks -IApp tools/test_video_inbox.m App/VideoInbox.m -framework Foundation -o build/test-video-inbox
 build/test-video-inbox
 xcrun --sdk macosx clang -fobjc-arc -fblocks -IApp tools/test_vpn_discovery.m App/VPNDiscovery.m -framework Foundation -o build/test-vpn-discovery
@@ -34,7 +36,7 @@ python3 tools/fetch_hls.py
 python3 tools/fetch_canvas.py
 cc -IVendor/RPiPlay/lib tools/test_http_completion.c Vendor/RPiPlay/lib/http_request.c Vendor/RPiPlay/lib/http_response.c Vendor/RPiPlay/lib/llhttp/api.c Vendor/RPiPlay/lib/llhttp/http.c Vendor/RPiPlay/lib/llhttp/llhttp.c -o build/test-http-completion
 build/test-http-completion
-xcrun --sdk macosx clang -fobjc-arc -fblocks -IApp -IVendor/RPiPlay/lib tools/test_media_cast.m App/MediaCast.m App/HLSPlaylist.m Vendor/RPiPlay/lib/http_request.c Vendor/RPiPlay/lib/http_response.c Vendor/RPiPlay/lib/llhttp/api.c Vendor/RPiPlay/lib/llhttp/http.c Vendor/RPiPlay/lib/llhttp/llhttp.c -framework Foundation -o build/test-media-cast
+xcrun --sdk macosx clang -fobjc-arc -fblocks -IApp -IVendor/RPiPlay/lib tools/test_media_cast.m App/MediaCast.m App/BoundedDownload.m App/HLSPlaylist.m Vendor/RPiPlay/lib/http_request.c Vendor/RPiPlay/lib/http_response.c Vendor/RPiPlay/lib/llhttp/api.c Vendor/RPiPlay/lib/llhttp/http.c Vendor/RPiPlay/lib/llhttp/llhttp.c -framework Foundation -o build/test-media-cast
 build/test-media-cast
 root="$PWD"
 sdk="$(xcrun --sdk iphoneos --show-sdk-path)"

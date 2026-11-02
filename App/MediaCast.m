@@ -1,4 +1,5 @@
 #import "MediaCast.h"
+#import "BoundedDownload.h"
 #import "HLSPlaylist.h"
 #import <sys/socket.h>
 #import <unistd.h>
@@ -7,7 +8,6 @@
 @interface MediaCast () {
     NSCondition *_ready;
     dispatch_queue_t _events;
-    NSURLSession *_network;
     int _reverse;
     void *_reverseConnection;
     NSString *_appleSession,*_epoch,*_primary,*_uuid;
@@ -28,7 +28,7 @@ static BOOL virtualURL(NSURL *url){return [url.scheme.lowercaseString isEqual:@"
 static BOOL stablePlaylist(NSData *data){NSString *text=[[NSString alloc]initWithData:data encoding:NSUTF8StringEncoding];return [text hasPrefix:@"#EXTM3U"] && ([text containsString:@"#EXT-X-ENDLIST"] || [text containsString:@"#EXT-X-STREAM-INF:"] || [text containsString:@"#EXT-X-I-FRAME-STREAM-INF:"]);}
 static BOOL sendBytes(int fd,NSData *data){const char *p=data.bytes;NSUInteger n=data.length;while(n){ssize_t k=send(fd,p,n,0);if(k<0 && errno==EINTR)continue;if(k<=0)return NO;p+=k;n-=(NSUInteger)k;}return YES;}
 @implementation MediaCast
-- (instancetype)init{if((self=[super init])){_ready=[NSCondition new];_events=dispatch_queue_create("ScreenLink.media.events",DISPATCH_QUEUE_SERIAL);_reverse=-1;_resources=[NSMutableDictionary dictionary];_identifiers=[NSMutableDictionary dictionary];_cache=[NSMutableDictionary dictionary];_pending=[NSMutableDictionary dictionary];_prefetch=[NSMutableOrderedSet orderedSet];_epoch=NSUUID.UUID.UUIDString;NSURLSessionConfiguration *c=NSURLSessionConfiguration.ephemeralSessionConfiguration;c.timeoutIntervalForRequest=12;c.timeoutIntervalForResource=20;c.requestCachePolicy=NSURLRequestReloadIgnoringLocalCacheData;c.URLCache=nil;_network=[NSURLSession sessionWithConfiguration:c];}return self;}
+- (instancetype)init{if((self=[super init])){_ready=[NSCondition new];_events=dispatch_queue_create("ScreenLink.media.events",DISPATCH_QUEUE_SERIAL);_reverse=-1;_resources=[NSMutableDictionary dictionary];_identifiers=[NSMutableDictionary dictionary];_cache=[NSMutableDictionary dictionary];_pending=[NSMutableDictionary dictionary];_prefetch=[NSMutableOrderedSet orderedSet];_epoch=NSUUID.UUID.UUIDString;}return self;}
 - (void)log:(NSString *)text{if(self.status)self.status(text);}
 - (BOOL)active{[_ready lock];BOOL value=_active;[_ready unlock];return value;}
 - (BOOL)videoIsLive{[_ready lock];BOOL value=_active && _readyToPlay && NSProcessInfo.processInfo.systemUptime-_heartbeat<10;[_ready unlock];return value;}
@@ -173,11 +173,12 @@ static BOOL sendBytes(int fd,NSData *data){const char *p=data.bytes;NSUInteger n
     }else if(webURL(url)){
         NSMutableURLRequest *request=[NSMutableURLRequest requestWithURL:url];[request setValue:@"AppleCoreMedia/1.0 ScreenLink" forHTTPHeaderField:@"User-Agent"];
         if(range.length<128 && [range hasPrefix:@"bytes="] && [range rangeOfCharacterFromSet:NSCharacterSet.newlineCharacterSet].location==NSNotFound)[request setValue:range forHTTPHeaderField:@"Range"];
-        dispatch_semaphore_t done=dispatch_semaphore_create(0);__block NSData *download=nil;__block NSHTTPURLResponse *response=nil;
-        NSURLSessionDataTask *task=[_network dataTaskWithRequest:request completionHandler:^(NSData *bytes,NSURLResponse *r,NSError *error){download=bytes;response=[r isKindOfClass:NSHTTPURLResponse.class]?(NSHTTPURLResponse *)r:nil;dispatch_semaphore_signal(done);}];[task resume];
-        if(dispatch_semaphore_wait(done,dispatch_time(DISPATCH_TIME_NOW,20*NSEC_PER_SEC))){[task cancel];return @{@"code":@504};}
-        data=download;code=response?response.statusCode:502;mime=response.MIMEType;contentRange=response.allHeaderFields[@"Content-Range"];
-        if(data.length>32*1024*1024)return @{@"code":@413};
+#if SL_BROADCAST_EXTENSION
+        NSUInteger budget=6*1024*1024;
+#else
+        NSUInteger budget=32*1024*1024;
+#endif
+        NSDictionary *download=SLBoundedDownload(request,budget);data=download[@"data"];code=[download[@"code"] integerValue];mime=download[@"mime"];contentRange=download[@"range"];
     }else return @{@"code":@400};
     if(code<200 || code>=300 || !data.length){[self log:[NSString stringWithFormat:@"MEDIA RESOURCE FAILED: HTTP %ld from %@, %lu bytes. No signed URLs are included in this log.",(long)code,url.host?:@"sender",(unsigned long)data.length]];return @{@"code":@(code>=400?code:502)};}
     NSString *text=[[NSString alloc]initWithData:data encoding:NSUTF8StringEncoding];
