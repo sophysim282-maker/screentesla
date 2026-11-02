@@ -43,6 +43,8 @@ jobs:
           node tools/test_youtube_rtc_browser.cjs build/media --fragmented
           node tools/test_canvas_browser.cjs App build/media
           node tools/test_split_browser.cjs App build/live.mp4
+          python3 tools/create_quality_fixtures.py build/quality
+          node tools/test_youtube_rtc_browser.cjs build/quality --quality
       - name: Viewer state and pacing checks
         run: |
           python3 tools/test_h264_viewer.py
