@@ -8,7 +8,8 @@ const fs=require('fs'),path=require('path'),assert=require('assert'),{chromium}=
    ch.onmessage=event=>{if(typeof event.data==='string'&&event.data==='hello-'+ch.label){ch.send(payload(ch.label));return;}if(event.data instanceof ArrayBuffer){const got=new Uint8Array(event.data),expected=payload(ch.label);echoes[ch.label]=got.length===expected.length&&got.every((v,i)=>v===expected[i]);}};
   };
   await peer.setRemoteDescription({type:'offer',sdp:offer});await peer.setLocalDescription(await peer.createAnswer());const end=performance.now()+10000;while(peer.iceGatheringState!=='complete'&&performance.now()<end)await new Promise(r=>setTimeout(r,25));
-  const lines=peer.localDescription.sdp.split('\r\n').filter(line=>!line.startsWith('a=candidate:')||line.split(/\s+/)[2]?.toLowerCase()==='tcp');if(!lines.some(line=>line.startsWith('a=candidate:')))throw Error('No browser TCP candidates');return lines.join('\r\n');
+  const lines=peer.localDescription.sdp.split('\r\n').filter(line=>!line.startsWith('a=candidate:')||line.split(/\s+/)[2]?.toLowerCase()==='tcp');// Chromium may initiate TCP using a peer-reflexive candidate without advertising a TCP listener.
+  return lines.join('\r\n');
  },input.offer);
  const answerFile=path.join(folder,'answer.json'),temp=answerFile+'.tmp';fs.writeFileSync(temp,JSON.stringify({sdpAnswer:answer}),{mode:0o600});fs.renameSync(temp,answerFile);
  await page.waitForFunction(()=>echoes.media&&echoes.screen&&pingOk&&peer.connectionState==='connected',null,{timeout:45000});
