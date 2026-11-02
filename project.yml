@@ -43,8 +43,8 @@ targets:
       path: App/Info.plist
       properties:
         CFBundleDisplayName: ScreenLink Lab
-        CFBundleShortVersionString: '0.11.0'
-        CFBundleVersion: '18'
+        CFBundleShortVersionString: '0.12.0'
+        CFBundleVersion: '19'
         UILaunchScreen: {}
         UIBackgroundModes: [audio, processing]
         BGTaskSchedulerPermittedIdentifiers:
@@ -80,8 +80,8 @@ targets:
       path: Tunnel/Info.plist
       properties:
         CFBundleDisplayName: ScreenLink Local VPN
-        CFBundleShortVersionString: '0.11.0'
-        CFBundleVersion: '18'
+        CFBundleShortVersionString: '0.12.0'
+        CFBundleVersion: '19'
         NSExtension:
           NSExtensionPointIdentifier: com.apple.networkextension.packet-tunnel
           NSExtensionPrincipalClass: PacketTunnelProvider

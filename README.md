@@ -87,3 +87,9 @@ KravaSign advertises VPN entitlement support, but the actual provisioning profil
 The built-in VPN **does not keep the containing receiver app running indefinitely**. The existing floating preview/timed runtime requirements still apply. YouTube media compatibility is also separate.
 
 The local peer approach is based on [LocalDevVPN](https://github.com/jkcoxson/LocalDevVPN) by jkcoxson, Stossy11 and the SideStore Team. ScreenLink implements its own restricted packet reflection and VPN manager. See the bundled `LocalVPN-Attribution.txt` for the upstream license.
+
+## Canvas player (0.12.0)
+
+The video-only viewer now displays frames on Canvas with pause/play, seek, full screen and Normal/Music sound controls. On secure contexts exposing both VideoDecoder and AudioDecoder it uses bundled MP4Box.js 0.5.4 and mux.js 6.3.0 for fMP4/TS demux, WebCodecs for video/audio decoding, timestamped Canvas painting and Web Audio scheduling. Frame and audio queues are bounded; seeks, reconnects and page exits release decoders, VideoFrames, fetches and audio nodes. Libraries are integrity-pinned and bundled with licenses, with no runtime CDN requests. Hardware decoding depends on browser/codec/device availability and is not guaranteed.
+
+**The standard http://172.20.10.1:8080 hotspot link is not a secure context.** Browsers normally withhold WebCodecs there. That link uses the existing native/HLS.js decoder with a hidden video element, Canvas presentation and optional Web Audio EQ. This is a display fallback, not direct WebCodecs. Unsupported codecs, encrypted/live HLS and direct decoder failures also fall back to compatible playback. Matroska files are not accepted by this AirPlay HLS endpoint. Canvas does not conceal video activity from the browser or guarantee compatibility with any car/browser restriction. This version does not change the iOS background runtime or VPN behavior.

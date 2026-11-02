@@ -28,9 +28,12 @@ jobs:
       - name: Native media HLS video and audio player
         run: |
           python3 tools/fetch_hls.py
+          python3 tools/fetch_canvas.py
           mkdir -p build/media
           ffmpeg -v error -f lavfi -i testsrc2=size=640x360:rate=30 -f lavfi -i sine=frequency=440:sample_rate=48000 -t 10 -c:v libx264 -preset ultrafast -tune zerolatency -g 60 -c:a aac -hls_time 2 -hls_playlist_type vod -hls_segment_filename build/media/part%02d.ts build/media/master.m3u8
           node tools/test_media_browser.cjs App build/media
+          ffmpeg -v error -f lavfi -i testsrc2=size=640x360:rate=30 -f lavfi -i sine=frequency=440:sample_rate=48000 -t 10 -c:v libx264 -preset ultrafast -g 60 -c:a aac -hls_time 2 -hls_segment_type fmp4 -hls_playlist_type vod -hls_segment_filename build/media/fragment%02d.m4s build/media/fragmented.m3u8
+          node tools/test_canvas_browser.cjs App build/media
       - name: Viewer state and pacing checks
         run: |
           python3 tools/test_h264_viewer.py

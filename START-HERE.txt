@@ -1,3 +1,9 @@
+VERSION 0.12.0 — CANVAS VIDEO + SOUND EQ
+
+Install/sign as before, retaining the built-in VPN extension. The hotspot viewer now draws video on Canvas. Play with sound enables audio; choose Normal or Music sound. Pause/Play, seek and full screen controls are above the Canvas.
+
+Direct MP4Box/mux.js → WebCodecs → Canvas + Web Audio is available only in secure browser contexts with supported decoders. Your ordinary HTTP hotspot link uses the compatible HLS decoder and Canvas display automatically. This does not hide video from the browser, and does not change iOS background execution.
+
 VERSION 0.11.0 — BUILT-IN LOCAL VPN
 
 Sign the entire IPA with KravaSign, retaining the embedded ScreenLinkLocalTunnel.appex. The app and extension both require the packet-tunnel-provider Network Extension entitlement in their signing profiles.

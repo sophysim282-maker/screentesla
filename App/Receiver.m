@@ -411,8 +411,8 @@ static NSArray *txtStrings(const char *bytes,int length) {
         NSDictionary *part=[_media resource:[url.path substringFromIndex:16] range:byteRange];NSInteger code=[part[@"code"] integerValue];
         status=[NSString stringWithFormat:@"%ld %@",(long)code,code==200?@"OK":(code==206?@"Partial Content":@"Media Request Failed")];mime=part[@"mime"]?:@"text/plain";body=part[@"data"]?:[NSData data];if(part[@"range"])extra=[NSString stringWithFormat:@"Content-Range: %@\r\n",part[@"range"]];
     }
-    else if([url.path isEqual:@"/video"] || [url.path isEqual:@"/media/hls.js"]){
-        BOOL script=[url.path hasSuffix:@".js"];NSString *path=[NSBundle.mainBundle pathForResource:script?@"HLSPlayer":@"MediaPlayer" ofType:script?@"js":@"html"];
+    else if([url.path isEqual:@"/video"] || [@[@"/media/hls.js",@"/media/canvas.js",@"/media/mp4box.js",@"/media/mux.js"] containsObject:url.path]){
+        BOOL script=[url.path hasSuffix:@".js"];NSDictionary *scripts=@{@"/media/hls.js":@"HLSPlayer",@"/media/canvas.js":@"CanvasPlayer",@"/media/mp4box.js":@"MP4Demux",@"/media/mux.js":@"TSDemux"};NSString *path=[NSBundle.mainBundle pathForResource:script?scripts[url.path]:@"MediaPlayer" ofType:script?@"js":@"html"];
         mime=script?@"application/javascript":@"text/html; charset=utf-8";body=path?[NSData dataWithContentsOfFile:path]:nil;if(!body){status=@"503 Service Unavailable";body=[NSData data];}
     }
     else if([url.path isEqual:@"/h264/info"]){mime=@"application/json";body=[NSJSONSerialization dataWithJSONObject:[_h264 info] options:0 error:NULL];}

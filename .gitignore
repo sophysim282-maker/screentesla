@@ -9,3 +9,8 @@ __pycache__/
 # Recreated from the integrity-pinned hls.js npm package during builds.
 App/HLSPlayer.js
 App/HLSPlayer-LICENSE.txt
+
+App/MP4Demux.js
+App/MP4Demux-LICENSE.txt
+App/TSDemux.js
+App/TSDemux-LICENSE.txt
