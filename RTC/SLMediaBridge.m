@@ -30,6 +30,12 @@ static const NSUInteger SLResourceLimit=6*1024*1024;
     if(self.pending.count>=8){[self error:identifier code:429];return;}
     if(object[@"range"]&&(![object[@"range"] isKindOfClass:NSString.class]||[object[@"range"] length]>120||[object[@"range"] rangeOfString:@"\\Abytes=[0-9]+-[0-9]*\\z" options:NSRegularExpressionSearch].location==NSNotFound)){[self error:identifier code:400];return;}
     if([path isEqual:@"/media/report"]&&![object[@"body"] isKindOfClass:NSDictionary.class]){[self error:identifier code:400];return;}
+    if([path isEqual:@"/media/report"]){NSDictionary *report=object[@"body"];BOOL valid=[report[@"epoch"] isKindOfClass:NSString.class]&&[report[@"epoch"] length]<=128;
+        for(NSString *key in @[@"position",@"duration",@"command"])if(report[key])valid=valid&&[report[key] isKindOfClass:NSNumber.class]&&isfinite([report[key] doubleValue])&&[report[key] doubleValue]>=0&&[report[key] doubleValue]<=1000000000;
+        for(NSString *key in @[@"paused",@"ready",@"ended"])if(report[key])valid=valid&&[report[key] isKindOfClass:NSNumber.class]&&CFGetTypeID((__bridge CFTypeRef)report[key])==CFBooleanGetTypeID();
+        if(report[@"error"])valid=valid&&[report[@"error"] isKindOfClass:NSString.class]&&[report[@"error"] length]<=240;
+        if(!valid){[self error:identifier code:400];return;}
+    }
     [self.pending addObject:[object mutableCopy]];[self next];
 }
 - (void)next {
