@@ -1,3 +1,14 @@
+VERSION 0.15.0 — REAL WEBRTC MOVING-VIDEO TEST
+
+1. Re-sign/install the new IPA with KravaSign, keeping BOTH extensions and WebRTC.framework.
+2. Ask Lovable to replace /screenlink-ping with the updated docs/webrtc-ping-viewer.html.
+3. Connect your Mac (or parked Tesla) to the iPhone hotspot.
+4. In ScreenLink, open WebRTC moving-video test, Start video test, enter its code on /screenlink-ping, then approve on the phone.
+5. Keep the phone test screen open. The website should show a moving white square and colored background. Press Play video if needed.
+6. Wait for VIDEO ACTIVE, then Copy diagnostics on both sides if it fails.
+
+This sends generated H.264 motion only. YouTube, Maps and sound have NOT been connected to WebRTC in this build. Their existing local modes remain available. Foreground video is being tested first; this does not promise background playback or bypass vehicle restrictions.
+
 VERSION 0.14.0 — WEBRTC PAIRING/PING PROTOTYPE
 
 This milestone tests connection setup only. It does NOT stream Maps or YouTube over WebRTC yet.
