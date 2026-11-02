@@ -15,6 +15,36 @@ if 'DNSServiceErrorType registration_error =' not in s:
     s = s.replace('    dnssd->DNSServiceRegister(&dnssd->', '    DNSServiceErrorType registration_error = dnssd->DNSServiceRegister(&dnssd->')
     s = s.replace('    return 1;', '    return registration_error == 0 ? 1 : -3;')
     p.write_text(s)
+
+# Method-only diagnostics for native handshakes rejected before route dispatch.
+p = vendor / 'lib' / 'httpd.c'
+s = p.read_text()
+if 'sl_method_prefix' not in s:
+    s = s.replace('    http_request_t *request;', '    http_request_t *request;\n    char sl_method_prefix[25];\n    unsigned int sl_method_length;\n    int sl_method_done;', 1)
+    marker = '                connection->request = http_request_init();'
+    assert marker in s
+    s = s.replace(marker, marker+'\n                connection->sl_method_length=0; connection->sl_method_done=0; connection->sl_method_prefix[0]=0;', 1)
+    marker = '            /* Parse HTTP request from data read from connection */'
+    assert marker in s
+    s = s.replace(marker, r'''            /* Save only the method token; never a URL, header or body. */
+            if (ret < 0) { httpd_remove_connection(httpd, connection); continue; }
+            for (int j=0; j<ret && !connection->sl_method_done; j++) {
+                unsigned char c=(unsigned char)buffer[j];
+                if (c==' ' || c=='\r' || c=='\n' || connection->sl_method_length>=24) {
+                    connection->sl_method_done=1;
+                } else if ((c>='A' && c<='Z') || c=='_') {
+                    connection->sl_method_prefix[connection->sl_method_length++]=(char)c;
+                    connection->sl_method_prefix[connection->sl_method_length]=0;
+                } else {
+                    if (!connection->sl_method_length) snprintf(connection->sl_method_prefix, sizeof(connection->sl_method_prefix), "non-text byte 0x%02X", c);
+                    connection->sl_method_done=1;
+                }
+            }
+''' + marker, 1)
+    marker = 'logger_log(httpd->logger, LOGGER_ERR, "httpd error in parsing: %s", http_request_get_error_name(connection->request));'
+    assert marker in s
+    s = s.replace(marker, 'logger_log(httpd->logger, LOGGER_ERR, "httpd parse rejected method [%s]: %s (%s)", connection->sl_method_prefix, http_request_get_error_name(connection->request), http_request_get_error_description(connection->request));', 1)
+    p.write_text(s)
 print('Receiver core prepared at pinned revision', revision)
 
 # Darwin uses IPPROTO_TCP and TCP_KEEPALIVE for these Linux socket options.

@@ -29,7 +29,7 @@ int main(void){@autoreleasepool{
     assert(!SLRewritePlaylist(@"#EXTM3U\n#EXT-X-KEY:METHOD=SAMPLE-AES,URI=\"skd://protected\"\n",^NSString *(NSString *uri){return uri;},&error));
     MediaCast *media=[MediaCast new];media.token=@"test-token";media.deviceID=@"02:00:00:00:00:01";
     assert(status(exchange(media,@"POST",@"/play",nil,@{@"Content-Location":@"mlhls://localhost/master.m3u8"},NULL,-1))==400);
-    NSDictionary *server=responsePlist(exchange(media,@"GET",@"/server-info",nil,nil,NULL,-1));assert(([server[@"features"] unsignedIntValue]&17)==17);assert(!([server[@"features"] unsignedIntValue]&4));
+    NSDictionary *server=responsePlist(exchange(media,@"GET",@"/server-info",nil,nil,NULL,-1));assert([server[@"features"] unsignedIntValue]==0x27B);assert(([server[@"features"] unsignedIntValue]&17)==17);assert(!([server[@"features"] unsignedIntValue]&4));
     int fds[2];assert(!socketpair(AF_UNIX,SOCK_STREAM,0,fds));struct timeval timeout={5,0};setsockopt(fds[1],SOL_SOCKET,SO_RCVTIMEO,&timeout,sizeof timeout);void *connection=(void *)1;
     assert(status(exchange(media,@"POST",@"/reverse",@"S1",nil,connection,fds[0]))==101);
     NSDictionary *play=@{@"Content-Location":@"mlhls://localhost/master.m3u8",@"uuid":@"video-1",@"Start-Position-Seconds":@3};

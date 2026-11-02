@@ -92,8 +92,8 @@ static BOOL sendBytes(int fd,NSData *data){const char *p=data.bytes;NSUInteger n
     NSData *body=length?[NSData dataWithBytes:raw length:(NSUInteger)length]:[NSData data];NSDictionary *plist=readPlist(body);NSString *session=header(request,"X-Apple-Session-ID");
     NSDictionary *query;NSMutableDictionary *q=[NSMutableDictionary dictionary];for(NSURLQueryItem *item in url.queryItems)if(item.value)q[item.name]=item.value;query=q;
     if([path isEqual:@"/server-info"]){
-        [self log:@"MEDIA: native AirPlay server-info requested."];
-        NSDictionary *info=@{@"features":@(0x5A7FFEFB),@"deviceid":self.deviceID?:@"",@"macAddress":self.deviceID?:@"",@"model":@"AppleTV2,1",@"srcvers":@"220.68",@"osBuildVersion":@"12B435",@"protovers":@"1.0",@"vv":@2};
+        [self log:@"MEDIA: legacy video/HLS server-info requested (media features 0x27B; mirroring discovery is separate)."];
+        NSDictionary *info=@{@"features":@(0x27B),@"deviceid":self.deviceID?:@"",@"macAddress":self.deviceID?:@"",@"model":@"AppleTV2,1",@"srcvers":@"220.68",@"osBuildVersion":@"12B435",@"protovers":@"1.0",@"vv":@2};
         [self reply:response status:200 type:@"text/x-apple-plist+xml" data:plistData(info)];return YES;
     }
     if([path isEqual:@"/reverse"] && [method isEqual:@"POST"]){
