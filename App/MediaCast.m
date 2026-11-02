@@ -13,6 +13,7 @@
     NSString *_appleSession,*_epoch,*_primary,*_uuid;
     NSMutableDictionary *_resources,*_identifiers,*_cache,*_pending;
     NSMutableOrderedSet *_prefetch;
+    NSArray<NSNumber *> *_sourceHeights;
     NSUInteger _requestID,_command;
     BOOL _active,_paused,_readyToPlay;
     double _position,_duration,_start,_fraction,_heartbeat,_rate,_seekPosition;
@@ -64,6 +65,11 @@ static BOOL sendBytes(int fd,NSData *data){const char *p=data.bytes;NSUInteger n
     [_ready lock];if(_active && [location isEqual:_primary])for(NSString *child in children)if(!_cache[child] && !_pending[child])[_prefetch addObject:child];[_ready unlock];
     [self drivePrefetch];
 }
+- (void)recordSourceHeights:(NSData *)data location:(NSString *)location epoch:(NSString *)epoch{
+    NSString *text=[[NSString alloc]initWithData:data encoding:NSUTF8StringEncoding];NSArray *heights=SLPlaylistVideoHeights(text?:@"");if(!heights.count)return;
+    [_ready lock];BOOL changed=[location isEqual:_primary]&&(!epoch||[epoch isEqual:_epoch])&&![_sourceHeights isEqual:heights];if(changed)_sourceHeights=heights;[_ready unlock];
+    if(changed)[self log:[NSString stringWithFormat:@"MEDIA SOURCE RESOLUTIONS: %@p. These are YouTube-offered variants; no upscaling.",[heights componentsJoinedByString:@"p, "]]];
+}
 - (void)requestURL:(NSString *)url{
     [_ready lock];
     if(!_active || _pending[url]){[_ready unlock];return;}
@@ -76,7 +82,7 @@ static BOOL sendBytes(int fd,NSData *data){const char *p=data.bytes;NSUInteger n
         if(expired){[self log:@"MEDIA: a playlist request timed out; retaining the current session for retry."];[self drivePrefetch];}
     });
 }
-- (NSDictionary *)state{[_ready lock];NSString *path=_primary?[self registerURL:_primary]:nil;NSDictionary *state=@{@"active":@(_active),@"ready":@(_readyToPlay),@"epoch":_epoch,@"url":path?:@"",@"command":@(_command),@"commandKind":_commandKind?:@"rate",@"seek":@(_seekPosition),@"paused":@(_paused),@"position":@(_position),@"duration":@(_duration),@"start":@(_start),@"fraction":@(_fraction),@"error":_error?:@""};[_ready unlock];return state;}
+- (NSDictionary *)state{[_ready lock];NSString *path=_primary?[self registerURL:_primary]:nil;NSDictionary *state=@{@"receiverProfile":@"AppleTV3,2",@"sourceHeights":_sourceHeights?:@[],@"active":@(_active),@"ready":@(_readyToPlay),@"epoch":_epoch,@"url":path?:@"",@"command":@(_command),@"commandKind":_commandKind?:@"rate",@"seek":@(_seekPosition),@"paused":@(_paused),@"position":@(_position),@"duration":@(_duration),@"start":@(_start),@"fraction":@(_fraction),@"error":_error?:@""};[_ready unlock];return state;}
 - (void)report:(NSDictionary *)report{
     NSString *event=nil,*session=nil,*newError=nil;[_ready lock];
     if(![report[@"epoch"] isEqual:_epoch] || !_active){[_ready unlock];return;}
@@ -93,7 +99,7 @@ static BOOL sendBytes(int fd,NSData *data){const char *p=data.bytes;NSUInteger n
     if(event){[self sendEvent:@{@"category":@"video",@"state":event} session:session];[self log:[NSString stringWithFormat:@"MEDIA BROWSER %@: video-only playback state reported.",event.uppercaseString]];}
 }
 - (void)connectionClosed:(void *)connection{[_ready lock];if(connection==_reverseConnection){if(_reverse>=0)close(_reverse);_reverse=-1;_reverseConnection=NULL;[_pending removeAllObjects];[_ready broadcast];}[_ready unlock];}
-- (void)stop{[_ready lock];_active=NO;_readyToPlay=NO;_primary=nil;_epoch=NSUUID.UUID.UUIDString;[_resources removeAllObjects];[_identifiers removeAllObjects];[_pending removeAllObjects];[_prefetch removeAllObjects];[_cache removeAllObjects];if(_reverse>=0)close(_reverse);_reverse=-1;_reverseConnection=NULL;[_ready broadcast];[_ready unlock];}
+- (void)stop{[_ready lock];_active=NO;_readyToPlay=NO;_primary=nil;_sourceHeights=@[];_epoch=NSUUID.UUID.UUIDString;[_resources removeAllObjects];[_identifiers removeAllObjects];[_pending removeAllObjects];[_prefetch removeAllObjects];[_cache removeAllObjects];if(_reverse>=0)close(_reverse);_reverse=-1;_reverseConnection=NULL;[_ready broadcast];[_ready unlock];}
 - (void)reply:(http_response_t **)response status:(int)code type:(NSString *)type data:(NSData *)data{
     *response=http_response_init("HTTP/1.1",code,code==200?"OK":(code==101?"Switching Protocols":"Request Failed"));
     if(type)http_response_add_header(*response,"Content-Type",type.UTF8String);
@@ -113,8 +119,8 @@ static BOOL sendBytes(int fd,NSData *data){const char *p=data.bytes;NSUInteger n
     NSData *body=length?[NSData dataWithBytes:raw length:(NSUInteger)length]:[NSData data];NSDictionary *plist=readPlist(body);NSString *session=header(request,"X-Apple-Session-ID");
     NSDictionary *query;NSMutableDictionary *q=[NSMutableDictionary dictionary];for(NSURLQueryItem *item in url.queryItems)if(item.value)q[item.name]=item.value;query=q;
     if([path isEqual:@"/server-info"]){
-        [self log:@"MEDIA: legacy video/HLS server-info requested (media features 0x27B; mirroring discovery is separate)."];
-        NSDictionary *info=@{@"features":@(0x27B),@"deviceid":self.deviceID?:@"",@"macAddress":self.deviceID?:@"",@"model":@"AppleTV2,1",@"srcvers":@"220.68",@"osBuildVersion":@"12B435",@"protovers":@"1.0",@"vv":@2};
+        [self log:@"MEDIA: 1080p-capable legacy HLS receiver profile requested (AppleTV3,2; media features 0x27B)."];
+        NSDictionary *info=@{@"features":@(0x27B),@"deviceid":self.deviceID?:@"",@"macAddress":self.deviceID?:@"",@"model":@"AppleTV3,2",@"srcvers":@"220.68",@"osBuildVersion":@"12B435",@"protovers":@"1.0",@"vv":@2};
         [self reply:response status:200 type:@"text/x-apple-plist+xml" data:plistData(info)];return YES;
     }
     if([path isEqual:@"/reverse"] && [method isEqual:@"POST"]){
@@ -128,7 +134,7 @@ static BOOL sendBytes(int fd,NSData *data){const char *p=data.bytes;NSUInteger n
         if(!location){NSString *text=[[NSString alloc]initWithData:body encoding:NSUTF8StringEncoding];for(NSString *line in [text componentsSeparatedByCharactersInSet:NSCharacterSet.newlineCharacterSet])if([line hasPrefix:@"Content-Location:"])location=[[line substringFromIndex:17] stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceCharacterSet];}
         NSURL *target=[NSURL URLWithString:location?:@""];
         if(!session.length || session.length>128 || [session rangeOfCharacterFromSet:NSCharacterSet.newlineCharacterSet].location!=NSNotFound || (!webURL(target)&&!virtualURL(target))){[self log:[NSString stringWithFormat:@"MEDIA PLAY REJECTED: session %@, content URL scheme %@, plist keys %@.",session.length?@"present":@"missing",target.scheme?:@"missing",[[plist.allKeys sortedArrayUsingSelector:@selector(compare:)] componentsJoinedByString:@", "]?:@"none"]];[self reply:response status:400 type:nil data:nil];return YES;}
-        [_ready lock];_active=YES;_readyToPlay=NO;_paused=NO;_position=0;_duration=0;_heartbeat=0;_rate=1;_command=0;_commandKind=@"rate";_seekPosition=0;_start=MAX(0,[plist[@"Start-Position-Seconds"] doubleValue]);_fraction=MAX(0,MIN(1,[plist[@"Start-Position"] doubleValue]));_error=nil;_eventState=@"loading";_appleSession=session;_primary=target.absoluteString;_uuid=[plist[@"uuid"] isKindOfClass:NSString.class]?plist[@"uuid"]:NSUUID.UUID.UUIDString;_epoch=NSUUID.UUID.UUIDString;[_resources removeAllObjects];[_identifiers removeAllObjects];[_cache removeAllObjects];[_pending removeAllObjects];[_prefetch removeAllObjects];[_ready broadcast];[_ready unlock];
+        [_ready lock];_active=YES;_readyToPlay=NO;_paused=NO;_position=0;_duration=0;_heartbeat=0;_rate=1;_command=0;_commandKind=@"rate";_seekPosition=0;_start=MAX(0,[plist[@"Start-Position-Seconds"] doubleValue]);_fraction=MAX(0,MIN(1,[plist[@"Start-Position"] doubleValue]));_error=nil;_eventState=@"loading";_appleSession=session;_sourceHeights=@[];_primary=target.absoluteString;_uuid=[plist[@"uuid"] isKindOfClass:NSString.class]?plist[@"uuid"]:NSUUID.UUID.UUIDString;_epoch=NSUUID.UUID.UUIDString;[_resources removeAllObjects];[_identifiers removeAllObjects];[_cache removeAllObjects];[_pending removeAllObjects];[_prefetch removeAllObjects];[_ready broadcast];[_ready unlock];
         [self reply:response status:200 type:nil data:nil];
         [self log:@"MEDIA PLAY REQUEST: native video-only handoff received. Open the hotspot viewer; its video player will show only the playing media."];
         [self sendEvent:@{@"category":@"video",@"state":@"loading"} session:session];if(virtualURL(target))[self requestURL:target.absoluteString];return YES;
@@ -145,7 +151,7 @@ static BOOL sendBytes(int fd,NSData *data){const char *p=data.bytes;NSUInteger n
                 // non-playlist, or actual HTTP failure response.
                 code=SLFCUPPlaylistStatus(code,data);
                 _cache[location]=@{@"data":data?:[NSData data],@"code":@(code),@"time":@(NSProcessInfo.processInfo.systemUptime)};[_pending removeObjectForKey:location];[_ready broadcast];}[_ready unlock];
-            [self reply:response status:valid?200:409 type:nil data:nil];if(!valid)[self log:@"MEDIA PLAYLIST RESPONSE REJECTED: session, URL, or request ID did not match an outstanding request."];if(valid){[self log:[NSString stringWithFormat:@"MEDIA PLAYLIST RESPONSE: %lu bytes received; sender status %@. Status 0 requires a valid HLS playlist.",(unsigned long)data.length,params[@"FCUP_Response_StatusCode"]?:@200]];[self prefetchChildren:data base:location];[self drivePrefetch];}return YES;
+            [self reply:response status:valid?200:409 type:nil data:nil];if(!valid)[self log:@"MEDIA PLAYLIST RESPONSE REJECTED: session, URL, or request ID did not match an outstanding request."];if(valid){[self log:[NSString stringWithFormat:@"MEDIA PLAYLIST RESPONSE: %lu bytes received; sender status %@. Status 0 requires a valid HLS playlist.",(unsigned long)data.length,params[@"FCUP_Response_StatusCode"]?:@200]];[self recordSourceHeights:data location:location epoch:nil];[self prefetchChildren:data base:location];[self drivePrefetch];}return YES;
         }
         if([type isEqual:@"playlistRemove"]){[_ready lock];NSDictionary *item=[params[@"item"] isKindOfClass:NSDictionary.class]?params[@"item"]:@{};if([session isEqual:_appleSession] && [item[@"uuid"] isEqual:_uuid]){_active=NO;_readyToPlay=NO;[_ready broadcast];}[_ready unlock];[self reply:response status:200 type:nil data:nil];return YES;}
         [self reply:response status:501 type:nil data:nil];[self log:@"MEDIA: sender requested an unsupported playlist action. Copy test log if playback stops here."];return YES;
@@ -183,6 +189,7 @@ static BOOL sendBytes(int fd,NSData *data){const char *p=data.bytes;NSUInteger n
     if(code<200 || code>=300 || !data.length){[self log:[NSString stringWithFormat:@"MEDIA RESOURCE FAILED: HTTP %ld from %@, %lu bytes. No signed URLs are included in this log.",(long)code,url.host?:@"sender",(unsigned long)data.length]];return @{@"code":@(code>=400?code:502)};}
     NSString *text=[[NSString alloc]initWithData:data encoding:NSUTF8StringEncoding];
     if([text hasPrefix:@"#EXTM3U"]){
+        [self recordSourceHeights:data location:location epoch:epoch];
         NSError *error=nil;NSString *rewritten=SLRewritePlaylist(text,^NSString *(NSString *uri){
             NSURL *target=[NSURL URLWithString:uri relativeToURL:url].absoluteURL;if(!webURL(target)&&!virtualURL(target))return nil;
             [self->_ready lock];NSString *path=[epoch isEqual:self->_epoch]?[self registerURL:target.absoluteString]:nil;[self->_ready unlock];return path;

@@ -33,16 +33,19 @@ int main(void){@autoreleasepool{
     NSError *error=nil;NSString *expanded=SLExpandYouTubePlaylist(@"#EXTM3U\n#YT-EXT-CONDENSED-URL:BASE-URI=\"https://example.test/videoplayback\",PARAMS=\"sq,lmt\",PREFIX=\"s/\"\n#EXTINF:2.0,\ns/1/42\n#EXT-X-ENDLIST\n",&error);assert(!error && [expanded containsString:@"https://example.test/videoplayback/sq/1/lmt/42"]);
     assert(!SLExpandYouTubePlaylist(@"#EXTM3U\n#YT-EXT-CONDENSED-URL:PREFIX=\"s/\"\n",&error));
     assert(!SLRewritePlaylist(@"#EXTM3U\n#EXT-X-KEY:METHOD=SAMPLE-AES,URI=\"skd://protected\"\n",^NSString *(NSString *uri){return uri;},&error));
+    NSString *hdMaster=@"#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=300000,RESOLUTION=426x240\nlow.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=8000000,RESOLUTION=1280x720\nmid.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=12000000,RESOLUTION=1920x1080\nhigh.m3u8\n";
+    assert(([SLPlaylistVideoHeights(hdMaster) isEqual:@[@240,@720,@1080]]));
+    NSString *mappedHD=SLRewritePlaylist(hdMaster,^NSString *(NSString *uri){return [@"/local/" stringByAppendingString:uri];},NULL);assert([mappedHD containsString:@"RESOLUTION=1920x1080"]);assert([mappedHD containsString:@"/local/high.m3u8"]);
     MediaCast *media=[MediaCast new];media.token=@"test-token";media.deviceID=@"02:00:00:00:00:01";
     assert(status(exchange(media,@"POST",@"/play",nil,@{@"Content-Location":@"mlhls://localhost/master.m3u8"},NULL,-1))==400);
-    NSDictionary *server=responsePlist(exchange(media,@"GET",@"/server-info",nil,nil,NULL,-1));assert([server[@"features"] unsignedIntValue]==0x27B);assert(([server[@"features"] unsignedIntValue]&17)==17);assert(!([server[@"features"] unsignedIntValue]&4));
+    NSDictionary *server=responsePlist(exchange(media,@"GET",@"/server-info",nil,nil,NULL,-1));assert([server[@"model"] isEqual:@"AppleTV3,2"]);assert([server[@"features"] unsignedIntValue]==0x27B);assert(([server[@"features"] unsignedIntValue]&17)==17);assert(!([server[@"features"] unsignedIntValue]&4));
     int fds[2];assert(!socketpair(AF_UNIX,SOCK_STREAM,0,fds));struct timeval timeout={5,0};setsockopt(fds[1],SOL_SOCKET,SO_RCVTIMEO,&timeout,sizeof timeout);void *connection=(void *)1;
     assert(status(exchange(media,@"POST",@"/reverse",@"S1",nil,connection,fds[0]))==101);
     NSDictionary *play=@{@"Content-Location":@"mlhls://localhost/master.m3u8",@"uuid":@"video-1",@"Start-Position-Seconds":@3};
     assert(status(exchange(media,@"POST",@"/play",@"S1",play,NULL,-1))==200);assert([event(fds[1])[@"state"] isEqual:@"loading"]);NSDictionary *masterRequest=event(fds[1]);assert([masterRequest[@"type"] isEqual:@"unhandledURLRequest"]);
-    deliver(media,masterRequest,@"#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1000000\nvideo.m3u8\n",@"S1");
+    deliver(media,masterRequest,@"#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1000000,RESOLUTION=1280x720\nvideo.m3u8\n",@"S1");
     NSDictionary *childRequest=event(fds[1]); // Prefetched before any browser variant request.
-    NSDictionary *state=[media state];assert([state[@"active"] boolValue]);assert([state[@"start"] intValue]==3);NSString *identifier=[NSURLComponents componentsWithString:state[@"url"]].path.lastPathComponent;
+    NSDictionary *state=[media state];assert([state[@"active"] boolValue]);assert(([state[@"sourceHeights"] isEqual:@[@720]]));assert([state[@"start"] intValue]==3);NSString *identifier=[NSURLComponents componentsWithString:state[@"url"]].path.lastPathComponent;
     NSDictionary *master=[media resource:identifier range:nil];assert([master[@"code"] intValue]==200);NSString *masterText=[[NSString alloc]initWithData:master[@"data"] encoding:NSUTF8StringEncoding];assert([masterText containsString:@"/media/resource/"]);assert(![masterText containsString:@"mlhls://"]);
     NSString *child=nil;for(NSString *line in [masterText componentsSeparatedByString:@"\n"])if([line hasPrefix:@"/media/resource/"])child=[NSURLComponents componentsWithString:line].path.lastPathComponent;assert(child);
     dispatch_semaphore_t done=dispatch_semaphore_create(0);__block NSDictionary *variant=nil;dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED,0),^{variant=[media resource:child range:nil];dispatch_semaphore_signal(done);});

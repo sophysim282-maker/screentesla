@@ -1,5 +1,5 @@
 const http=require('http'),fs=require('fs'),path=require('path'),assert=require('assert'),{chromium}=require('playwright');
-const root=process.argv[2],fixtures=process.argv[3];let source='master.m3u8',command=0,paused=false,kind='rate',seek=0,reports=[];
+const root=process.argv[2],fixtures=process.argv[3];let source=process.argv.includes('--quality')?'quality.m3u8':'master.m3u8',command=0,paused=false,kind='rate',seek=0,reports=[];
 const scripts={'/media/canvas.js':'CanvasPlayer.js','/media/mp4box.js':'MP4Demux.js','/media/mux.js':'TSDemux.js','/media/hls.js':'HLSPlayer.js'};
 const server=http.createServer((req,res)=>{const url=new URL(req.url,'http://localhost');res.setHeader('Cache-Control','no-store');
  if(url.pathname==='/'){res.setHeader('Content-Type','text/html');return res.end(fs.readFileSync(path.join(root,'MediaPlayer.html')));}
@@ -15,6 +15,14 @@ const server=http.createServer((req,res)=>{const url=new URL(req.url,'http://loc
  await page.goto('http://127.0.0.1:'+server.address().port+'/?token=fixture');
  await page.waitForFunction(()=>typeof codecPlayer!=='undefined'&&codecPlayer?.stats.drawn>25&&codecPlayer.currentTime>1,null,{timeout:20000});
  let result=await page.evaluate(()=>({engine,stats:codecPlayer.stats,time:codecPlayer.currentTime,source:player.getAttribute('src'),pixels:canvas.getContext('2d').getImageData(0,0,canvas.width,canvas.height).data.some((v,i)=>i%4!==3&&v>20)}));
+ if(process.argv.includes('--quality')){
+  assert(result.engine.startsWith('WebCodecs'));assert(result.pixels);assert(!result.source);
+  await page.waitForFunction(()=>codecPlayer?.stats.drawn>10&&canvas.width===1920&&canvas.height===1080,null,{timeout:20000});
+  assert.equal(await page.evaluate(()=>codecPlayer.selectedHeight),1080);assert.deepEqual(await page.evaluate(()=>codecPlayer.offeredHeights),[1080,720,144]);
+  await page.selectOption('#quality','720');await page.waitForFunction(()=>codecPlayer?.selectedHeight===720&&codecPlayer.stats.drawn>10&&canvas.height===720,null,{timeout:20000});
+  await page.selectOption('#quality','1080');await page.waitForFunction(()=>codecPlayer?.selectedHeight===1080&&codecPlayer.stats.drawn>10&&canvas.height===1080,null,{timeout:20000});
+  assert(await page.evaluate(()=>codecPlayer.stats.audioDecoded>0));console.log('Local Canvas HD passed: actual 1080p default, 720p manual and return to decoded 1080p, original audio; master advertises HD above 6 Mbps, no upscaling.');await browser.close();server.close();return;
+ }
  assert(result.engine.startsWith('WebCodecs'));assert(result.pixels);assert(!result.source);assert(result.stats.audioDecoded>10);console.log('Direct TS demux, decoded audio and Canvas pixels:',result);
  command++;paused=true;await page.waitForFunction(()=>codecPlayer.paused);const before=await page.evaluate(()=>codecPlayer.currentTime);await page.waitForTimeout(300);assert(Math.abs(await page.evaluate(()=>codecPlayer.currentTime)-before)<0.05);
  command++;paused=false;kind='seek';seek=5;await page.waitForFunction(()=>codecPlayer.currentTime>5.4&&codecPlayer.stats.drawn>35,null,{timeout:10000});

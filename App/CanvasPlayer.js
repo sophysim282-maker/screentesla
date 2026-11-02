@@ -28,6 +28,15 @@ function playlist(text,url){
  }
  return out;
 }
+// Prefer actual source resolution. A 6 Mbps ceiling can otherwise select 240p
+// when the source's 720p/1080p variants use a higher bitrate.
+function chooseVariant(levels,quality='hd'){
+ const height=level=>Number((level.RESOLUTION||'').split('x')[1])||0;
+ let candidates=levels.slice(),wanted=Number(quality);
+ if(wanted>0){const exact=candidates.filter(level=>height(level)===wanted);if(exact.length)candidates=exact;else return chooseVariant(levels,'hd');}
+ else {const hd=candidates.filter(level=>height(level)>0&&height(level)<=1080);if(hd.length)candidates=hd;}
+ return candidates.sort((a,b)=>height(b)-height(a)||(Number(b.BANDWIDTH)||0)-(Number(a.BANDWIDTH)||0))[0];
+}
 function description(entry){
  const box=entry.avcC||entry.hvcC||entry.vpcC||entry.av1C||entry.dOps;
  if(box){const stream=new DataStream(undefined,0,DataStream.BIG_ENDIAN);box.write(stream);return new Uint8Array(stream.buffer,8);}
@@ -52,9 +61,9 @@ function demux(bytes,init){
 }
 class CanvasPlayer {
  static supported(){return !!(self.isSecureContext&&self.VideoDecoder&&self.AudioDecoder&&self.EncodedVideoChunk&&self.EncodedAudioChunk);}
- constructor(canvas,{onerror=()=>{}}={}){
+ constructor(canvas,{onerror=()=>{},quality='hd'}={}){
   this.canvas=canvas;this.ctx=canvas.getContext('2d',{alpha:false});if(!this.ctx)throw Error('Canvas rendering unavailable');
-  this.onerror=onerror;this.paused=true;this.muted=true;this.duration=0;this.readyState=0;this.ended=false;this.error=null;this.closed=false;
+  this.quality=quality;this.offeredHeights=[];this.selectedHeight=0;this.onerror=onerror;this.paused=true;this.muted=true;this.duration=0;this.readyState=0;this.ended=false;this.error=null;this.closed=false;
   this.frames=[];this.audio=[];this.nodes=new Set();this.position=0;this.videoEnd=0;this.anchor=0;this.running=false;this.serial=0;this.decoders=new Map();this.configs=new Map();this.initializers=new Map();
   this.stats={drawn:0,dropped:0,decoded:0,audioDecoded:0,maxFrames:0,maxAudio:0};
   this.animation=requestAnimationFrame(()=>this.paint());
@@ -76,8 +85,8 @@ class CanvasPlayer {
   for(let depth=0;depth<4;depth++){
    manifest=playlist(new TextDecoder().decode(await this.bytes(manifestURL)),manifestURL);
    if(!manifest.variants.length)break;
-   const variants=manifest.variants.filter(v=>!v.RESOLUTION||Number(v.RESOLUTION.split('x')[1])<=1080).sort((a,b)=>Number(a.BANDWIDTH)-Number(b.BANDWIDTH));
-   const choice=variants.filter(v=>Number(v.BANDWIDTH)<=6000000).pop()||variants[0]||manifest.variants[0];
+   this.offeredHeights=[...new Set(manifest.variants.map(v=>Number((v.RESOLUTION||'').split('x')[1])||0).filter(n=>n>0))].sort((a,b)=>b-a);
+   const choice=chooseVariant(manifest.variants,this.quality);this.selectedHeight=Number((choice.RESOLUTION||'').split('x')[1])||0;
    const audio=manifest.audio.filter(a=>a['GROUP-ID']===choice.AUDIO);this.audioURL=(audio.find(a=>a.DEFAULT==='YES')||audio[0])?.url;manifestURL=choice.url;
   }
   if(manifest.variants.length||!manifest.segments.length||!manifest.end)throw Error('Live or nested HLS needs the compatibility player');
@@ -186,5 +195,5 @@ class CanvasPlayer {
  }
  destroy(){if(this.closed)return;this.closed=true;this.serial++;this.abort?.abort();cancelAnimationFrame(this.animation);this.release();this.initializers.clear();this.audioContext?.close();}
 }
-self.ScreenLinkCanvas={CanvasPlayer,playlist,demux};
+self.ScreenLinkCanvas={CanvasPlayer,playlist,demux,chooseVariant};
 })();

@@ -45,3 +45,9 @@ NSInteger SLFCUPPlaylistStatus(NSInteger status,NSData *data){
     NSString *text=[[NSString alloc]initWithData:data encoding:NSUTF8StringEncoding];
     return text && SLExpandYouTubePlaylist(text,NULL)?200:502;
 }
+
+NSArray<NSNumber *> *SLPlaylistVideoHeights(NSString *text){
+    NSMutableSet *heights=[NSMutableSet set];NSRegularExpression *regex=[NSRegularExpression regularExpressionWithPattern:@"(?:[:,])RESOLUTION=([0-9]+)x([0-9]+)(?:,|$)" options:0 error:NULL];
+    for(NSString *line in [text componentsSeparatedByCharactersInSet:NSCharacterSet.newlineCharacterSet]){if(![line hasPrefix:@"#EXT-X-STREAM-INF:"])continue;NSTextCheckingResult *match=[regex firstMatchInString:line options:0 range:NSMakeRange(0,line.length)];if(match){NSInteger h=[[line substringWithRange:[match rangeAtIndex:2]] integerValue];if(h>0&&h<=16384)[heights addObject:@(h)];}}
+    return [heights.allObjects sortedArrayUsingSelector:@selector(compare:)];
+}

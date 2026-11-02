@@ -49,8 +49,8 @@ targets:
       path: App/Info.plist
       properties:
         CFBundleDisplayName: ScreenLink Lab
-        CFBundleShortVersionString: '0.16.0'
-        CFBundleVersion: '24'
+        CFBundleShortVersionString: '0.16.1'
+        CFBundleVersion: '25'
         UILaunchScreen: {}
         UIBackgroundModes: [audio, processing]
         BGTaskSchedulerPermittedIdentifiers:
@@ -86,8 +86,8 @@ targets:
       path: Tunnel/Info.plist
       properties:
         CFBundleDisplayName: ScreenLink Local VPN
-        CFBundleShortVersionString: '0.16.0'
-        CFBundleVersion: '24'
+        CFBundleShortVersionString: '0.16.1'
+        CFBundleVersion: '25'
         NSExtension:
           NSExtensionPointIdentifier: com.apple.networkextension.packet-tunnel
           NSExtensionPrincipalClass: PacketTunnelProvider
@@ -130,8 +130,8 @@ targets:
       path: Broadcast/Info.plist
       properties:
         CFBundleDisplayName: ScreenLink Screen
-        CFBundleShortVersionString: '0.16.0'
-        CFBundleVersion: '24'
+        CFBundleShortVersionString: '0.16.1'
+        CFBundleVersion: '25'
         NSLocalNetworkUsageDescription: Share the live iPhone screen and AirPlay media with your hotspot viewer during a screen broadcast.
         NSBonjourServices: ['_airplay._tcp', '_raop._tcp']
         NSAppTransportSecurity:
