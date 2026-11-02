@@ -60,7 +60,7 @@ async function tick(){
  try{const next=await request('/media/state');state=next;
   if(!next.active){if(current){clear();current='';generation++;}status.textContent='Waiting for YouTube AirPlay…';detail.textContent=next.error||'Start video-only AirPlay in ScreenLink, then select ScreenLink from YouTube’s AirPlay menu.';return;}
   if(next.epoch!==current)await start(next);
-  if(next.command!==command){command=next.command;if(next.commandKind==='seek'&&media().readyState)media().currentTime=next.seek;if(next.paused)media().pause();else media().play().catch(()=>{});}
+  if(next.command!==command){command=next.command;if(next.commandKind==='seek'&&(codecPlayer||media().readyState))media().currentTime=next.seek;if(next.paused)media().pause();else media().play().catch(()=>{});}
   await request('/media/report',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(feedback())});
   status.textContent=media().error?'Video playback error · see details below':(media().readyState<2?'Loading video-only AirPlay…':(media().paused?'Video paused':'Video-only AirPlay · '+Math.floor(media().currentTime)+' seconds'));
   document.getElementById('seek').value=Number.isFinite(media().duration)&&media().duration>0?100*media().currentTime/media().duration:0;

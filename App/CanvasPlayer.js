@@ -64,10 +64,12 @@ class CanvasPlayer {
  set currentTime(value){this.seek(value);}
  async bytes(url,range){
   const absolute=new URL(url,location.href);if(absolute.origin!==location.origin)throw Error('Media must use the ScreenLink proxy');
-  const response=await fetch(absolute,{signal:this.abort.signal,cache:'no-store',headers:range?{Range:`bytes=${range.start}-${range.end}`}:{}});
-  if(!response.ok)throw Error('Media HTTP '+response.status);
-  if(range&&response.status!==206)throw Error('Media server did not honor byte range');
-  return new Uint8Array(await response.arrayBuffer());
+  const outer=this.abort.signal,control=new AbortController(),cancel=()=>control.abort();if(outer.aborted)cancel();else outer.addEventListener('abort',cancel,{once:true});const timer=setTimeout(()=>control.abort(Error('Media request timed out')),20000);
+  try{const response=await fetch(absolute,{signal:control.signal,cache:'no-store',headers:range?{Range:`bytes=${range.start}-${range.end}`}:{}});
+   if(!response.ok)throw Error('Media HTTP '+response.status);
+   if(range&&response.status!==206)throw Error('Media server did not honor byte range');
+   return new Uint8Array(await response.arrayBuffer());
+  }finally{clearTimeout(timer);outer.removeEventListener('abort',cancel);}
  }
  async load(url,start=0){
   this.abort=new AbortController();let manifestURL=new URL(url,location.href).href,manifest;
@@ -86,13 +88,14 @@ class CanvasPlayer {
  fail(error){if(this.closed||error?.name==='AbortError')return;this.error={code:3,message:error.message||String(error)};this.pause();this.onerror(error);}
  async configure(track,kind,serial){
   const config=kind==='video'?{codec:track.codec,codedWidth:track.video.width,codedHeight:track.video.height,description:track.description,hardwareAcceleration:'prefer-hardware'}:{codec:track.codec,sampleRate:track.audio.sample_rate,numberOfChannels:track.audio.channel_count,description:track.description};
+  if(config.codec.toLowerCase()==='opus'){config.codec='opus';delete config.description;}
+  const key=JSON.stringify({...config,description:config.description?Array.from(config.description):[]});
+  if(this.configs.get(kind)===key)return this.decoders.get(kind);
   // Browser implementations may accept a codec while declining the hardware hint.
   const Type=kind==='video'?VideoDecoder:AudioDecoder;
   let supported=await Type.isConfigSupported(config);if(!supported.supported&&kind==='video'){delete config.hardwareAcceleration;supported=await Type.isConfigSupported(config);}
   if(serial!==this.serial||this.closed)throw new DOMException('Playback replaced','AbortError');
   if(!supported.supported)throw Error('Unsupported '+kind+' codec '+track.codec);
-  const key=JSON.stringify({...config,description:config.description?Array.from(config.description):[]});
-  if(this.configs.get(kind)===key)return this.decoders.get(kind);
   const old=this.decoders.get(kind);if(old){await old.flush();old.close();}
   const decoder=new Type({output:frame=>this.output(kind,frame),error:error=>this.fail(error)});decoder.configure(config);this.decoders.set(kind,decoder);this.configs.set(kind,key);return decoder;
  }
@@ -129,14 +132,6 @@ class CanvasPlayer {
    while(decoder.decodeQueueSize>12){if(serial!==this.serial||this.closed)return;await sleep(5);}
   }
   for(const decoder of this.decoders.values())if(decoder.state==='configured')await decoder.flush();
- }
- async pump(list,kind,start,serial){
-  for(const segment of list.segments){
-   if(segment.start+segment.duration<=start)continue;
-   while(serial===this.serial&&!this.closed&&segment.start>this.currentTime+2)await sleep(30);
-   if(serial!==this.serial||this.closed)return;
-   await this.decodeSegment(segment,kind,serial);
-  }
  }
  async seek(value){
   if(!this.videoList||this.closed)return;this.serial++;const serial=this.serial;
