@@ -156,3 +156,38 @@ if 'if (!cseq && response_datalen == 0)' not in s:
     assert marker in s
     s = s.replace(marker, '    if (!cseq && response_datalen == 0) http_response_add_header(*response, "Content-Length", "0");\n' + marker, 1)
     p.write_text(s)
+
+# After PTTH upgrade, parse acknowledgements and EVENT/1.0 as framed reverse
+# messages. Feeding EVENT/1.0 into the ordinary request-method parser disconnects
+# valid AirPlay sessions (observed on the user's device).
+p = vendor / 'lib' / 'httpd.c'
+s = p.read_text()
+if 'sl_reverse_feed' not in s:
+    s = s.replace('#include "httpd.h"', '#include "httpd.h"\n#include "ReverseChannel.h"', 1)
+    s = s.replace('struct http_connection_s {', 'struct http_connection_s {\n    int sl_is_reverse;\n    sl_reverse_buffer sl_reverse;', 1)
+    marker = '    httpd->connections[i].socket_fd = fd;'
+    assert marker in s
+    s = s.replace(marker, '    httpd->connections[i].sl_is_reverse=0;\n    sl_reverse_reset(&httpd->connections[i].sl_reverse);\n' + marker, 1)
+    marker = '    httpd->callbacks.conn_destroy(connection->user_data);'
+    assert marker in s
+    s = s.replace(marker, '    sl_reverse_reset(&connection->sl_reverse);\n' + marker, 1)
+    marker = '            /* Parse HTTP request from data read from connection */'
+    assert marker in s
+    s = s.replace(marker, '''            if (connection->sl_is_reverse) {
+                int messages=sl_reverse_feed(&connection->sl_reverse, buffer, (size_t)ret);
+                if (messages<0) {
+                    logger_log(httpd->logger, LOGGER_ERR, "Invalid or oversized reverse AirPlay frame");
+                    httpd_remove_connection(httpd, connection);
+                }
+                continue;
+            }
+''' + marker, 1)
+    marker = '                    data = http_response_get_data(response, &datalen);'
+    assert marker in s
+    s = s.replace(marker, marker + '''
+                    if (datalen>=12 && !memcmp(data,"HTTP/1.1 101",12)) {
+                        connection->sl_is_reverse=1;
+                        logger_log(httpd->logger, LOGGER_INFO, "Reverse AirPlay framing enabled for HTTP acknowledgements and EVENT/1.0");
+                    }
+''', 1)
+    p.write_text(s)

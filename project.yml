@@ -7,7 +7,7 @@ settings:
     PRODUCT_BUNDLE_IDENTIFIER: local.screenlink.airplaylab
     CLANG_ENABLE_OBJC_ARC: YES
     GCC_PREPROCESSOR_DEFINITIONS: ['$(inherited)', 'OPENSSL_API_COMPAT=0x10100000L']
-    HEADER_SEARCH_PATHS: ['$(SRCROOT)/deps/include', '$(SRCROOT)/Vendor/RPiPlay/lib', '$(SRCROOT)/Vendor/RPiPlay/lib/playfair', '$(SRCROOT)/Vendor/RPiPlay/lib/llhttp']
+    HEADER_SEARCH_PATHS: ['$(SRCROOT)/App', '$(SRCROOT)/deps/include', '$(SRCROOT)/Vendor/RPiPlay/lib', '$(SRCROOT)/Vendor/RPiPlay/lib/playfair', '$(SRCROOT)/Vendor/RPiPlay/lib/llhttp']
     LIBRARY_SEARCH_PATHS: ['$(SRCROOT)/deps/lib']
     OTHER_LDFLAGS: ['$(inherited)', '-lcrypto', '-lplist-2.0']
     ENABLE_BITCODE: NO
@@ -36,8 +36,8 @@ targets:
       path: App/Info.plist
       properties:
         CFBundleDisplayName: ScreenLink Lab
-        CFBundleShortVersionString: '0.10.3'
-        CFBundleVersion: '16'
+        CFBundleShortVersionString: '0.10.4'
+        CFBundleVersion: '17'
         UILaunchScreen: {}
         UIBackgroundModes: [audio, processing]
         BGTaskSchedulerPermittedIdentifiers:

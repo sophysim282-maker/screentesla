@@ -38,3 +38,9 @@ NSString *SLRewritePlaylist(NSString *text,NSString *(^map)(NSString *uri),NSErr
     }
     return [out componentsJoinedByString:@"\n"];
 }
+
+NSInteger SLFCUPPlaylistStatus(NSInteger status,NSData *data){
+    if(status!=0)return status;
+    NSString *text=[[NSString alloc]initWithData:data encoding:NSUTF8StringEncoding];
+    return text && SLExpandYouTubePlaylist(text,NULL)?200:502;
+}

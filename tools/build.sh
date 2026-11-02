@@ -9,6 +9,8 @@ for tool in xcodegen autoconf automake glibtoolize; do
   command -v "$tool" >/dev/null || { echo "Missing $tool. Install prerequisites: brew install xcodegen autoconf automake libtool" >&2; exit 1; }
 done
 mkdir -p build
+cc -Wall -Wextra -Werror tools/test_reverse_channel.c -o build/test-reverse-channel
+build/test-reverse-channel
 cc -Wall -Wextra -Werror tools/test_frame_cadence.c -o build/test-frame-cadence
 build/test-frame-cadence
 cc -Wall -Wextra -Werror tools/test_mjpeg.c -o build/test-mjpeg

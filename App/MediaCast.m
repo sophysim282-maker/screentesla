@@ -139,8 +139,13 @@ static BOOL sendBytes(int fd,NSData *data){const char *p=data.bytes;NSUInteger n
         if([type isEqual:@"unhandledURLResponse"]){
             NSString *location=[params[@"FCUP_Response_URL"] isKindOfClass:NSString.class]?params[@"FCUP_Response_URL"]:nil;NSData *data=[params[@"FCUP_Response_Data"] isKindOfClass:NSData.class]?params[@"FCUP_Response_Data"]:nil;
             [_ready lock];NSNumber *expected=location?_pending[location]:nil;BOOL valid=[session isEqual:_appleSession] && expected && [expected isEqual:params[@"FCUP_Response_RequestID"]];
-            if(valid){NSInteger code=params[@"FCUP_Response_StatusCode"]?[params[@"FCUP_Response_StatusCode"] integerValue]:200;_cache[location]=@{@"data":data?:[NSData data],@"code":@(code),@"time":@(NSProcessInfo.processInfo.systemUptime)};[_pending removeObjectForKey:location];[_ready broadcast];}[_ready unlock];
-            [self reply:response status:valid?200:409 type:nil data:nil];if(!valid)[self log:@"MEDIA PLAYLIST RESPONSE REJECTED: session, URL, or request ID did not match an outstanding request."];if(valid){[self log:[NSString stringWithFormat:@"MEDIA PLAYLIST RESPONSE: %lu bytes received from YouTube's control channel.",(unsigned long)data.length]];[self prefetchChildren:data base:location];[self drivePrefetch];}return YES;
+            if(valid){NSInteger code=params[@"FCUP_Response_StatusCode"]?[params[@"FCUP_Response_StatusCode"] integerValue]:200;
+                // Some YouTube FCUP completions use status 0 for a delivered
+                // playlist. Promote only a validated HLS body, never an empty,
+                // non-playlist, or actual HTTP failure response.
+                code=SLFCUPPlaylistStatus(code,data);
+                _cache[location]=@{@"data":data?:[NSData data],@"code":@(code),@"time":@(NSProcessInfo.processInfo.systemUptime)};[_pending removeObjectForKey:location];[_ready broadcast];}[_ready unlock];
+            [self reply:response status:valid?200:409 type:nil data:nil];if(!valid)[self log:@"MEDIA PLAYLIST RESPONSE REJECTED: session, URL, or request ID did not match an outstanding request."];if(valid){[self log:[NSString stringWithFormat:@"MEDIA PLAYLIST RESPONSE: %lu bytes received; sender status %@. Status 0 requires a valid HLS playlist.",(unsigned long)data.length,params[@"FCUP_Response_StatusCode"]?:@200]];[self prefetchChildren:data base:location];[self drivePrefetch];}return YES;
         }
         if([type isEqual:@"playlistRemove"]){[_ready lock];NSDictionary *item=[params[@"item"] isKindOfClass:NSDictionary.class]?params[@"item"]:@{};if([session isEqual:_appleSession] && [item[@"uuid"] isEqual:_uuid]){_active=NO;_readyToPlay=NO;[_ready broadcast];}[_ready unlock];[self reply:response status:200 type:nil data:nil];return YES;}
         [self reply:response status:501 type:nil data:nil];[self log:@"MEDIA: sender requested an unsupported playlist action. Copy test log if playback stops here."];return YES;
