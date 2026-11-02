@@ -55,12 +55,12 @@ class CanvasPlayer {
  constructor(canvas,{onerror=()=>{}}={}){
   this.canvas=canvas;this.ctx=canvas.getContext('2d',{alpha:false});if(!this.ctx)throw Error('Canvas rendering unavailable');
   this.onerror=onerror;this.paused=true;this.muted=true;this.duration=0;this.readyState=0;this.ended=false;this.error=null;this.closed=false;
-  this.frames=[];this.audio=[];this.nodes=new Set();this.position=0;this.anchor=0;this.running=false;this.serial=0;this.decoders=new Map();this.configs=new Map();this.initializers=new Map();
+  this.frames=[];this.audio=[];this.nodes=new Set();this.position=0;this.videoEnd=0;this.anchor=0;this.running=false;this.serial=0;this.decoders=new Map();this.configs=new Map();this.initializers=new Map();
   this.stats={drawn:0,dropped:0,decoded:0,audioDecoded:0,maxFrames:0,maxAudio:0};
   this.animation=requestAnimationFrame(()=>this.paint());
  }
  clock(){return this.audioContext?.state==='running'?this.audioContext.currentTime:performance.now()/1000;}
- get currentTime(){return this.running&&!this.paused?Math.min(this.duration,this.position+this.clock()-this.anchor):this.position;}
+ get currentTime(){return this.running&&!this.paused?Math.min(this.duration,Math.max(this.position,this.videoEnd),this.position+this.clock()-this.anchor):this.position;}
  set currentTime(value){this.seek(value);}
  async bytes(url,range){
   const absolute=new URL(url,location.href);if(absolute.origin!==location.origin)throw Error('Media must use the ScreenLink proxy');
@@ -102,7 +102,7 @@ class CanvasPlayer {
  output(kind,data){
   if(this.closed){data.close();return;}
   if(kind==='video'){
-   this.stats.decoded++;if(data.timestamp/1e6<this.position-0.05){data.close();return;}
+   this.stats.decoded++;this.videoEnd=Math.max(this.videoEnd,(data.timestamp+(data.duration||33333))/1e6);if(data.timestamp/1e6<this.position-0.05){data.close();return;}
    this.frames.push(data);this.frames.sort((a,b)=>a.timestamp-b.timestamp);this.stats.maxFrames=Math.max(this.stats.maxFrames,this.frames.length);
    if(this.frames.length>180){this.fail(Error('Video buffer exceeded its limit'));return;}
   }else{
@@ -111,7 +111,7 @@ class CanvasPlayer {
    this.audio.push({timestamp:data.timestamp/1e6,sampleRate:data.sampleRate,frames:data.numberOfFrames,pcm});data.close();
    this.stats.maxAudio=Math.max(this.stats.maxAudio,this.audio.length);if(this.audio.length>600)this.fail(Error('Audio buffer exceeded its limit'));
   }
-  this.readyState=2;
+  if(kind==='video')this.readyState=2;
  }
  async decodeSegment(segment,kind,serial){
   let init=null;if(segment.map){const key=JSON.stringify(segment.map);if(!this.initializers.has(key))this.initializers.set(key,await this.bytes(segment.map.url,segment.map.range));init=this.initializers.get(key);}
@@ -135,7 +135,7 @@ class CanvasPlayer {
  }
  async seek(value){
   if(!this.videoList||this.closed)return;this.serial++;const serial=this.serial;
-  this.abort?.abort();this.abort=new AbortController();this.position=Math.max(0,Math.min(Number(value)||0,Math.max(0,this.duration-0.01)));this.anchor=this.clock();this.running=false;this.ended=false;this.readyState=0;this.release();
+  this.abort?.abort();this.abort=new AbortController();this.position=Math.max(0,Math.min(Number(value)||0,Math.max(0,this.duration-0.01)));this.videoEnd=this.position;this.anchor=this.clock();this.running=false;this.ended=false;this.readyState=0;this.release();
   const run=async()=>{
    // Serialize audio/video demux and decoder configuration across segment boundaries.
    const work=this.videoList.segments.filter(s=>s.start+s.duration>this.position).map(segment=>({segment,kind:this.audioList?'video':'all'}));
@@ -171,9 +171,9 @@ class CanvasPlayer {
   if(this.closed)return;
   if(!this.paused){
    if(this.readyState>=2&&!this.running){this.anchor=this.clock();this.running=true;}
-   const now=this.currentTime;let frame=null;
+   const now=this.currentTime;if(this.running&&!this.finished&&this.position+this.clock()-this.anchor>this.videoEnd){this.position=now;this.anchor=this.clock();}let frame=null;
    while(this.frames.length&&this.frames[0].timestamp/1e6<=now+0.015){if(frame){frame.close();this.stats.dropped++;}frame=this.frames.shift();}
-   if(frame){try{if(this.canvas.width!==frame.displayWidth||this.canvas.height!==frame.displayHeight){this.canvas.width=frame.displayWidth;this.canvas.height=frame.displayHeight;}this.ctx.drawImage(frame,0,0,this.canvas.width,this.canvas.height);this.stats.drawn++;}finally{frame.close();}}
+   if(frame){try{if(this.canvas.width!==frame.displayWidth||this.canvas.height!==frame.displayHeight){this.canvas.width=frame.displayWidth;this.canvas.height=frame.displayHeight;}this.ctx.drawImage(frame,0,0,this.canvas.width,this.canvas.height);this.stats.drawn++;}catch(error){this.fail(error);}finally{frame.close();}}
    this.scheduleAudio(now);
    if(this.finished&&now>=this.duration-0.02){this.pause();this.position=this.duration;this.ended=true;}
   }

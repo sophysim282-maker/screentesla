@@ -27,5 +27,11 @@ const server=http.createServer((req,res)=>{const url=new URL(req.url,'http://loc
  await page.evaluate(()=>{window.retired=codecPlayer;document.getElementById('reconnect').click();});
  await page.waitForFunction(()=>retired.closed&&retired.frames.length===0&&retired.decoders.size===0&&codecPlayer!==retired&&codecPlayer.stats.drawn>10,null,{timeout:15000});
  console.log('Reconnect releases frames, decoders and audio nodes');
+ await page.close();source='master.m3u8';command++;kind='rate';paused=false;seek=0;
+ const delayed=await browser.newPage();await delayed.route('**/part02.ts',async route=>{await new Promise(resolve=>setTimeout(resolve,4000));try{await route.continue();}catch{}});
+ await delayed.goto('http://127.0.0.1:'+server.address().port+'/?token=fixture');
+ await delayed.waitForFunction(()=>codecPlayer?.currentTime>3.96,null,{timeout:15000});await delayed.waitForTimeout(500);
+ assert(await delayed.evaluate(()=>codecPlayer.currentTime<4.1),'Playback clock must hold at the last decoded frame during network starvation');
+ await delayed.waitForFunction(()=>codecPlayer?.currentTime>4.3,null,{timeout:10000});assert(await delayed.evaluate(()=>engine.startsWith('WebCodecs')));console.log('Network starvation freezes the media clock and resumes direct playback');
  await browser.close();server.close();
 })().catch(error=>{console.error(error);server.close();process.exit(1);});
