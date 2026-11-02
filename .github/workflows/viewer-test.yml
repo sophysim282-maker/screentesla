@@ -17,6 +17,8 @@ jobs:
           node-version: '22'
       - run: npm install --no-save playwright@1.58.2
       - run: npx playwright install --with-deps chromium
+      - name: HLS range and error-propagation regression
+        run: node tools/test_youtube_loader.cjs
       - name: WebRTC ping viewer with approval and signaling expiry
         run: |
           node tools/test_rtc_viewer.cjs
