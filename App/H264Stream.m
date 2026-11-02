@@ -61,8 +61,9 @@
 }
 - (NSDictionary *)info {[_ready lock];NSDictionary *result=@{@"epoch":_epoch,@"ready":@(_initialization!=nil&&!_privacyHidden),@"hidden":@(_privacyHidden),@"privacyRevision":@(_privacyRevision),@"codec":_codec ?: @"",@"sequence":@(_sequence)};[_ready unlock];return result;}
 - (NSDictionary *)initialization {[_ready lock];NSDictionary *result=@{@"epoch":_epoch,@"data":(!_privacyHidden?_initialization:nil) ?: [NSData data]};[_ready unlock];return result;}
-- (NSDictionary *)readAfter:(uint64_t)after epoch:(NSString *)epoch {
-    [_ready lock];NSDate *deadline=[NSDate dateWithTimeIntervalSinceNow:1];
+- (NSDictionary *)readAfter:(uint64_t)after epoch:(NSString *)epoch {return [self readAfter:after epoch:epoch maxBytes:2*1024*1024 wait:1];}
+- (NSDictionary *)readAfter:(uint64_t)after epoch:(NSString *)epoch maxBytes:(NSUInteger)limit wait:(NSTimeInterval)wait {
+    limit=MAX(1024,MIN(limit,2*1024*1024));[_ready lock];NSDate *deadline=[NSDate dateWithTimeIntervalSinceNow:MAX(0,MIN(wait,1))];
     while(!_privacyHidden && [epoch isEqual:_epoch] && (!_units.count || after>=_sequence))if(![_ready waitUntilDate:deadline])break;
     if(_privacyHidden){NSDictionary *result=@{@"reset":@YES,@"hidden":@YES,@"epoch":_epoch,@"data":NSData.data};[_ready unlock];return result;}
     uint64_t first=[_units.firstObject[@"id"] unsignedLongLongValue];
@@ -77,7 +78,7 @@
     }
     for(NSUInteger i=after?0:bootstrap;i<_units.count;i++){
         NSDictionary *unit=_units[i];
-        if([unit[@"id"] unsignedLongLongValue]>after){[data appendData:unit[@"data"]];last=[unit[@"id"] unsignedLongLongValue];if(data.length>=2*1024*1024)break;}
+        if([unit[@"id"] unsignedLongLongValue]>after){if([unit[@"data"] length]>limit-data.length)break;[data appendData:unit[@"data"]];last=[unit[@"id"] unsignedLongLongValue];if(data.length>=limit)break;}
     }
     NSDictionary *result=@{@"reset":@NO,@"epoch":_epoch,@"id":@(last),@"data":data};[_ready unlock];return result;
 }

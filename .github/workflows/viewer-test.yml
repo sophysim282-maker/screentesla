@@ -47,6 +47,7 @@ jobs:
           python3 tools/create_quality_fixtures.py build/quality
           node tools/test_canvas_browser.cjs App build/quality --quality
           node tools/test_youtube_rtc_browser.cjs build/quality --quality
+          node tools/test_youtube_rtc_browser.cjs build/quality --quality --maps --screen-fixture=build/live.mp4
       - name: Viewer state and pacing checks
         run: |
           python3 tools/test_h264_viewer.py

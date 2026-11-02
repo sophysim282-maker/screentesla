@@ -6,6 +6,7 @@
 - (NSDictionary *)info;
 - (NSDictionary *)initialization;
 - (NSDictionary *)readAfter:(uint64_t)sequence epoch:(NSString *)epoch;
+- (NSDictionary *)readAfter:(uint64_t)sequence epoch:(NSString *)epoch maxBytes:(NSUInteger)bytes wait:(NSTimeInterval)wait;
 @property(nonatomic,readonly) BOOL privacyHidden;
 - (void)setPrivacyHidden:(BOOL)hidden notBefore:(uint64_t)timestamp;
 - (BOOL)changePrivacyHidden:(BOOL)hidden notBefore:(uint64_t)timestamp expectedRevision:(NSUInteger)revision;

@@ -6,6 +6,12 @@
 @property(nonatomic,copy) void (^mediaOpened)(void);
 @property(nonatomic,readonly) uint64_t mediaBufferedAmount;
 @property(nonatomic,readonly) BOOL mediaOpen;
+@property(nonatomic,copy) void (^screenMessage)(NSData *,BOOL);
+@property(nonatomic,copy) void (^screenOpened)(void);
+@property(nonatomic,readonly) uint64_t screenBufferedAmount;
+@property(nonatomic,readonly) BOOL screenOpen;
+- (void)enableScreenChannel;
+- (BOOL)sendScreen:(NSData *)data binary:(BOOL)binary;
 - (instancetype)initWithHotspotOnly:(BOOL)strict offerer:(BOOL)offerer;
 - (instancetype)initWithHotspotOnly:(BOOL)strict offerer:(BOOL)offerer dataOnly:(BOOL)dataOnly;
 - (void)enableMediaChannel;
