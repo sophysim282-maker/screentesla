@@ -4,8 +4,10 @@
 #import "Receiver.h"
 #import "FloatingPreview.h"
 #import "BackgroundSession.h"
+#import "LocalVPN.h"
 @interface Controller : UIViewController { CVPixelBufferRef _lastPixel; }
 @property(nonatomic,strong) Receiver *receiver;
+@property(nonatomic,strong) LocalVPN *vpn;
 @property(nonatomic,strong) UITextView *text;
 @property(nonatomic,strong) FloatingPreview *preview;
 @property(nonatomic,strong) BackgroundSession *session;
@@ -22,9 +24,9 @@
     UIStackView *stack=[UIStackView new];stack.axis=UILayoutConstraintAxisVertical;stack.spacing=6;stack.translatesAutoresizingMaskIntoConstraints=NO;
     [self.view addSubview:stack];
     [NSLayoutConstraint activateConstraints:@[[stack.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor constant:8],[stack.bottomAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.bottomAnchor constant:-8],[stack.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor constant:16],[stack.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor constant:-16]]];
-    UILabel *title=[UILabel new];title.text=@"ScreenLink · AirPlay Lab 0.10.4";title.font=[UIFont boldSystemFontOfSize:21];[stack addArrangedSubview:title];
+    UILabel *title=[UILabel new];title.text=@"ScreenLink · AirPlay Lab 0.11.0";title.font=[UIFont boldSystemFontOfSize:21];[stack addArrangedSubview:title];
     self.bookmark=[UILabel new];self.bookmark.font=[UIFont monospacedSystemFontOfSize:14 weight:UIFontWeightMedium];self.bookmark.numberOfLines=0;self.bookmark.text=@"Connect your Mac to the hotspot, then start receiver.";[stack addArrangedSubview:self.bookmark];
-    UILabel *help=[UILabel new];help.numberOfLines=0;help.font=[UIFont systemFontOfSize:13];help.text=@"Start → copy link → connect AirPlay → return here → start a background session (iOS 26 test), or floating preview. Viewer: use H.264 for full source frame rate.";[stack addArrangedSubview:help];
+    UILabel *help=[UILabel new];help.numberOfLines=0;help.font=[UIFont systemFontOfSize:13];help.text=@"Connect built-in VPN → allow setup → Start YouTube video-only → wait for background session → open YouTube AirPlay. Keep the Mac on your hotspot.";[stack addArrangedSubview:help];
     self.discoveryMode=[[UISegmentedControl alloc]initWithItems:@[@"iPhone VPN",@"Mac VPN",@"Native"]];
     id savedMode=[NSUserDefaults.standardUserDefaults objectForKey:@"discoveryMode"];
     NSInteger mode=savedMode?[savedMode integerValue]:SLDiscoveryPhoneVPN;
@@ -45,8 +47,12 @@
         UIButton *button=[UIButton buttonWithType:UIButtonTypeSystem];[button setTitle:labels[i] forState:UIControlStateNormal];[button.heightAnchor constraintEqualToConstant:34].active=YES;
         [button addTarget:self action:NSSelectorFromString(actions[i]) forControlEvents:UIControlEventTouchUpInside];[stack addArrangedSubview:button];
     }
+    UIStackView *vpnRow=[UIStackView new];vpnRow.axis=UILayoutConstraintAxisHorizontal;vpnRow.distribution=UIStackViewDistributionFillEqually;
+    for(NSString *name in @[@"Connect built-in VPN",@"Disconnect VPN"]){UIButton *button=[UIButton buttonWithType:UIButtonTypeSystem];[button setTitle:name forState:UIControlStateNormal];[button.heightAnchor constraintEqualToConstant:34].active=YES;[button addTarget:self action:[name hasPrefix:@"Connect"]?@selector(connectVPN):@selector(disconnectVPN) forControlEvents:UIControlEventTouchUpInside];[vpnRow addArrangedSubview:button];}
+    [stack insertArrangedSubview:vpnRow atIndex:3];
     self.text=[UITextView new];self.text.editable=NO;self.text.font=[UIFont monospacedSystemFontOfSize:12 weight:UIFontWeightRegular];[stack addArrangedSubview:self.text];
     self.receiver=[Receiver new];__weak Controller *weak=self;
+    self.vpn=[LocalVPN new];self.vpn.status=^(NSString *message){[weak append:message];};
     self.receiver.status=^(NSString *message){[weak append:message];};
     self.receiver.preview=^(CVPixelBufferRef pixel){[weak receivedPixel:pixel];};
     self.receiver.videoProfile=self.videoProfile.selectedSegmentIndex;
@@ -59,7 +65,7 @@
         [owner append:@"BACKGROUND RUNTIME ENDED: receiver, viewer link and media session retained. iOS may suspend this app without PiP. Returning to ScreenLink resumes the existing receiver; Start is not required to rebuild it."];
         if(!owner.preview.active && UIApplication.sharedApplication.applicationState==UIApplicationStateBackground)[owner beginGrace];
     };
-    [self append:@"Version 0.10.4: accepts sender status 0 only for validated HLS playlists, and frames reverse-channel EVENT/1.0 messages without disconnecting. Experimental native YouTube video-only AirPlay. Tap Start YouTube video-only here first; wait for the background task to start, then open YouTube → Cast → AirPlay & Bluetooth devices → ScreenLink VPN Phone. Open the fixed hotspot viewer on your Mac and press Play with sound. This path carries the original media and audio, not screenshots. Discovery and screen mirroring remain available. Native YouTube, ads, and background behavior still require your iPhone test."];
+    [self append:@"Version 0.11.0: includes a built-in local packet-tunnel VPN. Sign the app AND embedded extension with the VPN entitlement, then tap Connect built-in VPN and Allow. LocalDevVPN is no longer required when this VPN is connected. VPN transport is separate from the app background runtime. Includes the 0.10.4 playlist and EVENT fixes. Experimental native YouTube video-only AirPlay. Tap Start YouTube video-only here first; wait for the background task to start, then open YouTube → Cast → AirPlay & Bluetooth devices → ScreenLink VPN Phone. Open the fixed hotspot viewer on your Mac and press Play with sound. This path carries the original media and audio, not screenshots. Discovery and screen mirroring remain available. Native YouTube, ads, and background behavior still require your iPhone test."];
     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(background) name:UIApplicationDidEnterBackgroundNotification object:nil];
     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(active) name:UIApplicationDidBecomeActiveNotification object:nil];
     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(foreground) name:UIApplicationWillEnterForegroundNotification object:nil];
@@ -74,13 +80,23 @@
     self.receiver.videoProfile=self.videoProfile.selectedSegmentIndex;
 }
 - (void)refreshDiscovery { [self.receiver refreshDiscovery]; }
-- (void)start {
+- (void)connectVPN { [self.vpn connect:nil]; }
+- (void)disconnectVPN { [self.vpn disconnect]; }
+- (void)withVPN:(void (^)(void))ready {
+    if(2-self.discoveryMode.selectedSegmentIndex!=SLDiscoveryPhoneVPN || self.vpn.connected){ready();return;}
+    [self.vpn connect:^(BOOL ok){if(ok)ready();}];
+}
+- (void)start { [self withVPN:^{[self startReceiver];}]; }
+- (void)startReceiver {
     if(!self.receiver.isRunning)self.receiver.discoveryMode=2-self.discoveryMode.selectedSegmentIndex;
     if([self.receiver start]){[NSUserDefaults.standardUserDefaults setBool:YES forKey:@"receiverArmed"];UIApplication.sharedApplication.idleTimerDisabled=YES;[self links];}
 }
 - (void)stop { [NSUserDefaults.standardUserDefaults setBool:NO forKey:@"receiverArmed"];[self.session finish];[self endGrace];[self.receiver stop];[self.preview reset];[self.preview removeFromSuperview];self.preview=nil;if(_lastPixel){CVPixelBufferRelease(_lastPixel);_lastPixel=NULL;}UIApplication.sharedApplication.idleTimerDisabled=NO;[self append:@"Stopped. Video frames cleared."]; }
 - (void)startMedia {
-    [self start];if(!self.receiver.isRunning)return;
+    [self withVPN:^{[self startMediaReady];}];
+}
+- (void)startMediaReady {
+    [self startReceiver];if(!self.receiver.isRunning)return;
     self.session.allowWaitingForVideo=YES;[self.session start];
     [self append:@"NATIVE VIDEO TEST: open the fixed hotspot link on your Mac. Then switch to YouTube on iPhone, tap Cast → AirPlay & Bluetooth devices → ScreenLink VPN Phone. Do not start Control Center Screen Mirroring. Browser playback includes audio; press Play with sound on the Mac. A timed background session must be active before leaving ScreenLink. Native YouTube compatibility needs a device test."];
 }

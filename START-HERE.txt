@@ -1,3 +1,14 @@
+VERSION 0.11.0 — BUILT-IN LOCAL VPN
+
+Sign the entire IPA with KravaSign, retaining the embedded ScreenLinkLocalTunnel.appex. The app and extension both require the packet-tunnel-provider Network Extension entitlement in their signing profiles.
+
+1. Disconnect LocalDevVPN or other VPNs.
+2. Open ScreenLink → Connect built-in VPN → Allow the iOS VPN configuration prompt. Wait for BUILT-IN VPN CONNECTED.
+3. Connect the Mac to the iPhone hotspot. Start YouTube video-only in ScreenLink and wait for BACKGROUND SESSION ACTIVE. Open http://172.20.10.1:8080/ on the Mac.
+4. Open YouTube → Cast → AirPlay & Bluetooth devices → ScreenLink VPN Phone. Press Play with sound on the Mac viewer.
+
+A VPN connection does not provide unlimited background execution for the receiver app. Native YouTube playback, background behavior and this new VPN require physical iPhone testing. This build includes the 0.10.4 playlist status-zero and reverse EVENT fixes.
+
 This ZIP contains experimental iPhone app SOURCE CODE.
 It is NOT an IPA and cannot be installed by tapping the ZIP.
 The exact same-iPhone AirPlay behavior you requested is not verified yet.

@@ -1,6 +1,6 @@
 # ScreenLink AirPlay Lab
 
-ScreenLink receives the iPhone's own AirPlay mirroring stream through a local VPN peer and serves video to another device's browser over the iPhone hotspot. The viewer only needs a browser. The phone app needs LocalDevVPN and an active floating preview for the tested background path.
+ScreenLink receives the iPhone's own AirPlay mirroring stream through a local VPN peer and serves video to another device's browser over the iPhone hotspot. The viewer only needs a browser. Version 0.11.0 embeds ScreenLink Local VPN, so a separately installed LocalDevVPN is no longer required with a compatible signing profile. Floating preview remains the tested background path; the timed background session and native YouTube playback still need device validation.
 
 ## Confirmed baseline and current change
 
@@ -11,7 +11,7 @@ Version 0.8 preserves the working discovery and PiP controller source. It adds c
 ## Use
 
 1. Install the unsigned IPA through your existing signing setup. An unsigned build still requires valid device signing; normal free-account expiry and app limits apply.
-2. Connect [LocalDevVPN](https://apps.apple.com/us/app/localdevvpn/id6755608044). The tested peer is 10.7.0.1; the interface address is a separate address.
+2. Sign the complete IPA with a profile supporting `com.apple.developer.networking.networkextension = [packet-tunnel-provider]` on both the app and embedded extension. Keep the extension when signing with KravaSign. Open the app, tap **Connect built-in VPN**, and accept the iOS VPN configuration prompt. Disconnect other VPNs first. The peer is 10.7.0.1; the interface is 10.7.1.1.
 3. Enable Personal Hotspot and connect the viewing device to it. Stop any old Mac proxy advertisements.
 4. In ScreenLink select **iPhone VPN**, choose **Fast**, and tap **Start receiver**. Copy the complete hotspot viewer link, including its token.
 5. Open Control Center → Screen Mirroring → **ScreenLink VPN Phone**.
@@ -54,7 +54,7 @@ For a local build, use macOS with full Xcode and `brew install xcodegen autoconf
 bash tools/build.sh
 ```
 
-The build fetches pinned RPiPlay sources and cross-compiles its dependencies, runs portable cadence/multipart tests and a real local-only Bonjour lookup test on macOS, and native H.264 cache tests, then compiles the iOS app. There is no custom Network Extension, App Groups entitlement, or ReplayKit capture in this app. LocalDevVPN supplies the separately signed VPN provider.
+The build fetches pinned RPiPlay sources and cross-compiles its dependencies, runs portable cadence/multipart tests and a real local-only Bonjour lookup test on macOS, and native H.264 cache tests, then compiles the iOS app. The app embeds a packet-tunnel Network Extension; both targets request the packet-tunnel-provider entitlement. No App Groups entitlement or ReplayKit capture is needed. Unsigned builds cannot validate the signing profile or an installed VPN connection.
 
 ## Validation and limits
 
@@ -77,3 +77,13 @@ OpenSSL 1.1.1w and libplist 2.2.0 are fetched at build time; their licenses rema
 ## 0.9.2: bookmark the hotspot viewer
 
 On the iPhone Personal Hotspot, bookmark `http://172.20.10.1:8080/` (or the actual bridge address shown at the top of ScreenLink). The root address redirects hotspot clients to the current viewer token automatically. Start the receiver first. Anyone connected to this hotspot can use the short viewer address. Other Wi-Fi interfaces and media/API requests still require the token. This changes link convenience only; the 0.9.1 video/background fixes remain.
+
+## Built-in VPN (0.11.0)
+
+ScreenLink Local VPN routes only 10.7.0.1/32, reflects IPv4 packets between that peer and 10.7.1.1, and leaves Internet routes and DNS unchanged. No external VPN server is used. The app discovers the installed extension bundle ID, including signer rewrites, before saving the configuration with NETunnelProviderManager. iOS presents its own consent prompt; there is no separate mobileconfig to install. The Disconnect VPN button retains the saved profile for reuse.
+
+KravaSign advertises VPN entitlement support, but the actual provisioning profile must authorize packet-tunnel-provider for the app and extension. A certificate alone does not grant this entitlement. Do not strip PlugIns/ScreenLinkLocalTunnel.appex or remove its entitlements. The app logs missing-extension, permission and connection failures. This build has not been tested on a physical iPhone or with the user's KravaSign profile.
+
+The built-in VPN **does not keep the containing receiver app running indefinitely**. The existing floating preview/timed runtime requirements still apply. YouTube media compatibility is also separate.
+
+The local peer approach is based on [LocalDevVPN](https://github.com/jkcoxson/LocalDevVPN) by jkcoxson, Stossy11 and the SideStore Team. ScreenLink implements its own restricted packet reflection and VPN manager. See the bundled `LocalVPN-Attribution.txt` for the upstream license.

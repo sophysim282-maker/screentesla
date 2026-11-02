@@ -89,7 +89,7 @@ static NSData *encodedTXT(NSArray<NSString *> *strings) {
         if(owner && owner->_generation==generation && owner->_airplay && !owner->_resolvedPeer)
             [owner report:@"Local proxy lookup has not completed after 5 seconds. Save this log; registration alone is not a successful lookup."];
     });
-    [self report:[NSString stringWithFormat:@"LOCAL-ONLY iPhone VPN discovery requested: %@ → %@:%@. Keep LocalDevVPN connected. Same-phone visibility still needs a test.",name,peer,profile[@"port"]]];
+    [self report:[NSString stringWithFormat:@"LOCAL-ONLY iPhone VPN discovery requested: %@ → %@:%@. Keep ScreenLink Local VPN connected. Same-phone visibility still needs a test.",name,peer,profile[@"port"]]];
     return YES;
 }
 - (void)foundService:(const char *)name type:(const char *)type domain:(const char *)domain {

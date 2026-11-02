@@ -9,6 +9,8 @@ for tool in xcodegen autoconf automake glibtoolize; do
   command -v "$tool" >/dev/null || { echo "Missing $tool. Install prerequisites: brew install xcodegen autoconf automake libtool" >&2; exit 1; }
 done
 mkdir -p build
+cc -Wall -Wextra -Werror tools/test_local_packet.c -o build/test-local-packet
+build/test-local-packet
 cc -Wall -Wextra -Werror tools/test_reverse_channel.c -o build/test-reverse-channel
 build/test-reverse-channel
 cc -Wall -Wextra -Werror tools/test_frame_cadence.c -o build/test-frame-cadence
@@ -61,5 +63,20 @@ xcodegen generate
 xcodebuild -project ScreenLinkAirPlayLab.xcodeproj -scheme ScreenLinkAirPlayLab -configuration Release -destination 'generic/platform=iOS' -derivedDataPath build/DerivedData CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build 2>&1 | tee -a build/xcodebuild.log
 mkdir -p build/Payload
 cp -R build/DerivedData/Build/Products/Release-iphoneos/ScreenLinkAirPlayLab.app build/Payload/
+python3 - <<'VERIFY_VPN'
+import plistlib
+from pathlib import Path
+app=Path('build/Payload/ScreenLinkAirPlayLab.app')
+plugins=list((app/'PlugIns').glob('*.appex'))
+assert len(plugins)==1, 'Expected one embedded VPN extension'
+info=plistlib.loads((plugins[0]/'Info.plist').read_bytes())
+assert info['NSExtension']['NSExtensionPointIdentifier']=='com.apple.networkextension.packet-tunnel'
+assert info['NSExtension']['NSExtensionPrincipalClass']=='PacketTunnelProvider'
+assert (plugins[0]/info['CFBundleExecutable']).is_file()
+parent=plistlib.loads((app/'Info.plist').read_bytes())
+assert info['CFBundleIdentifier'].startswith(parent['CFBundleIdentifier']+'.')
+assert info['CFBundleVersion']==parent['CFBundleVersion']
+print('Embedded VPN packaging verified:', info['CFBundleIdentifier'])
+VERIFY_VPN
 (cd build && zip -qry ScreenLink-AirPlay-Lab-unsigned.ipa Payload)
 echo 'Unsigned IPA built. Free signing still required. Same-phone AirPlay has NOT been tested by this build.'

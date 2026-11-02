@@ -20,7 +20,14 @@ targets:
       - path: App
       - path: Vendor/RPiPlay/lib
         excludes: ['**/CMakeLists.txt', '**/*.md']
+    entitlements:
+      path: App/ScreenLink.entitlements
+      properties:
+        com.apple.developer.networking.networkextension: [packet-tunnel-provider]
     dependencies:
+      - target: ScreenLinkLocalTunnel
+        embed: true
+      - sdk: NetworkExtension.framework
       - sdk: AVKit.framework
       - sdk: AVFoundation.framework
       - sdk: UIKit.framework
@@ -36,8 +43,8 @@ targets:
       path: App/Info.plist
       properties:
         CFBundleDisplayName: ScreenLink Lab
-        CFBundleShortVersionString: '0.10.4'
-        CFBundleVersion: '17'
+        CFBundleShortVersionString: '0.11.0'
+        CFBundleVersion: '18'
         UILaunchScreen: {}
         UIBackgroundModes: [audio, processing]
         BGTaskSchedulerPermittedIdentifiers:
@@ -50,6 +57,34 @@ targets:
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
+  ScreenLinkLocalTunnel:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: Tunnel
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: local.screenlink.airplaylab.LocalTunnel
+        PRODUCT_NAME: ScreenLinkLocalTunnel
+        APPLICATION_EXTENSION_API_ONLY: YES
+        OTHER_LDFLAGS: ['$(inherited)']
+        SKIP_INSTALL: YES
+    dependencies:
+      - sdk: NetworkExtension.framework
+      - sdk: Foundation.framework
+    entitlements:
+      path: Tunnel/LocalTunnel.entitlements
+      properties:
+        com.apple.developer.networking.networkextension: [packet-tunnel-provider]
+    info:
+      path: Tunnel/Info.plist
+      properties:
+        CFBundleDisplayName: ScreenLink Local VPN
+        CFBundleShortVersionString: '0.11.0'
+        CFBundleVersion: '18'
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.networkextension.packet-tunnel
+          NSExtensionPrincipalClass: PacketTunnelProvider
 schemes:
   ScreenLinkAirPlayLab:
     build:
