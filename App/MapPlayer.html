@@ -37,7 +37,7 @@ function draw(){if(closed)return;
  if(!privateScreen&&video.readyState>=2&&video.videoWidth&&context){const rotate=orientation===6?Math.PI/2:orientation===8?-Math.PI/2:orientation===3?Math.PI:0,side=orientation===6||orientation===8,w=side?video.videoHeight:video.videoWidth,h=side?video.videoWidth:video.videoHeight;if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;}context.save();context.translate(w/2,h/2);context.rotate(rotate);context.drawImage(video,-video.videoWidth/2,-video.videoHeight/2);context.restore();cover.hidden=true;if(!frameReported){frameReported=true;notify(false,true,true);}}
  requestAnimationFrame(draw);
 }
-async function health(){if(closed)return;try{const meta=await info();lastPolicy=performance.now();orientation=meta.orientation||1;
+async function health(){if(closed)return;const mine=generation;try{const meta=await info();if(mine!==generation){if(!closed)setTimeout(health,400);return;}lastPolicy=performance.now();orientation=meta.orientation||1;
  if(meta.hidden!==false){localHold=false;revision=Number(meta.privacyRevision)||0;if(!privateScreen||playing)hide(true,'PHONE SCREEN HIDDEN — open Google Maps before choosing Show screen.');else{status.textContent=hideAcknowledged?'PHONE SCREEN HIDDEN — you can now switch apps.':'PHONE SCREEN HIDDEN';cover.textContent='Phone screen hidden. Open Google Maps before choosing Show screen.';notify(true,true);}}
  else if(!localHold){
   if(Number.isFinite(meta.ageMs)&&meta.ageMs>4000){if(!privateScreen||playing)hide(false,'Screen hidden while waiting for fresh capture.');setTimeout(health,400);return;}
@@ -46,7 +46,7 @@ async function health(){if(closed)return;try{const meta=await info();lastPolicy=
   if(meta.ready){if(!playing||activeEpoch!==meta.epoch){stopStream();activeEpoch=meta.epoch;privateScreen=false;playing=true;run(meta,generation);}status.textContent=meta.ageMs<4000?'Live iPhone screen · Hide screen BEFORE switching apps':'Waiting for a fresh screen frame';}
   else if(!privateScreen)hide(false,'Waiting for fresh screen capture.');
  }
- }catch{if(!closed)hide(false,'Screen hidden: connection lost. Hide is NOT confirmed on the iPhone.');}
+ }catch{if(!closed&&mine===generation)hide(false,'Screen hidden: connection lost. Hide is NOT confirmed on the iPhone.');}
  if(!closed)setTimeout(health,400);
 }
 async function setPrivacy(hidden){hideAcknowledged=false;if(hidden){localHold=true;hide(false,'Hiding screen… wait for confirmation before switching apps.');}try{const result=await request('/screen/privacy',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({hidden,expectedRevision:revision})}),meta=JSON.parse(new TextDecoder().decode(result.bytes));revision=Number(meta.privacyRevision)||0;if(hidden){hideAcknowledged=true;hide(true,'PHONE SCREEN HIDDEN — you can now switch apps.');}else{localHold=false;status.textContent='Waiting for a fresh screen frame…';}}catch{hide(false,'Could not confirm Hide. Keep Google Maps open or stop the system broadcast.');}}
