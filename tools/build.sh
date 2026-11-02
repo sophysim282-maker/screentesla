@@ -23,6 +23,8 @@ cc -Wall -Wextra -Werror tools/test_fmp4.c -o build/test-fmp4
 build/test-fmp4
 xcrun --sdk macosx clang -fobjc-arc -fblocks -IApp tools/test_h264_stream.m App/H264Stream.m -framework Foundation -o build/test-h264-stream
 build/test-h264-stream
+xcrun --sdk macosx clang -fobjc-arc -fblocks -IApp tools/test_screen_privacy.m App/H264Stream.m -framework Foundation -o build/test-screen-privacy
+build/test-screen-privacy
 xcrun --sdk macosx clang -fobjc-arc -fblocks -IApp -IBroadcast tools/test_screen_encoder.m Broadcast/ScreenEncoder.m App/H264Stream.m -framework Foundation -framework VideoToolbox -framework CoreMedia -framework CoreVideo -o build/test-screen-encoder
 build/test-screen-encoder
 xcrun --sdk macosx clang -fobjc-arc -fblocks -IApp tools/test_bounded_download.m App/BoundedDownload.m -framework Foundation -o build/test-bounded-download

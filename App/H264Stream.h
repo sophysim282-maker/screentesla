@@ -6,5 +6,10 @@
 - (NSDictionary *)info;
 - (NSDictionary *)initialization;
 - (NSDictionary *)readAfter:(uint64_t)sequence epoch:(NSString *)epoch;
+@property(nonatomic,readonly) BOOL privacyHidden;
+- (void)setPrivacyHidden:(BOOL)hidden notBefore:(uint64_t)timestamp;
+- (BOOL)changePrivacyHidden:(BOOL)hidden notBefore:(uint64_t)timestamp expectedRevision:(NSUInteger)revision;
+- (NSUInteger)privacyPermitForTimestamp:(uint64_t)timestamp;
+- (void)appendAVCC:(NSData *)sample timestamp:(uint64_t)timestamp keyframe:(BOOL)keyframe privacyPermit:(NSUInteger)permit;
 - (void)reset;
 @end

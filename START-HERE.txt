@@ -1,3 +1,13 @@
+VERSION 0.13.1 — MANUAL PHONE SCREEN PRIVACY
+
+The broadcast starts HIDDEN.
+1. Open Google Maps on the iPhone. On the Mac viewer, press Show phone screen.
+2. BEFORE switching away from Google Maps, press Hide phone screen on the viewer. Wait for HIDDEN confirmation.
+3. Use your other phone apps. YouTube keeps playing in its separate panel.
+4. Return to Google Maps, then press Show phone screen again.
+
+This does not automatically recognize Google Maps. Never press Show while another private app is visible. If Hide is NOT confirmed, keep Maps open or stop the system broadcast before switching apps.
+
 VERSION 0.13.0 — LIVE IPHONE MAPS + YOUTUBE
 
 1. Re-sign the entire IPA with KravaSign. Keep BOTH extensions: ScreenLinkLocalTunnel and ScreenLinkBroadcast. Keep VPN entitlements.

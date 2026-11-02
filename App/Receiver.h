@@ -23,6 +23,8 @@ typedef NS_ENUM(NSInteger, SLVideoProfile) { SLVideoFast=0, SLVideoBalanced=1, S
 @property(nonatomic,copy,readonly) NSDictionary *discoveryProfile;
 @property(nonatomic,strong,readonly) H264Stream *screenStream;
 @property(nonatomic,copy) void (^broadcastStop)(void);
+@property(nonatomic,readonly) BOOL screenHidden;
+- (void)setScreenHidden:(BOOL)hidden;
 - (void)screenFrameWithOrientation:(NSInteger)orientation;
 - (void)broadcastMessage:(NSString *)message;
 - (BOOL)start;

@@ -150,6 +150,9 @@ _decodeQueue=dispatch_queue_create("ScreenLink.decode",DISPATCH_QUEUE_SERIAL);_j
         }];
     } return self; }
 - (H264Stream *)screenStream {return _screenStream;}
+- (BOOL)screenHidden {return !_screenStream || _screenStream.privacyHidden;}
+- (BOOL)changeScreenHidden:(BOOL)hidden expectedRevision:(NSUInteger)revision {if(!_screenStream)return NO;CMTime time=CMClockGetTime(CMClockGetHostTimeClock());BOOL changed=[_screenStream changePrivacyHidden:hidden notBefore:(uint64_t)(CMTimeGetSeconds(time)*1000000) expectedRevision:revision];if(changed)[self emit:hidden?@"PHONE SCREEN HIDDEN: new screen frames are blocked and cached screen history cleared. YouTube media continues.":@"PHONE SCREEN ENABLED: only show after Google Maps is open. Waiting for a fresh capture keyframe."];return changed;}
+- (void)setScreenHidden:(BOOL)hidden {[self changeScreenHidden:hidden expectedRevision:[[_screenStream info][@"privacyRevision"] unsignedIntegerValue]];}
 - (void)screenFrameWithOrientation:(NSInteger)orientation {@synchronized(self){_screenFrames++;_screenOrientation=orientation;_screenTime=CACurrentMediaTime();}}
 - (void)broadcastMessage:(NSString *)message {[self emit:message];}
 - (NSDictionary *)screenInfo {NSMutableDictionary *info=[[_screenStream info] mutableCopy]?:[NSMutableDictionary dictionary];@synchronized(self){info[@"frames"]=@(_screenFrames);info[@"orientation"]=@(_screenOrientation?:1);info[@"ageMs"]=@(_screenTime?(CACurrentMediaTime()-_screenTime)*1000:999999);}return info;}
@@ -415,6 +418,7 @@ static NSArray *txtStrings(const char *bytes,int length) {
     struct sockaddr_in peer={0};socklen_t peerSize=sizeof peer;BOOL loopback=getpeername(client,(struct sockaddr *)&peer,&peerSize)==0 && peer.sin_family==AF_INET && (ntohl(peer.sin_addr.s_addr)>>24)==127;
     BOOL localOwner=loopback && localControl && [parts.firstObject isEqual:@"GET"] && [url.path isEqual:@"/local/owner"];
     BOOL localStop=loopback && localControl && [parts.firstObject isEqual:@"POST"] && [url.path isEqual:@"/local/broadcast/stop"];
+    BOOL privacy=[parts.firstObject isEqual:@"POST"] && [url.path isEqual:@"/screen/privacy"];
     BOOL report=[parts.firstObject isEqual:@"POST"] && [url.path isEqual:@"/media/report"];
     BOOL current;@synchronized(self){current=_generation==generation;}
     if(current && [parts.firstObject isEqual:@"GET"] && ([url.path isEqual:@"/"] || [url.path isEqual:@"/video"] || [url.path isEqual:@"/split"] || [url.path isEqual:@"/map"]) && !token && hotspotClient(client)){
@@ -423,7 +427,8 @@ static NSArray *txtStrings(const char *bytes,int length) {
     }
     else if(current && localOwner){mime=@"application/json";NSDictionary *owner;@synchronized(self){owner=@{@"broadcast":@(_screenStream!=nil),@"running":@(_running),@"frames":@(_screenFrames),@"token":self.token,@"logs":_broadcastLog.copy?:@[]};}body=[NSJSONSerialization dataWithJSONObject:owner options:0 error:NULL];}
     else if(current && localStop && _screenStream){mime=@"application/json";body=[@"{}" dataUsingEncoding:NSUTF8StringEncoding];dispatch_after(dispatch_time(DISPATCH_TIME_NOW,NSEC_PER_MSEC*250),dispatch_get_main_queue(),^{if(self.broadcastStop)self.broadcastStop();});}
-    else if(!current || (![parts.firstObject isEqual:@"GET"] && !report) || ![token isEqual:self.token]){status=@"403 Forbidden";body=[@"On the iPhone hotspot, open http://172.20.10.1:8080/ . On other Wi-Fi, use the complete viewer link from ScreenLink." dataUsingEncoding:NSUTF8StringEncoding];}
+    else if(!current || (![parts.firstObject isEqual:@"GET"] && !report && !privacy) || ![token isEqual:self.token]){status=@"403 Forbidden";body=[@"On the iPhone hotspot, open http://172.20.10.1:8080/ . On other Wi-Fi, use the complete viewer link from ScreenLink." dataUsingEncoding:NSUTF8StringEncoding];}
+    else if(privacy){NSData *json=[request subdataWithRange:NSMakeRange(bodyOffset,bodyLength)];id object=[NSJSONSerialization JSONObjectWithData:json options:0 error:NULL];id value=[object isKindOfClass:NSDictionary.class]?object[@"hidden"]:nil;if(!_screenStream){status=@"409 Conflict";}else if(!value || CFGetTypeID((__bridge CFTypeRef)value)!=CFBooleanGetTypeID()){status=@"400 Bad Request";}else{if(![self changeScreenHidden:[value boolValue] expectedRevision:[object[@"expectedRevision"] unsignedIntegerValue]])status=@"409 Conflict";mime=@"application/json";body=[NSJSONSerialization dataWithJSONObject:[self screenInfo] options:0 error:NULL];}}
     else if([url.path isEqual:@"/screen/info"]){mime=@"application/json";body=[NSJSONSerialization dataWithJSONObject:[self screenInfo] options:0 error:NULL];}
     else if([url.path isEqual:@"/screen/init.mp4"]){NSDictionary *part=[_screenStream initialization];body=part[@"data"]?:NSData.data;mime=@"video/mp4";extra=[NSString stringWithFormat:@"X-Stream-Epoch: %@\r\n",part[@"epoch"]?:@""];if(!body.length)status=@"503 Service Unavailable";}
     else if([url.path isEqual:@"/screen/segments"]){NSDictionary *part=[_screenStream readAfter:after epoch:epoch?:@""];if([part[@"reset"] boolValue])status=@"409 Conflict";else{body=part[@"data"]?:NSData.data;if(!body.length)status=@"204 No Content";}mime=@"video/mp4";extra=[NSString stringWithFormat:@"X-Stream-Epoch: %@\r\nX-Last-ID: %@\r\n",part[@"epoch"]?:@"",part[@"id"]?:@0];}

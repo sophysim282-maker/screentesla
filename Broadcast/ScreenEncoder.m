@@ -13,11 +13,11 @@
     BOOL _configured,_stopped;
     CMTime _last;
 }
-- (void)encoded:(CMSampleBufferRef)sample error:(OSStatus)error;
+- (void)encoded:(CMSampleBufferRef)sample error:(OSStatus)error permit:(NSUInteger)permit;
 @end
 static void output(void *owner,void *frame,OSStatus status,VTEncodeInfoFlags flags,CMSampleBufferRef sample){
     ScreenEncoder *encoder=(__bridge ScreenEncoder *)owner;
-    @autoreleasepool {[encoder encoded:sample error:status];}
+    @autoreleasepool {NSNumber *permit=CFBridgingRelease(frame);[encoder encoded:sample error:status permit:permit.unsignedIntegerValue];}
 }
 @implementation ScreenEncoder
 - (instancetype)initWithStream:(H264Stream *)stream {if((self=[super init])){_stream=stream;_slots=dispatch_semaphore_create(2);_last=kCMTimeInvalid;}return self;}
@@ -43,6 +43,7 @@ static void output(void *owner,void *frame,OSStatus status,VTEncodeInfoFlags fla
 - (void)consume:(CMSampleBufferRef)sample orientation:(NSInteger)orientation {
     if(_stopped)return;CVPixelBufferRef input=CMSampleBufferGetImageBuffer(sample);if(!input)return;
     CMTime pts=CMSampleBufferGetPresentationTimeStamp(sample);if(!CMTIME_IS_NUMERIC(pts))return;
+    NSUInteger permit=[_stream privacyPermitForTimestamp:(uint64_t)(CMTimeGetSeconds(pts)*1000000)];if(!permit)return;
     if(CMTIME_IS_NUMERIC(_last)&&CMTimeGetSeconds(CMTimeSubtract(pts,_last))<1.0/30.0)return;
     if(!_encoder && ![self setup:input])return;
     if(_orientation && orientation!=_orientation){[self closeEncoder];if(![self setup:input])return;}
@@ -51,11 +52,11 @@ static void output(void *owner,void *frame,OSStatus status,VTEncodeInfoFlags fla
     CVPixelBufferRef scaled=NULL;
     OSStatus error=CVPixelBufferPoolCreatePixelBufferWithAuxAttributes(NULL,_pool,(__bridge CFDictionaryRef)@{(id)kCVPixelBufferPoolAllocationThresholdKey:@3},&scaled);
     if(!error)error=VTPixelTransferSessionTransferImage(_transfer,input,scaled);
-    if(!error){_last=pts;error=VTCompressionSessionEncodeFrame(_encoder,scaled,pts,CMTimeMake(1,30),NULL,NULL,NULL);}
+    if(!error){_last=pts;void *context=(void *)CFBridgingRetain(@(permit));error=VTCompressionSessionEncodeFrame(_encoder,scaled,pts,CMTimeMake(1,30),NULL,context,NULL);if(error)CFRelease(context);}
     if(scaled)CVPixelBufferRelease(scaled);
     if(error){dispatch_semaphore_signal(_slots);if(self.failed)self.failed([NSString stringWithFormat:@"Screen frame rejected (%d); later frames will retry.",(int)error]);}
 }
-- (void)encoded:(CMSampleBufferRef)sample error:(OSStatus)error {
+- (void)encoded:(CMSampleBufferRef)sample error:(OSStatus)error permit:(NSUInteger)permit {
     @try {
         if(error||!sample||_stopped)return;
         CMFormatDescriptionRef format=CMSampleBufferGetFormatDescription(sample);
@@ -68,7 +69,7 @@ static void output(void *owner,void *frame,OSStatus status,VTEncodeInfoFlags fla
         CFArrayRef attachments=CMSampleBufferGetSampleAttachmentsArray(sample,NO);BOOL key=YES;
         if(attachments&&CFArrayGetCount(attachments)){CFDictionaryRef values=CFArrayGetValueAtIndex(attachments,0);key=!CFDictionaryContainsKey(values,kCMSampleAttachmentKey_NotSync);}
         double seconds=CMTimeGetSeconds(CMSampleBufferGetPresentationTimeStamp(sample));if(!isfinite(seconds)||seconds<0)return;
-        [_stream appendAVCC:data timestamp:(uint64_t)(seconds*1000000) keyframe:key];if(self.frameEncoded)self.frameEncoded(_orientation?:1);
+        [_stream appendAVCC:data timestamp:(uint64_t)(seconds*1000000) keyframe:key privacyPermit:permit];if(self.frameEncoded)self.frameEncoded(_orientation?:1);
     } @finally {dispatch_semaphore_signal(_slots);}
 }
 - (void)stop {_stopped=YES;[self closeEncoder];[_stream reset];}
