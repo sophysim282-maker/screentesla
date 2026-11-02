@@ -1,0 +1,47 @@
+#import <Foundation/Foundation.h>
+#import <arpa/inet.h>
+#import "SLPingPeer.h"
+#import "SLSignaling.h"
+#import "SLMediaBridge.h"
+#import "SLMediaSession.h"
+static NSString *const resourceID=@"11111111-1111-4111-8111-111111111111";
+static NSString *const largeID=@"22222222-2222-4222-8222-222222222222";
+static void check(BOOL value,NSString *message){if(!value)@throw [NSException exceptionWithName:@"Test" reason:message userInfo:nil];}
+static void waitFor(BOOL (^condition)(void),double seconds){NSDate *deadline=[NSDate dateWithTimeIntervalSinceNow:seconds];while(!condition()&&deadline.timeIntervalSinceNow>0)[NSRunLoop.currentRunLoop runUntilDate:[NSDate dateWithTimeIntervalSinceNow:.01]];check(condition(),@"Timed out waiting for native media test");}
+@interface Fixture : NSObject <SLMediaProvider>
+@property(nonatomic,strong) NSData *bytes;
+@property(nonatomic) NSUInteger reads,reports;
+@end
+@implementation Fixture
+- (instancetype)init {if((self=[super init])){NSMutableData *data=[NSMutableData dataWithLength:1024*1024];for(NSUInteger i=0;i<data.length;i++)((uint8_t *)data.mutableBytes)[i]=(uint8_t)(i*17+29);_bytes=data;}return self;}
+- (BOOL)active {return YES;}
+- (NSDictionary *)state {return @{@"active":@YES,@"epoch":@"fixture",@"url":[NSString stringWithFormat:@"/media/resource/%@?token=local-secret-must-not-cross",resourceID]};}
+- (NSDictionary *)resource:(NSString *)identifier range:(NSString *)range {self.reads++;if([identifier isEqual:largeID])return @{@"code":@200,@"data":[NSMutableData dataWithLength:6*1024*1024+1]};if(![identifier isEqual:resourceID])return @{@"code":@404};if(range)return @{@"code":@206,@"mime":@"video/mp2t",@"range":@"bytes 0-31/1048576",@"data":[self.bytes subdataWithRange:NSMakeRange(0,32)]};return @{@"code":@200,@"mime":@"video/mp2t",@"data":self.bytes};}
+- (void)report:(NSDictionary *)report {if([report[@"epoch"] isEqual:@"fixture"])self.reports++;}
+@end
+static NSDictionary *apiCall(SLSignaling *api,NSString *method,NSString *path,NSString *auth,NSDictionary *body,NSInteger expected){__block BOOL done=NO;__block NSDictionary *result;__block NSInteger code;[api call:method path:path authorization:auth body:body completion:^(NSInteger status,NSDictionary *data,NSError *error){code=status;result=data;done=YES;}];waitFor(^BOOL{return done;},12);check(code==expected,[NSString stringWithFormat:@"Media signaling HTTP %ld, expected %ld",(long)code,(long)expected]);return result;}
+static NSString *makeAnswer(SLPingPeer *peer,NSString *offer,NSString **gathering){__block NSString *answer,*ice;__block BOOL done=NO;[peer answerOffer:offer completion:^(NSString *text,NSString *mode,NSError *error){answer=text;ice=mode;done=YES;}];waitFor(^BOOL{return done;},6);check(answer.length,@"Data-only answer failed");*gathering=ice;return answer;}
+int main(int argc,const char *argv[]){@autoreleasepool{
+ BOOL live=argc>1&&!strcmp(argv[1],"--live");Fixture *fixture=[Fixture new];SLPingPeer *left=nil,*right=[[SLPingPeer alloc]initWithHotspotOnly:NO offerer:NO dataOnly:YES];SLMediaBridge *bridge=nil;SLMediaSession *host=nil;SLSignaling *api=nil;NSString *viewerPath,*viewerAuth;int exitCode=0;
+ NSMutableDictionary *responses=[NSMutableDictionary dictionary];__block NSUInteger hello=0;
+ right.mediaMessage=^(NSData *data,BOOL binary){if(binary){check(data.length>=8,@"Truncated media chunk");uint32_t words[2];memcpy(words,data.bytes,8);NSNumber *identifier=@(ntohl(words[0]));NSMutableDictionary *entry=responses[identifier];check(entry!=nil,@"Media bytes arrived before metadata");NSMutableData *bytes=entry[@"bytes"];check(bytes.length==ntohl(words[1]),@"Media chunk offset mismatch");[bytes appendBytes:(const uint8_t *)data.bytes+8 length:data.length-8];check(bytes.length<=[entry[@"length"] unsignedIntegerValue],@"Media response exceeded declared bound");}
+  else {NSDictionary *object=[NSJSONSerialization JSONObjectWithData:data options:0 error:nil];if([object[@"type"] isEqual:@"hello"]){check([object[@"protocol"] isEqual:@"screenlink-media-v1"],@"Wrong media protocol");hello++;}else if([object[@"type"] isEqual:@"response"]){NSMutableDictionary *entry=[object mutableCopy];entry[@"bytes"]=[NSMutableData data];responses[object[@"id"]]=entry;}}
+ };
+ @try {
+  if(live){host=[[SLMediaSession alloc]initWithMedia:fixture hotspotOnly:NO];[host control:@"start"];waitFor(^BOOL{return [[host control:@"status"][@"pairingCode"] length]>0||[[host control:@"status"][@"phase"] isEqual:@"failed"];},18);NSString *code=[host control:@"status"][@"pairingCode"];check([SLSignaling validCode:code],@"Extension-owned media session failed to create pairing");api=[[SLSignaling alloc]initWithBaseURL:[NSURL URLWithString:@"https://tesla4khmer.com/api/public/screenlink"]];NSDictionary *join=apiCall(api,@"POST",@"/join",nil,@{@"pairingCode":code},202);viewerPath=[@"/join/" stringByAppendingString:join[@"joinId"]];viewerAuth=[@"Viewer " stringByAppendingString:join[@"viewerSecret"]];apiCall(api,@"GET",[viewerPath stringByAppendingString:@"/offer"],viewerAuth,nil,403);waitFor(^BOOL{return [[host control:@"status"][@"approvalRequested"] boolValue];},5);[host control:@"approve"];waitFor(^BOOL{return [[host control:@"status"][@"phase"] isEqual:@"connecting"];},5);NSDictionary *offer=apiCall(api,@"GET",[viewerPath stringByAppendingString:@"/offer"],viewerAuth,nil,200);check(![offer[@"sdpOffer"] containsString:@"m=video"]&&! [offer[@"sdpOffer"] containsString:@"m=audio"],@"Original-media relay must not start camera/audio/video encoders");NSString *ice;NSString *answer=makeAnswer(right,offer[@"sdpOffer"],&ice);apiCall(api,@"POST",[viewerPath stringByAppendingString:@"/answer"],viewerAuth,@{@"sdpAnswer":answer,@"iceGathering":ice,@"negotiationRevision":@1},200);}
+  else {left=[[SLPingPeer alloc]initWithHotspotOnly:NO offerer:YES dataOnly:YES];[left enableMediaChannel];bridge=[SLMediaBridge new];bridge.stateProvider=^NSDictionary *{return [fixture state];};bridge.resourceProvider=^NSDictionary *(NSString *identifier,NSString *range){return [fixture resource:identifier range:range];};bridge.reportConsumer=^(NSDictionary *report){[fixture report:report];};__weak SLPingPeer *weakLeft=left;__weak SLMediaBridge *weakBridge=bridge;bridge.send=^BOOL(NSData *data,BOOL binary){return [weakLeft sendMedia:data binary:binary];};bridge.bufferedAmount=^uint64_t{return weakLeft.mediaBufferedAmount;};left.mediaOpened=^{[weakBridge open];};left.mediaMessage=^(NSData *data,BOOL binary){if(!binary)[weakBridge receive:data];};__block BOOL done=NO;__block NSString *offer;[left offerRestart:NO completion:^(NSString *sdp,NSString *ice,NSError *error){offer=sdp;done=YES;}];waitFor(^BOOL{return done;},6);check(offer.length,@"Data-only offer failed");NSString *ice;NSString *answer=makeAnswer(right,offer,&ice);done=NO;[left applyAnswer:answer completion:^(NSError *error){check(!error,@"Data-only answer rejected");done=YES;}];waitFor(^BOOL{return done;},6);}
+  waitFor(^BOOL{return right.mediaOpen&&hello>0;},20);
+  void (^request)(NSUInteger,NSString *,NSDictionary *)=^(NSUInteger identifier,NSString *path,NSDictionary *extra){NSMutableDictionary *object=[@{@"type":@"request",@"id":@(identifier),@"path":path} mutableCopy];[object addEntriesFromDictionary:extra?:@{}];check([right sendMedia:[NSJSONSerialization dataWithJSONObject:object options:0 error:nil] binary:NO],@"Media request send failed");waitFor(^BOOL{NSDictionary *entry=responses[@(identifier)];return entry&&[entry[@"bytes"] length]==[entry[@"length"] unsignedIntegerValue];},25);};
+  request(1,@"/media/state",nil);NSDictionary *state=[NSJSONSerialization JSONObjectWithData:responses[@1][@"bytes"] options:0 error:nil];check([state[@"url"] isEqual:[@"/media/resource/" stringByAppendingString:resourceID]],@"Local viewer token leaked through state");
+  request(2,state[@"url"],nil);check([responses[@2][@"status"] intValue]==200&&[responses[@2][@"bytes"] isEqual:fixture.bytes],@"Original resource bytes corrupted across SCTP");
+  request(3,state[@"url"],@{@"range":@"bytes=0-31"});check([responses[@3][@"status"] intValue]==206&&[responses[@3][@"bytes"] length]==32,@"Byte ranges were not preserved");
+  request(4,@"/media/report",@{@"body":@{@"epoch":@"fixture",@"ready":@YES}});check(fixture.reports==1,@"AirPlay playback feedback did not reach provider");NSUInteger before=fixture.reads;
+  request(5,@"https://example.com/",nil);check([responses[@5][@"status"] intValue]==403&&fixture.reads==before,@"Arbitrary URLs must be blocked before fetching");
+  request(6,@"/screen/info",nil);check([responses[@6][@"status"] intValue]==403,@"YouTube media channel exposed phone screen");
+  request(7,[@"/media/resource/" stringByAppendingString:largeID],nil);check([responses[@7][@"status"] intValue]==413&&[responses[@7][@"bytes"] length]==0,@"Oversized resource was not rejected");
+  puts("Native original-media relay passed: real data-only peers, exact 1 MB resource bytes, ranges, feedback, token removal, path/screen isolation and 6 MB response bound. Same-Mac test only.");
+  if(live)puts("Production extension-owned media-session flow passed without a UI controller: session create, preapproval refusal, explicit approval, answer, data and cleanup. Not a physical iPhone background test.");
+ } @catch(NSException *exception){fprintf(stderr,"Native media test failed: %s\n",exception.reason.UTF8String);exitCode=1;}
+ @finally {[bridge stop];[host stop];[left close];[right close];[api close];}
+ return exitCode;
+}}

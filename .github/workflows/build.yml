@@ -21,7 +21,9 @@ jobs:
         run: curl --head --connect-timeout 8 --max-time 15 https://tesla4khmer.com/api/public/screenlink
       - name: Production signaling integration (real native SDP and ping)
         if: ${{ !cancelled() && steps.native-build.outcome == 'success' }}
-        run: build/test-rtc-peer --live
+        run: |
+          build/test-rtc-peer --live
+          build/test-rtc-media --live
       - uses: actions/upload-artifact@v4
         if: always()
         with:
