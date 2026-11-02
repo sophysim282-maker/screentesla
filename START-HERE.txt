@@ -1,3 +1,17 @@
+VERSION 0.16.0 — YOUTUBE VIDEO + SOUND THROUGH YOUR HTTPS WEBSITE
+
+1. Sign/install the IPA with KravaSign. Keep BOTH extensions and WebRTC.framework.
+2. Ask Lovable to publish docs/webrtc-youtube-viewer.html at https://tesla4khmer.com/screenlink-youtube . The same pairing backend is used; the old moving-test page is separate.
+3. Connect built-in VPN and turn on Personal Hotspot. Connect the Mac to that hotspot.
+4. Tap YouTube website · pair video + sound. Tap the round system button and Start Broadcast (ScreenLink Screen).
+5. Tap Start website pairing, enter its code on /screenlink-youtube and press Approve viewer on the phone.
+6. Leave the system broadcast running. Open YouTube → Cast → AirPlay & Bluetooth devices → ScreenLink VPN Phone.
+7. Press Play with sound on the website. Actual video/audio should arrive through the local WebRTC media channel.
+
+This is original YouTube media, not the colored moving pattern. Phone-screen capture stays hidden and the YouTube WebRTC channel cannot request it. Do not press Show in another legacy local viewer unless you intend to share your phone screen.
+
+The broadcast extension owns the session so leaving the main app does not intentionally stop it. iOS can still stop the broadcast; physical YouTube compatibility, memory pressure and sustained background operation need testing. Copy diagnostics on both sides if playback fails. The app cannot silently grant or restart a system broadcast.
+
 VERSION 0.15.0 — REAL WEBRTC MOVING-VIDEO TEST
 
 1. Re-sign/install the new IPA with KravaSign, keeping BOTH extensions and WebRTC.framework.
