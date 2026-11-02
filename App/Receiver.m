@@ -8,6 +8,7 @@
 #import "HotspotLink.h"
 #import "MediaCast.h"
 #import <VideoToolbox/VideoToolbox.h>
+#import <CoreMedia/CMSync.h>
 #import <CoreImage/CoreImage.h>
 #import <UIKit/UIKit.h>
 #import <QuartzCore/QuartzCore.h>
