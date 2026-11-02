@@ -9,6 +9,14 @@ for tool in xcodegen autoconf automake glibtoolize; do
   command -v "$tool" >/dev/null || { echo "Missing $tool. Install prerequisites: brew install xcodegen autoconf automake libtool" >&2; exit 1; }
 done
 mkdir -p build
+python3 tools/fetch_webrtc.py
+rtc_mac="$PWD/Vendor/WebRTC.xcframework/macos-x86_64_arm64"
+codesign --force --sign - "$rtc_mac/WebRTC.framework"
+xcrun --sdk macosx clang -fobjc-arc -fblocks -IRTC -F"$rtc_mac" tools/test_rtc_peer.m RTC/SLPingPeer.m RTC/SLSignaling.m -framework Foundation -framework WebRTC -Wl,-rpath,"$rtc_mac" -o build/test-rtc-peer
+build/test-rtc-peer
+if [[ "${SCREENLINK_LIVE_SIGNALING_TEST:-0}" == 1 ]]; then
+  build/test-rtc-peer --live
+fi
 cc -Wall -Wextra -Werror tools/test_local_packet.c -o build/test-local-packet
 build/test-local-packet
 cc -Wall -Wextra -Werror tools/test_reverse_channel.c -o build/test-reverse-channel
@@ -74,12 +82,14 @@ cp -R build/DerivedData/Build/Products/Release-iphoneos/ScreenLinkAirPlayLab.app
 # Ad-hoc signatures are NOT device-authorized signing or provisioning profiles.
 codesign --force --sign - --generate-entitlement-der --entitlements Tunnel/LocalTunnel.entitlements build/Payload/ScreenLinkAirPlayLab.app/PlugIns/ScreenLinkLocalTunnel.appex
 codesign --force --sign - --generate-entitlement-der --entitlements Broadcast/Broadcast.entitlements build/Payload/ScreenLinkAirPlayLab.app/PlugIns/ScreenLinkBroadcast.appex
+codesign --force --sign - build/Payload/ScreenLinkAirPlayLab.app/Frameworks/WebRTC.framework
 codesign --force --sign - --generate-entitlement-der --entitlements App/ScreenLink.entitlements build/Payload/ScreenLinkAirPlayLab.app
 python3 - <<'VERIFY_VPN'
 import plistlib, subprocess
 from pathlib import Path
 app=Path('build/Payload/ScreenLinkAirPlayLab.app')
 plugins=list((app/'PlugIns').glob('*.appex'))
+assert (app/'Frameworks/WebRTC.framework/WebRTC').is_file()
 assert len(plugins)==2, 'Expected embedded VPN and screen broadcast extensions'
 vpn=next(p for p in plugins if p.name=='ScreenLinkLocalTunnel.appex')
 broadcast=next(p for p in plugins if p.name=='ScreenLinkBroadcast.appex')

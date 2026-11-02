@@ -1,3 +1,16 @@
+VERSION 0.14.0 — WEBRTC PAIRING/PING PROTOTYPE
+
+This milestone tests connection setup only. It does NOT stream Maps or YouTube over WebRTC yet.
+
+1. Re-sign/install the IPA as before, keeping both extensions and the embedded WebRTC.framework.
+2. Turn on iPhone Personal Hotspot and connect the Mac or parked Tesla to it.
+3. Open WebRTC pairing test · no video yet in ScreenLink. Keep this screen open.
+4. Tap Start pairing test and enter the displayed six-digit code on the website pairing page.
+5. Approve the request on the iPhone. Wait for LOCAL P2P PING VERIFIED.
+6. If it fails, Copy diagnostics from the test screen. No SDP or role secrets are included.
+
+The viewer must implement the v2 API and the ordered data channel named ping, with UTF-8 ping/pong replies. Browser API support alone is not an end-to-end connection test. Local streaming modes remain available on the previous screen.
+
 VERSION 0.13.1 — MANUAL PHONE SCREEN PRIVACY
 
 The broadcast starts HIDDEN.
