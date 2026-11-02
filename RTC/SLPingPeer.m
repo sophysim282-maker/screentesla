@@ -91,10 +91,23 @@
 }
 - (BOOL)send:(NSString *)text {if(self.channel.readyState!=RTCDataChannelStateOpen)return NO;return [self.channel sendData:[[RTCDataBuffer alloc]initWithData:[text dataUsingEncoding:NSUTF8StringEncoding] isBinary:NO]];}
 - (void)ping {if(!self.closed&&self.channel.readyState==RTCDataChannelStateOpen)self.pingSent=[self send:@"ping"]||self.pingSent;}
-- (void)dataChannelDidChangeState:(RTCDataChannel *)dataChannel {if(dataChannel==self.mediaChannel){dispatch_async(dispatch_get_main_queue(),^{if(!self.closed&&self.mediaOpen&&self.mediaOpened)self.mediaOpened();});return;}dispatch_async(dispatch_get_main_queue(),^{if(self.closed||dataChannel!=self.channel)return;if(dataChannel.readyState==RTCDataChannelStateOpen){[self log:@"WebRTC data channel open; waiting for a verified ping/pong exchange."];[self ping];if(!self.pingTimer){__weak SLPingPeer *weak=self;self.pingTimer=[NSTimer scheduledTimerWithTimeInterval:3 repeats:YES block:^(NSTimer *timer){[weak ping];}];}}});}
+- (void)dataChannelDidChangeState:(RTCDataChannel *)dataChannel {
+    dispatch_async(dispatch_get_main_queue(),^{
+        if(self.closed)return;
+        if(dataChannel==self.mediaChannel){if(self.mediaOpen&&self.mediaOpened)self.mediaOpened();return;}
+        if(dataChannel!=self.channel)return;
+        if(dataChannel.readyState==RTCDataChannelStateOpen){[self log:@"WebRTC data channel open; waiting for a verified ping/pong exchange."];[self ping];if(!self.pingTimer){__weak SLPingPeer *weak=self;self.pingTimer=[NSTimer scheduledTimerWithTimeInterval:3 repeats:YES block:^(NSTimer *timer){[weak ping];}];}}
+    });
+}
 - (void)dataChannel:(RTCDataChannel *)channel didReceiveMessageWithBuffer:(RTCDataBuffer *)buffer {
-    if(channel==self.mediaChannel){if(buffer.data.length<=16384)dispatch_async(dispatch_get_main_queue(),^{if(!self.closed&&channel==self.mediaChannel&&self.mediaMessage)self.mediaMessage(buffer.data,buffer.isBinary);});return;}if(buffer.data.length>4096||buffer.isBinary)return;NSString *text=[[NSString alloc]initWithData:buffer.data encoding:NSUTF8StringEncoding];
-    dispatch_async(dispatch_get_main_queue(),^{if(self.closed||channel!=self.channel)return;
+    // Classification must run after the queued incoming-channel installation.
+    // Otherwise an immediate hello can be mistaken for an unknown ping channel.
+    if(buffer.data.length>16384)return;
+    dispatch_async(dispatch_get_main_queue(),^{
+        if(self.closed)return;
+        if(channel==self.mediaChannel){if(self.mediaMessage)self.mediaMessage(buffer.data,buffer.isBinary);return;}
+        if(channel!=self.channel||buffer.data.length>4096||buffer.isBinary)return;
+        NSString *text=[[NSString alloc]initWithData:buffer.data encoding:NSUTF8StringEncoding];
         if([text isEqual:@"ping"]){if([self send:@"pong"])self.lastVerified=NSProcessInfo.processInfo.systemUptime;}
         else if([text isEqual:@"pong"]&&self.pingSent)self.lastVerified=NSProcessInfo.processInfo.systemUptime;
         else {id object=[NSJSONSerialization JSONObjectWithData:buffer.data options:0 error:nil];if([object isKindOfClass:NSDictionary.class]&&[object[@"type"] isEqual:@"video-report"]){id count=object[@"framesRendered"];if([count isKindOfClass:NSNumber.class]&&[count unsignedLongLongValue]<=1000000000ULL){NSUInteger n=[count unsignedIntegerValue];if(n>self.remoteFrames){self.remoteFrames=n;self.lastRemoteProgress=NSProcessInfo.processInfo.systemUptime;}}}
@@ -125,7 +138,17 @@ static BOOL privateIP(NSString *host,BOOL strict){struct in_addr address;if(inet
 - (void)close {self.closed=YES;self.mediaChannel.delegate=nil;[self.mediaChannel close];self.mediaChannel=nil;self.mediaMessage=nil;self.mediaOpened=nil;[self.testVideo stop];self.testVideo=nil;[self.receivedTrack removeRenderer:self];self.receivedTrack=nil;self.videoTrack=nil;self.videoSource=nil;self.offerGeneration++;self.offerCompletion=nil;[self.pingTimer invalidate];self.pingTimer=nil;self.channel.delegate=nil;[self.channel close];self.channel=nil;self.peer.delegate=nil;[self.peer close];self.peer=nil;self.factory=nil;}
 - (void)peerConnection:(RTCPeerConnection *)peer didChangeConnectionState:(RTCPeerConnectionState)state {dispatch_async(dispatch_get_main_queue(),^{if(!self.closed){if(state==RTCPeerConnectionStateConnected)[self.testVideo start];else [self.testVideo stop];[self log:@"WebRTC connection state changed; traffic and route checks determine verification."];}});}
 - (void)peerConnection:(RTCPeerConnection *)p didChangeIceGatheringState:(RTCIceGatheringState)state {dispatch_async(dispatch_get_main_queue(),^{if(state==RTCIceGatheringStateComplete)[self finishGathering:YES generation:self.offerGeneration];});}
-- (void)peerConnection:(RTCPeerConnection *)p didOpenDataChannel:(RTCDataChannel *)channel {dispatch_async(dispatch_get_main_queue(),^{if(self.closed){[channel close];return;}if([channel.label isEqual:@"media"]&&[channel.protocol isEqual:@"screenlink-media-v1"]){self.mediaChannel=channel;channel.delegate=self;[self dataChannelDidChangeState:channel];return;}if(![channel.label isEqual:@"ping"]){[channel close];return;}self.channel=channel;channel.delegate=self;[self dataChannelDidChangeState:channel];});}
+- (void)peerConnection:(RTCPeerConnection *)p didOpenDataChannel:(RTCDataChannel *)channel {
+    // Queue ownership first, then attach the observer before returning to WebRTC.
+    // Waiting for the main queue to attach it loses messages sent at channel-open.
+    dispatch_async(dispatch_get_main_queue(),^{
+        if(self.closed){channel.delegate=nil;[channel close];return;}
+        if([channel.label isEqual:@"media"]&&[channel.protocol isEqual:@"screenlink-media-v1"]){self.mediaChannel=channel;[self dataChannelDidChangeState:channel];return;}
+        if(![channel.label isEqual:@"ping"]){channel.delegate=nil;[channel close];return;}
+        self.channel=channel;[self dataChannelDidChangeState:channel];
+    });
+    channel.delegate=self;
+}
 - (void)peerConnection:(RTCPeerConnection *)p didChangeSignalingState:(RTCSignalingState)s {}
 - (void)peerConnection:(RTCPeerConnection *)p didChangeIceConnectionState:(RTCIceConnectionState)s {}
 - (void)peerConnection:(RTCPeerConnection *)p didGenerateIceCandidate:(RTCIceCandidate *)c {}
