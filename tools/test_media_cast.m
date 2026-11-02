@@ -27,6 +27,7 @@ int main(void){@autoreleasepool{
     NSData *validPlaylist=[@"#EXTM3U\n#EXT-X-ENDLIST\n" dataUsingEncoding:NSUTF8StringEncoding];
     assert(SLFCUPPlaylistStatus(0,validPlaylist)==200);
     assert(SLFCUPPlaylistStatus(0,[NSData data])==502);
+    assert(SLFCUPPlaylistStatus(0,nil)==502);
     assert(SLFCUPPlaylistStatus(0,[@"not a playlist" dataUsingEncoding:NSUTF8StringEncoding])==502);
     assert(SLFCUPPlaylistStatus(403,validPlaylist)==403);
     NSError *error=nil;NSString *expanded=SLExpandYouTubePlaylist(@"#EXTM3U\n#YT-EXT-CONDENSED-URL:BASE-URI=\"https://example.test/videoplayback\",PARAMS=\"sq,lmt\",PREFIX=\"s/\"\n#EXTINF:2.0,\ns/1/42\n#EXT-X-ENDLIST\n",&error);assert(!error && [expanded containsString:@"https://example.test/videoplayback/sq/1/lmt/42"]);
