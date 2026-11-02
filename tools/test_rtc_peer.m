@@ -16,7 +16,7 @@ int main(int argc,const char *argv[]){@autoreleasepool{
  BOOL live=argc>1&&!strcmp(argv[1],"--live");SLPingPeer *left=[[SLPingPeer alloc]initWithHotspotOnly:NO offerer:YES],*right=[[SLPingPeer alloc]initWithHotspotOnly:NO offerer:NO];SLSignaling *api=nil;NSString *session=nil,*auth=nil;int result=0;
  @try {
   require([SLSignaling validSecret:[@"a" stringByPaddingToLength:64 withString:@"a" startingAtIndex:0]],@"Secret validation");require(![SLSignaling validSecret:@"short"]&&![SLSignaling validIdentifier:@"../bad"]&&[SLSignaling validCode:@"012345"],@"Identifier validation");
-  NSError *videoError=nil;require([left enableTestVideo:&videoError],@"Native H.264 source setup failed");
+  NSError *videoError=nil;BOOL videoReady=[left enableTestVideo:&videoError];require(videoReady,videoError.localizedDescription?:@"Native H.264 source setup failed");
   NSString *sdp=offer(left);require([sdp containsString:@"m=video"]&&[sdp containsString:@"H264/90000"],@"Offer must contain real H.264 video");
   if(!live){apply(left,answer(right,sdp));verifyPeers(left,right);verifyVideo(left,right);puts("Native WebRTC peers passed: host-only offer/answer, DTLS/SCTP ping/pong, traffic stats and private-route checks. This is a same-Mac test.");}
   else {

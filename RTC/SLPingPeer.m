@@ -20,7 +20,7 @@
 @end
 @implementation SLPingPeer
 - (instancetype)initWithHotspotOnly:(BOOL)strict offerer:(BOOL)offerer {
-    if((self=[super init])){static dispatch_once_t once;dispatch_once(&once,^{RTCInitializeSSL();RTCSetMinDebugLogLevel(RTCLoggingSeverityError);});_strict=strict;_factory=[RTCPeerConnectionFactory new];RTCSetMinDebugLogLevel(RTCLoggingSeverityNone);RTCConfiguration *config=[RTCConfiguration new];config.iceServers=@[];config.iceTransportPolicy=RTCIceTransportPolicyAll;config.sdpSemantics=RTCSdpSemanticsUnifiedPlan;config.bundlePolicy=RTCBundlePolicyMaxBundle;config.tcpCandidatePolicy=RTCTcpCandidatePolicyDisabled;config.continualGatheringPolicy=RTCContinualGatheringPolicyGatherOnce;
+    if((self=[super init])){static dispatch_once_t once;dispatch_once(&once,^{RTCInitializeSSL();RTCSetMinDebugLogLevel(RTCLoggingSeverityError);});_strict=strict;RTCDefaultVideoEncoderFactory *encoders=[RTCDefaultVideoEncoderFactory new];for(RTCVideoCodecInfo *codec in [RTCDefaultVideoEncoderFactory supportedCodecs])if([codec.name isEqual:@"H264"]){encoders.preferredCodec=codec;break;}_factory=[[RTCPeerConnectionFactory alloc]initWithEncoderFactory:encoders decoderFactory:[RTCDefaultVideoDecoderFactory new]];RTCSetMinDebugLogLevel(RTCLoggingSeverityNone);RTCConfiguration *config=[RTCConfiguration new];config.iceServers=@[];config.iceTransportPolicy=RTCIceTransportPolicyAll;config.sdpSemantics=RTCSdpSemanticsUnifiedPlan;config.bundlePolicy=RTCBundlePolicyMaxBundle;config.tcpCandidatePolicy=RTCTcpCandidatePolicyDisabled;config.continualGatheringPolicy=RTCContinualGatheringPolicyGatherOnce;
         _peer=[_factory peerConnectionWithConfiguration:config constraints:[[RTCMediaConstraints alloc]initWithMandatoryConstraints:nil optionalConstraints:nil] delegate:self];
         if(offerer){RTCDataChannelConfiguration *channel=[RTCDataChannelConfiguration new];channel.isOrdered=YES;_channel=[_peer dataChannelForLabel:@"ping" configuration:channel];_channel.delegate=self;}
     }return self;
@@ -31,7 +31,7 @@
     RTCRtpTransceiverInit *init=[RTCRtpTransceiverInit new];init.direction=RTCRtpTransceiverDirectionSendOnly;init.streamIds=@[@"screenlink-test"];
     RTCRtpTransceiver *transceiver=[self.peer addTransceiverWithTrack:self.videoTrack init:init];
     NSMutableArray *codecs=[NSMutableArray array];for(RTCRtpCodecCapability *codec in [self.factory rtpSenderCapabilitiesForKind:@"video"].codecs)if([codec.name caseInsensitiveCompare:@"H264"]==NSOrderedSame)[codecs addObject:codec];
-    NSError *codecError=nil;if(!transceiver||!codecs.count||![transceiver setCodecPreferences:codecs error:&codecError]){if(error)*error=[self error:@"H.264 WebRTC video is unavailable on this device."];return NO;}
+    NSError *codecError=nil;if(!transceiver||!codecs.count||![transceiver setCodecPreferences:codecs error:&codecError]){if(error)*error=[self error:[NSString stringWithFormat:@"H.264 setup failed (transceiver %@, %lu H.264 capabilities, codec error %@).",transceiver?@"available":@"missing",(unsigned long)codecs.count,codecError.localizedDescription?:@"none"]];return NO;}
     RTCRtpParameters *parameters=transceiver.sender.parameters;for(RTCRtpEncodingParameters *encoding in parameters.encodings){encoding.maxBitrateBps=@1500000;encoding.maxFramerate=@30;}transceiver.sender.parameters=parameters;
     self.testVideo=[[SLTestVideo alloc]initWithSource:self.videoSource];if(!self.testVideo){if(error)*error=[self error:@"Could not allocate bounded video buffers."];return NO;}return YES;
 }
