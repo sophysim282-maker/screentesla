@@ -18,7 +18,9 @@ jobs:
       - run: npm install --no-save playwright@1.58.2
       - run: npx playwright install --with-deps chromium
       - name: WebRTC ping viewer with approval and signaling expiry
-        run: node tools/test_rtc_viewer.cjs
+        run: |
+          node tools/test_rtc_viewer.cjs
+          node tools/test_rtc_viewer.cjs --vp8
       - run: sudo apt-get update && sudo apt-get install -y ffmpeg
       - name: Generate and play sustained 60 fps compressed video
         run: |

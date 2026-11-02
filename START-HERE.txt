@@ -7,7 +7,7 @@ VERSION 0.15.0 — REAL WEBRTC MOVING-VIDEO TEST
 5. Keep the phone test screen open. The website should show a moving white square and colored background. Press Play video if needed.
 6. Wait for VIDEO ACTIVE, then Copy diagnostics on both sides if it fails.
 
-This sends generated H.264 motion only. YouTube, Maps and sound have NOT been connected to WebRTC in this build. Their existing local modes remain available. Foreground video is being tested first; this does not promise background playback or bypass vehicle restrictions.
+This sends generated video motion only. YouTube, Maps and sound have NOT been connected to WebRTC in this build. Their existing local modes remain available. Foreground video is being tested first; this does not promise background playback or bypass vehicle restrictions.
 
 VERSION 0.14.0 — WEBRTC PAIRING/PING PROTOTYPE
 

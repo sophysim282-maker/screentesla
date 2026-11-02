@@ -30,8 +30,9 @@
     self.videoSource=[self.factory videoSource];self.videoTrack=[self.factory videoTrackWithSource:self.videoSource trackId:@"screenlink-test-video"];
     RTCRtpTransceiverInit *init=[RTCRtpTransceiverInit new];init.direction=RTCRtpTransceiverDirectionSendOnly;init.streamIds=@[@"screenlink-test"];
     RTCRtpTransceiver *transceiver=[self.peer addTransceiverWithTrack:self.videoTrack init:init];
-    NSMutableArray *codecs=[NSMutableArray array];for(RTCRtpCodecCapability *codec in [self.factory rtpSenderCapabilitiesForKind:@"video"].codecs)if([codec.name caseInsensitiveCompare:@"H264"]==NSOrderedSame)[codecs addObject:codec];
-    NSError *codecError=nil;if(!transceiver||!codecs.count||![transceiver setCodecPreferences:codecs error:&codecError]){if(error)*error=[self error:[NSString stringWithFormat:@"H.264 setup failed (transceiver %@, %lu H.264 capabilities, codec error %@).",transceiver?@"available":@"missing",(unsigned long)codecs.count,codecError.localizedDescription?:@"none"]];return NO;}
+    NSArray *available=[self.factory rtpSenderCapabilitiesForKind:kRTCMediaStreamTrackKindVideo].codecs;
+    NSMutableArray *codecs=[NSMutableArray array];for(NSString *wanted in @[@"H264",@"VP8"]){for(RTCRtpCodecCapability *codec in available)if([codec.name caseInsensitiveCompare:wanted]==NSOrderedSame||[codec.mimeType caseInsensitiveCompare:[@"video/" stringByAppendingString:wanted]]==NSOrderedSame)[codecs addObject:codec];if(codecs.count)break;}
+    NSError *codecError=nil;if(!transceiver||!codecs.count||![transceiver setCodecPreferences:codecs error:&codecError]){if(error)*error=[self error:[NSString stringWithFormat:@"Video setup failed (transceiver %@, codecs %@, encoders %@, error %@).",transceiver?@"available":@"missing",[available valueForKey:@"name"],[[RTCDefaultVideoEncoderFactory supportedCodecs] valueForKey:@"name"],codecError.localizedDescription?:@"none"]];return NO;}
     RTCRtpParameters *parameters=transceiver.sender.parameters;for(RTCRtpEncodingParameters *encoding in parameters.encodings){encoding.maxBitrateBps=@1500000;encoding.maxFramerate=@30;}transceiver.sender.parameters=parameters;
     self.testVideo=[[SLTestVideo alloc]initWithSource:self.videoSource];if(!self.testVideo){if(error)*error=[self error:@"Could not allocate bounded video buffers."];return NO;}return YES;
 }
