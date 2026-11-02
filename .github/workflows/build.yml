@@ -15,8 +15,12 @@ jobs:
       - name: Install build prerequisites
         run: brew install xcodegen autoconf automake libtool
       - name: Build
+        id: native-build
         run: bash tools/build.sh
+      - name: Public HTTPS transport check (no credentials)
+        run: curl --head --connect-timeout 8 --max-time 15 https://tesla4khmer.com/api/public/screenlink
       - name: Production signaling integration (real native SDP and ping)
+        if: ${{ !cancelled() && steps.native-build.outcome == 'success' }}
         run: build/test-rtc-peer --live
       - uses: actions/upload-artifact@v4
         if: always()

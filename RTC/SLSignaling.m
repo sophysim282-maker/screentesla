@@ -20,7 +20,7 @@
         NSInteger code=[response isKindOfClass:NSHTTPURLResponse.class]?((NSHTTPURLResponse *)response).statusCode:0;NSDictionary *object=@{};NSError *failure=nil;
         if(data.length>512*1024)failure=[NSError errorWithDomain:@"ScreenLink.Signaling" code:2 userInfo:@{NSLocalizedDescriptionKey:@"Signaling response exceeded its limit."}];
         else if(data.length){id json=[NSJSONSerialization JSONObjectWithData:data options:0 error:nil];if([json isKindOfClass:NSDictionary.class])object=json;else failure=[NSError errorWithDomain:@"ScreenLink.Signaling" code:3 userInfo:@{NSLocalizedDescriptionKey:@"Signaling server returned a non-JSON response."}];}
-        if(error)failure=[NSError errorWithDomain:@"ScreenLink.Signaling" code:error.code userInfo:@{NSLocalizedDescriptionKey:@"Signaling request failed. Check Internet connectivity."}];
+        if(error){NSError *underlying=error.userInfo[NSUnderlyingErrorKey];NSString *message=[NSString stringWithFormat:@"Signaling transport failed (%ld; underlying %ld). Check Internet, device time and server TLS.",(long)error.code,(long)underlying.code];failure=[NSError errorWithDomain:@"ScreenLink.Signaling" code:error.code userInfo:@{NSLocalizedDescriptionKey:message}];}
         if(!failure && (code<200||code>=300)){NSString *message=[SLSignaling matches:object[@"error"] pattern:@"\\A[a-z_]{1,80}\\z"]?object[@"error"]:@"request_failed";failure=[NSError errorWithDomain:@"ScreenLink.Signaling" code:code userInfo:@{NSLocalizedDescriptionKey:[NSString stringWithFormat:@"Signaling HTTP %ld (%@).",(long)code,message]}];}
         dispatch_async(dispatch_get_main_queue(),^{completion(code,object,failure);});
     }] resume];
