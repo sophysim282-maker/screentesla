@@ -9,6 +9,11 @@ if not (vendor / '.git').is_dir():
     vendor.parent.mkdir(parents=True, exist_ok=True)
     subprocess.run(['git', 'clone', '--no-checkout', 'https://github.com/FD-/RPiPlay.git', str(vendor)], check=True)
 subprocess.run(['git', '-C', str(vendor), 'checkout', '--detach', revision], check=True)
+# Keep discovery and native /server-info on the same HD-capable compatibility profile.
+p = vendor / 'lib' / 'global.h'
+s = p.read_text().replace('\"AppleTV2,1\"', '\"AppleTV3,2\"')
+assert '\"AppleTV3,2\"' in s
+p.write_text(s)
 p = vendor / 'lib' / 'dnssd.c'
 s = p.read_text()
 if 'DNSServiceErrorType registration_error =' not in s:
