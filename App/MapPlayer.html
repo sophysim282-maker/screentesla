@@ -5,7 +5,7 @@
 const viewerOrigin=window.origin,rtcTransport=window.frameElement?.dataset.transport==='rtc';
 const token=new URLSearchParams(location.search).get('token'),video=document.getElementById('source'),canvas=document.getElementById('screen'),status=document.getElementById('status'),cover=document.getElementById('privacy'),context=canvas.getContext('2d',{alpha:false});
 const endpoint=path=>{const [route,...query]=path.split('&');return route+'?token='+encodeURIComponent(token)+(query.length?'&'+query.join('&'):'');},sleep=ms=>new Promise(r=>setTimeout(r,ms));
-let generation=0,objectURL=null,orientation=1,closed=false,playing=false,privateScreen=true,localHold=false,lastPolicy=0,revision=0,activeEpoch='',frameReported=false;
+let generation=0,objectURL=null,orientation=1,closed=false,playing=false,privateScreen=true,localHold=false,lastPolicy=0,revision=0,activeEpoch='',frameReported=false,hideAcknowledged=false;
 const pending=new Set();
 function notify(hidden,confirmed,frameReady=false){if(parent!==window)parent.postMessage({type:'screenlink-privacy',hidden,confirmed,frameReady,revision},viewerOrigin);}
 function rtcRequest(path,options,signal){return new Promise((resolve,reject)=>{const channel=new MessageChannel();let finished=false;const close=()=>{signal.removeEventListener('abort',cancel);channel.port1.close();};const cancel=()=>{if(finished)return;finished=true;channel.port1.postMessage({cancel:true});close();reject(Error('Screen request cancelled'));};signal.addEventListener('abort',cancel,{once:true});channel.port1.onmessage=event=>{if(finished)return;finished=true;close();const item=event.data;if(item.error){reject(Error(item.error));return;}const headers=new Headers(item.headers||{});resolve({response:{status:item.status,ok:item.status>=200&&item.status<300,headers},bytes:item.bytes||new ArrayBuffer(0)});};parent.postMessage({type:'screenlink-screen-request',path,method:options.method||'GET',body:options.body||null},viewerOrigin,[channel.port2]);if(signal.aborted)cancel();});}
@@ -13,7 +13,7 @@ async function request(path,options={}){const abort=new AbortController(),timer=
 async function info(){const {bytes}=await request('/screen/info');return JSON.parse(new TextDecoder().decode(bytes));}
 function update(buffer,fn){return new Promise((resolve,reject)=>{const timer=setTimeout(()=>finish(Error('Map decoder timed out')),4000);const finish=error=>{clearTimeout(timer);buffer.removeEventListener('updateend',ready);buffer.removeEventListener('error',bad);error?reject(error):resolve();};const ready=()=>finish(),bad=()=>finish(Error('Map decoder rejected stream'));buffer.addEventListener('updateend',ready);buffer.addEventListener('error',bad);try{fn();}catch(error){finish(error);}});}
 function stopStream(){generation++;playing=false;frameReported=false;for(const abort of pending)abort.abort();pending.clear();video.pause();video.removeAttribute('src');video.load();if(objectURL)URL.revokeObjectURL(objectURL);objectURL=null;canvas.dataset.epoch='';if(context){context.fillStyle='#000';context.fillRect(0,0,canvas.width,canvas.height);}cover.hidden=false;}
-function hide(confirmed,text){privateScreen=true;stopStream();status.textContent=text;cover.textContent=text;notify(true,confirmed);}
+function hide(confirmed,text){if(!confirmed)hideAcknowledged=false;privateScreen=true;stopStream();status.textContent=text;cover.textContent=text;notify(true,confirmed);}
 async function run(meta,mine){
  try{
   if(!self.MediaSource)throw Error('This browser needs MediaSource support. Try current Chrome on the Mac.');
@@ -38,7 +38,7 @@ function draw(){if(closed)return;
  requestAnimationFrame(draw);
 }
 async function health(){if(closed)return;try{const meta=await info();lastPolicy=performance.now();orientation=meta.orientation||1;
- if(meta.hidden!==false){localHold=false;revision=Number(meta.privacyRevision)||0;if(!privateScreen||playing)hide(true,'PHONE SCREEN HIDDEN — open Google Maps before choosing Show screen.');else{status.textContent='PHONE SCREEN HIDDEN';cover.textContent='Phone screen hidden. Open Google Maps before choosing Show screen.';notify(true,true);}}
+ if(meta.hidden!==false){localHold=false;revision=Number(meta.privacyRevision)||0;if(!privateScreen||playing)hide(true,'PHONE SCREEN HIDDEN — open Google Maps before choosing Show screen.');else{status.textContent=hideAcknowledged?'PHONE SCREEN HIDDEN — you can now switch apps.':'PHONE SCREEN HIDDEN';cover.textContent='Phone screen hidden. Open Google Maps before choosing Show screen.';notify(true,true);}}
  else if(!localHold){
   if(Number.isFinite(meta.ageMs)&&meta.ageMs>4000){if(!privateScreen||playing)hide(false,'Screen hidden while waiting for fresh capture.');setTimeout(health,400);return;}
   const nextRevision=Number(meta.privacyRevision)||0;
@@ -49,7 +49,7 @@ async function health(){if(closed)return;try{const meta=await info();lastPolicy=
  }catch{if(!closed)hide(false,'Screen hidden: connection lost. Hide is NOT confirmed on the iPhone.');}
  if(!closed)setTimeout(health,400);
 }
-async function setPrivacy(hidden){if(hidden){localHold=true;hide(false,'Hiding screen… wait for confirmation before switching apps.');}try{const result=await request('/screen/privacy',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({hidden,expectedRevision:revision})}),meta=JSON.parse(new TextDecoder().decode(result.bytes));revision=Number(meta.privacyRevision)||0;if(hidden)hide(true,'PHONE SCREEN HIDDEN — you can now switch apps.');else{localHold=false;status.textContent='Waiting for a fresh screen frame…';}}catch{hide(false,'Could not confirm Hide. Keep Google Maps open or stop the system broadcast.');}}
+async function setPrivacy(hidden){hideAcknowledged=false;if(hidden){localHold=true;hide(false,'Hiding screen… wait for confirmation before switching apps.');}try{const result=await request('/screen/privacy',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({hidden,expectedRevision:revision})}),meta=JSON.parse(new TextDecoder().decode(result.bytes));revision=Number(meta.privacyRevision)||0;if(hidden){hideAcknowledged=true;hide(true,'PHONE SCREEN HIDDEN — you can now switch apps.');}else{localHold=false;status.textContent='Waiting for a fresh screen frame…';}}catch{hide(false,'Could not confirm Hide. Keep Google Maps open or stop the system broadcast.');}}
 document.getElementById('hide').onclick=()=>setPrivacy(true);document.getElementById('show').onclick=()=>setPrivacy(false);document.getElementById('retry').onclick=()=>{stopStream();};
 window.addEventListener('message',event=>{if(event.source!==parent||event.origin!==viewerOrigin||!['screenlink-hide','screenlink-disconnected'].includes(event.data?.type))return;localHold=true;hide(false,'Hiding phone screen…');});
 window.addEventListener('pagehide',()=>{closed=true;stopStream();});draw();health();
