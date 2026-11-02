@@ -1,5 +1,6 @@
 #import <Foundation/Foundation.h>
 @interface H264Stream : NSObject
+- (instancetype)initWithMaxBytes:(NSUInteger)bytes packets:(NSUInteger)packets;
 - (void)configureSPS:(NSData *)sps PPS:(NSData *)pps width:(uint16_t)width height:(uint16_t)height;
 - (void)appendAVCC:(NSData *)sample timestamp:(uint64_t)timestamp keyframe:(BOOL)keyframe;
 - (NSDictionary *)info;

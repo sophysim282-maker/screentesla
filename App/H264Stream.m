@@ -8,11 +8,12 @@
     uint64_t _sequence,_base,_pendingTime;
     uint32_t _lastDuration;
     BOOL _pendingKey,_needKey;
-    NSUInteger _bytes;
+    NSUInteger _bytes,_maxBytes,_maxPackets;
 }
 @end
 @implementation H264Stream
-- (instancetype)init {if((self=[super init])){_ready=[NSCondition new];[self reset];}return self;}
+- (instancetype)init {return [self initWithMaxBytes:24*1024*1024 packets:720];}
+- (instancetype)initWithMaxBytes:(NSUInteger)bytes packets:(NSUInteger)packets {if((self=[super init])){_maxBytes=MAX(1024,bytes);_maxPackets=MAX(2,packets);_ready=[NSCondition new];[self reset];}return self;}
 - (void)reset {
     [_ready lock];_initialization=nil;_pending=nil;_units=[NSMutableArray array];_epoch=NSUUID.UUID.UUIDString;_sequence=0;_base=0;_bytes=0;_needKey=YES;_lastDuration=33333;[_ready broadcast];[_ready unlock];
 }
@@ -41,7 +42,7 @@
             // Evict cache history without interrupting clients that are already
             // decoding. A new client waits for a retained keyframe; it must
             // never bootstrap using a dependent frame after eviction.
-            while(_units.count>1 && (_bytes>24*1024*1024 || _units.count>720)){
+            while(_units.count>1 && (_bytes>_maxBytes || _units.count>_maxPackets)){
                 _bytes-=[_units.firstObject[@"data"] length];[_units removeObjectAtIndex:0];
             }
         }

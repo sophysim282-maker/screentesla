@@ -25,6 +25,9 @@ targets:
       properties:
         com.apple.developer.networking.networkextension: [packet-tunnel-provider]
     dependencies:
+      - target: ScreenLinkBroadcast
+        embed: true
+      - sdk: ReplayKit.framework
       - target: ScreenLinkLocalTunnel
         embed: true
       - sdk: NetworkExtension.framework
@@ -43,8 +46,8 @@ targets:
       path: App/Info.plist
       properties:
         CFBundleDisplayName: ScreenLink Lab
-        CFBundleShortVersionString: '0.12.0'
-        CFBundleVersion: '19'
+        CFBundleShortVersionString: '0.13.0'
+        CFBundleVersion: '20'
         UILaunchScreen: {}
         UIBackgroundModes: [audio, processing]
         BGTaskSchedulerPermittedIdentifiers:
@@ -80,11 +83,55 @@ targets:
       path: Tunnel/Info.plist
       properties:
         CFBundleDisplayName: ScreenLink Local VPN
-        CFBundleShortVersionString: '0.12.0'
-        CFBundleVersion: '19'
+        CFBundleShortVersionString: '0.13.0'
+        CFBundleVersion: '20'
         NSExtension:
           NSExtensionPointIdentifier: com.apple.networkextension.packet-tunnel
           NSExtensionPrincipalClass: PacketTunnelProvider
+  ScreenLinkBroadcast:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: '16.0'
+    sources:
+      - path: Broadcast
+      - path: App
+        excludes: ['main.m', 'LocalVPN.h', 'LocalVPN.m', 'BackgroundSession.h', 'BackgroundSession.m', 'FloatingPreview.h', 'FloatingPreview.m', 'Info.plist', '*.entitlements']
+      - path: Vendor/RPiPlay/lib
+        excludes: ['**/CMakeLists.txt', '**/*.md']
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: local.screenlink.airplaylab.Broadcast
+        PRODUCT_NAME: ScreenLinkBroadcast
+        APPLICATION_EXTENSION_API_ONLY: YES
+        SKIP_INSTALL: YES
+        GCC_PREPROCESSOR_DEFINITIONS: ['$(inherited)', 'SL_BROADCAST_EXTENSION=1']
+    dependencies:
+      - sdk: ReplayKit.framework
+      - sdk: UIKit.framework
+      - sdk: Foundation.framework
+      - sdk: VideoToolbox.framework
+      - sdk: CoreMedia.framework
+      - sdk: CoreVideo.framework
+      - sdk: CoreImage.framework
+      - sdk: ImageIO.framework
+      - sdk: QuartzCore.framework
+    entitlements:
+      path: Broadcast/Broadcast.entitlements
+      properties: {}
+    info:
+      path: Broadcast/Info.plist
+      properties:
+        CFBundleDisplayName: ScreenLink Screen
+        CFBundleShortVersionString: '0.13.0'
+        CFBundleVersion: '20'
+        NSLocalNetworkUsageDescription: Share the live iPhone screen and AirPlay media with your hotspot viewer during a screen broadcast.
+        NSBonjourServices: ['_airplay._tcp', '_raop._tcp']
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.broadcast-services-upload
+          NSExtensionPrincipalClass: SampleHandler
+          RPBroadcastProcessMode: RPBroadcastProcessModeSampleBuffer
 schemes:
   ScreenLinkAirPlayLab:
     build:

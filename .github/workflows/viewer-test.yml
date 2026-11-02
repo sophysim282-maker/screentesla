@@ -25,6 +25,7 @@ jobs:
           cc tools/test_fmp4.c -o build/mux
           build/mux build/source.h264 build/live.mp4
           node tools/test_browser_live.cjs App/Viewer.html build/live.mp4
+          node tools/test_split_browser.cjs App build/live.mp4
       - name: Native media HLS video and audio player
         run: |
           python3 tools/fetch_hls.py

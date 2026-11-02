@@ -23,6 +23,8 @@ cc -Wall -Wextra -Werror tools/test_fmp4.c -o build/test-fmp4
 build/test-fmp4
 xcrun --sdk macosx clang -fobjc-arc -fblocks -IApp tools/test_h264_stream.m App/H264Stream.m -framework Foundation -o build/test-h264-stream
 build/test-h264-stream
+xcrun --sdk macosx clang -fobjc-arc -fblocks -IApp -IBroadcast tools/test_screen_encoder.m Broadcast/ScreenEncoder.m App/H264Stream.m -framework Foundation -framework VideoToolbox -framework CoreMedia -framework CoreVideo -o build/test-screen-encoder
+build/test-screen-encoder
 xcrun --sdk macosx clang -fobjc-arc -fblocks -IApp tools/test_video_inbox.m App/VideoInbox.m -framework Foundation -o build/test-video-inbox
 build/test-video-inbox
 xcrun --sdk macosx clang -fobjc-arc -fblocks -IApp tools/test_vpn_discovery.m App/VPNDiscovery.m -framework Foundation -o build/test-vpn-discovery
@@ -67,25 +69,37 @@ cp -R build/DerivedData/Build/Products/Release-iphoneos/ScreenLinkAirPlayLab.app
 # Embed the requested entitlement template so IPA re-signers can preserve it.
 # Ad-hoc signatures are NOT device-authorized signing or provisioning profiles.
 codesign --force --sign - --generate-entitlement-der --entitlements Tunnel/LocalTunnel.entitlements build/Payload/ScreenLinkAirPlayLab.app/PlugIns/ScreenLinkLocalTunnel.appex
+codesign --force --sign - --generate-entitlement-der --entitlements Broadcast/Broadcast.entitlements build/Payload/ScreenLinkAirPlayLab.app/PlugIns/ScreenLinkBroadcast.appex
 codesign --force --sign - --generate-entitlement-der --entitlements App/ScreenLink.entitlements build/Payload/ScreenLinkAirPlayLab.app
 python3 - <<'VERIFY_VPN'
 import plistlib, subprocess
 from pathlib import Path
 app=Path('build/Payload/ScreenLinkAirPlayLab.app')
 plugins=list((app/'PlugIns').glob('*.appex'))
-assert len(plugins)==1, 'Expected one embedded VPN extension'
-info=plistlib.loads((plugins[0]/'Info.plist').read_bytes())
+assert len(plugins)==2, 'Expected embedded VPN and screen broadcast extensions'
+vpn=next(p for p in plugins if p.name=='ScreenLinkLocalTunnel.appex')
+broadcast=next(p for p in plugins if p.name=='ScreenLinkBroadcast.appex')
+info=plistlib.loads((vpn/'Info.plist').read_bytes())
 assert info['NSExtension']['NSExtensionPointIdentifier']=='com.apple.networkextension.packet-tunnel'
 assert info['NSExtension']['NSExtensionPrincipalClass']=='PacketTunnelProvider'
-assert (plugins[0]/info['CFBundleExecutable']).is_file()
+assert (vpn/info['CFBundleExecutable']).is_file()
 parent=plistlib.loads((app/'Info.plist').read_bytes())
 assert info['CFBundleIdentifier'].startswith(parent['CFBundleIdentifier']+'.')
 assert info['CFBundleVersion']==parent['CFBundleVersion']
-for bundle in [plugins[0],app]:
+for bundle in [vpn,app]:
     result=subprocess.run(['codesign','-d','--entitlements',':-',str(bundle)],capture_output=True,check=True)
     entitlements=plistlib.loads(result.stdout)
     assert 'packet-tunnel-provider' in entitlements['com.apple.developer.networking.networkextension']
-print('Embedded VPN packaging and re-signing entitlement templates verified:', info['CFBundleIdentifier'])
+b=plistlib.loads((broadcast/'Info.plist').read_bytes())
+assert b['NSExtension']['NSExtensionPointIdentifier']=='com.apple.broadcast-services-upload'
+assert b['NSExtension']['NSExtensionPrincipalClass']=='SampleHandler'
+assert b['NSExtension']['RPBroadcastProcessMode']=='RPBroadcastProcessModeSampleBuffer'
+assert b['CFBundleVersion']==parent['CFBundleVersion']
+assert b['CFBundleIdentifier'].startswith(parent['CFBundleIdentifier']+'.')
+assert (broadcast/b['CFBundleExecutable']).is_file()
+for name in ['SplitViewer.html','MapPlayer.html','MediaPlayer.html','HLSPlayer.js']:
+    assert (broadcast/name).is_file(),name
+print('Embedded VPN and broadcast extension packaging verified:', info['CFBundleIdentifier'],b['CFBundleIdentifier'])
 VERIFY_VPN
 (cd build && zip -qry ScreenLink-AirPlay-Lab-unsigned.ipa Payload)
 echo 'Unsigned IPA built. Free signing still required. Same-phone AirPlay has NOT been tested by this build.'

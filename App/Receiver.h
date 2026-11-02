@@ -6,6 +6,7 @@ typedef NS_ENUM(NSInteger, SLDiscoveryMode) {
     SLDiscoveryPhoneVPN=2
 };
 typedef NS_ENUM(NSInteger, SLVideoProfile) { SLVideoFast=0, SLVideoBalanced=1, SLVideoSharp=2 };
+@class H264Stream;
 @interface Receiver : NSObject
 @property(nonatomic,copy) void (^status)(NSString *);
 /// Delivered on the main queue, bounded to one pending live frame.
@@ -20,6 +21,10 @@ typedef NS_ENUM(NSInteger, SLVideoProfile) { SLVideoFast=0, SLVideoBalanced=1, S
 @property(nonatomic,readonly) BOOL videoIsLive;
 @property(nonatomic,readonly) BOOL externalDiscovery;
 @property(nonatomic,copy,readonly) NSDictionary *discoveryProfile;
+@property(nonatomic,strong,readonly) H264Stream *screenStream;
+@property(nonatomic,copy) void (^broadcastStop)(void);
+- (void)screenFrameWithOrientation:(NSInteger)orientation;
+- (void)broadcastMessage:(NSString *)message;
 - (BOOL)start;
 - (void)refreshDiscovery;
 - (void)stop;

@@ -1,3 +1,15 @@
+VERSION 0.13.0 — LIVE IPHONE MAPS + YOUTUBE
+
+1. Re-sign the entire IPA with KravaSign. Keep BOTH extensions: ScreenLinkLocalTunnel and ScreenLinkBroadcast. Keep VPN entitlements.
+2. Connect built-in VPN. Choose Maps + YouTube · prepare screen broadcast.
+3. Tap the round iOS broadcast button, choose ScreenLink Screen, then Start Broadcast. Wait for SCREEN BROADCAST ACTIVE in the app log.
+4. Open YouTube and select ScreenLink VPN Phone using AirPlay. Then open Google Maps on the iPhone.
+5. Open http://172.20.10.1:8080/ on the Mac. The broadcast viewer defaults to split view. Drag the middle line, reset it, or switch to stacked panels.
+
+The map panel shows the currently visible iPhone screen, including other apps if you switch. Keep the phone unlocked. The extension hosts the receiver during an active screen broadcast; the main app no longer needs its timed background task in this mode. iOS can still interrupt or stop capture. Simultaneous YouTube AirPlay and ReplayKit capture requires your physical iPhone test and is not guaranteed by build tests.
+
+Stop through Control Center or Stop sharing in ScreenLink. Starting this mode replaces a normal receiver; reconnect YouTube AirPlay after the broadcast starts. No extra third-party VPN is required.
+
 VERSION 0.12.0 — CANVAS VIDEO + SOUND EQ
 
 Install/sign as before, retaining the built-in VPN extension. The hotspot viewer now draws video on Canvas. Play with sound enables audio; choose Normal or Music sound. Pause/Play, seek and full screen controls are above the Canvas.
