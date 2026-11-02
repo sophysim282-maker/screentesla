@@ -38,7 +38,7 @@
 - (NSString *)authorization {return self.secret.length?[@"Device " stringByAppendingString:self.secret]:nil;}
 - (NSString *)path:(NSString *)suffix {return [NSString stringWithFormat:@"/sessions/%@/%@",self.sessionId,suffix];}
 - (void)error:(NSError *)error {
-    if(NSProcessInfo.processInfo.systemUptime-self.lastErrorTime>8){[self log:error.localizedDescription?:@"Signaling unavailable."];self.lastErrorTime=NSProcessInfo.processInfo.systemUptime;}
+    if(NSProcessInfo.processInfo.systemUptime-self.lastErrorTime>8){[self log:[NSString stringWithFormat:@"%@ (%@/%ld)",error.localizedDescription?:@"Signaling unavailable.",error.domain,(long)error.code]];self.lastErrorTime=NSProcessInfo.processInfo.systemUptime;}
     self.stateLabel.text=self.verified?@"Local ping verified · signaling currently unavailable":error.localizedDescription;
 }
 - (void)startTest {
