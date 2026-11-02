@@ -17,6 +17,13 @@ jobs:
       - name: Build
         id: native-build
         run: bash tools/build.sh
+      - name: Native-to-Chromium local TCP fallback (UDP excluded)
+        run: |
+          npm install --no-save playwright@1.58.2
+          npx playwright install chromium
+          rtc_mac="$PWD/Vendor/WebRTC.xcframework/macos-x86_64_arm64"
+          xcrun --sdk macosx clang -fobjc-arc -fblocks -IRTC -F"$rtc_mac" tools/test_rtc_tcp_browser.m RTC/SLPingPeer.m RTC/SLTestVideo.m -framework CoreVideo -framework Foundation -framework WebRTC -Wl,-rpath,"$rtc_mac" -o build/test-rtc-tcp-browser
+          build/test-rtc-tcp-browser tools/test_rtc_tcp_browser.cjs
       - name: Public HTTPS transport check (no credentials)
         run: curl --head --connect-timeout 8 --max-time 15 https://tesla4khmer.com/api/public/screenlink
       - name: Production signaling integration (real native SDP and ping)
