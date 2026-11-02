@@ -22,7 +22,7 @@
     UIStackView *stack=[UIStackView new];stack.axis=UILayoutConstraintAxisVertical;stack.spacing=6;stack.translatesAutoresizingMaskIntoConstraints=NO;
     [self.view addSubview:stack];
     [NSLayoutConstraint activateConstraints:@[[stack.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor constant:8],[stack.bottomAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.bottomAnchor constant:-8],[stack.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor constant:16],[stack.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor constant:-16]]];
-    UILabel *title=[UILabel new];title.text=@"ScreenLink · AirPlay Lab 0.9.3";title.font=[UIFont boldSystemFontOfSize:21];[stack addArrangedSubview:title];
+    UILabel *title=[UILabel new];title.text=@"ScreenLink · AirPlay Lab 0.10.0";title.font=[UIFont boldSystemFontOfSize:21];[stack addArrangedSubview:title];
     self.bookmark=[UILabel new];self.bookmark.font=[UIFont monospacedSystemFontOfSize:14 weight:UIFontWeightMedium];self.bookmark.numberOfLines=0;self.bookmark.text=@"Connect your Mac to the hotspot, then start receiver.";[stack addArrangedSubview:self.bookmark];
     UILabel *help=[UILabel new];help.numberOfLines=0;help.font=[UIFont systemFontOfSize:13];help.text=@"Start → copy link → connect AirPlay → return here → start a background session (iOS 26 test), or floating preview. Viewer: use H.264 for full source frame rate.";[stack addArrangedSubview:help];
     self.discoveryMode=[[UISegmentedControl alloc]initWithItems:@[@"iPhone VPN",@"Mac VPN",@"Native"]];
@@ -39,8 +39,8 @@
     self.previewSlot=[UIView new];self.previewSlot.backgroundColor=UIColor.blackColor;
     NSLayoutConstraint *previewHeight=[self.previewSlot.heightAnchor constraintEqualToConstant:100];previewHeight.priority=750;previewHeight.active=YES;
     [stack addArrangedSubview:self.previewSlot];
-    NSArray *labels=@[@"Start receiver",@"Copy viewer link",@"Start 30-minute background test",@"Start floating preview",@"Show browser links",@"Copy test log",@"Refresh discovery",@"Stop sharing"];
-    NSArray *actions=@[NSStringFromSelector(@selector(start)),NSStringFromSelector(@selector(copyViewer)),NSStringFromSelector(@selector(startSession)),NSStringFromSelector(@selector(startFloating)),NSStringFromSelector(@selector(links)),NSStringFromSelector(@selector(copyLog)),NSStringFromSelector(@selector(refreshDiscovery)),NSStringFromSelector(@selector(stop))];
+    NSArray *labels=@[@"Start YouTube video-only",@"Start receiver",@"Copy viewer link",@"Start 30-minute background test",@"Start floating preview",@"Show browser links",@"Copy test log",@"Refresh discovery",@"Stop sharing"];
+    NSArray *actions=@[NSStringFromSelector(@selector(startMedia)),NSStringFromSelector(@selector(start)),NSStringFromSelector(@selector(copyViewer)),NSStringFromSelector(@selector(startSession)),NSStringFromSelector(@selector(startFloating)),NSStringFromSelector(@selector(links)),NSStringFromSelector(@selector(copyLog)),NSStringFromSelector(@selector(refreshDiscovery)),NSStringFromSelector(@selector(stop))];
     for(NSUInteger i=0;i<labels.count;i++) {
         UIButton *button=[UIButton buttonWithType:UIButtonTypeSystem];[button setTitle:labels[i] forState:UIControlStateNormal];[button.heightAnchor constraintEqualToConstant:34].active=YES;
         [button addTarget:self action:NSSelectorFromString(actions[i]) forControlEvents:UIControlEventTouchUpInside];[stack addArrangedSubview:button];
@@ -55,7 +55,7 @@
     self.session.videoIsLive=^BOOL{return weak.receiver.videoIsLive;};
     self.session.activityChanged=^(BOOL active){Controller *owner=weak;if(!owner)return;owner.receiver.compressedOnlyInBackground=active && !owner.preview.active;if(active)[owner endGrace];};
     self.session.ended=^{[weak stop];};
-    [self append:@"Version 0.9.3: browser playback avoids repeated live-edge seeks, detects stalls and retains GOP history across keyframes. Background packet checks distinguish actual video from task activation. Bookmark the short hotspot address shown above; no token needs copying on your hotspot. Discovery stays published during app transitions; video intake does not wait for decoding. The background test requires 10 fresh video frames. BACKGROUND SESSION ACTIVE means background execution was granted; it does not establish an AirPlay connection. Use H.264 in the viewer and keep LocalDevVPN connected. No audio or native YouTube media casting."];
+    [self append:@"Version 0.10.0: experimental native YouTube video-only AirPlay. Tap Start YouTube video-only here first; wait for the background task to start, then open YouTube → Cast → AirPlay & Bluetooth devices → ScreenLink VPN Phone. Open the fixed hotspot viewer on your Mac and press Play with sound. This path carries the original media and audio, not screenshots. Discovery and screen mirroring remain available. Native YouTube, ads, and background behavior still require your iPhone test."];
     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(background) name:UIApplicationDidEnterBackgroundNotification object:nil];
     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(active) name:UIApplicationDidBecomeActiveNotification object:nil];
     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(foreground) name:UIApplicationWillEnterForegroundNotification object:nil];
@@ -75,7 +75,13 @@
     if([self.receiver start]){[NSUserDefaults.standardUserDefaults setBool:YES forKey:@"receiverArmed"];UIApplication.sharedApplication.idleTimerDisabled=YES;[self links];}
 }
 - (void)stop { [NSUserDefaults.standardUserDefaults setBool:NO forKey:@"receiverArmed"];[self.session finish];[self endGrace];[self.receiver stop];[self.preview reset];[self.preview removeFromSuperview];self.preview=nil;if(_lastPixel){CVPixelBufferRelease(_lastPixel);_lastPixel=NULL;}UIApplication.sharedApplication.idleTimerDisabled=NO;[self append:@"Stopped. Video frames cleared."]; }
+- (void)startMedia {
+    [self start];if(!self.receiver.isRunning)return;
+    self.session.allowWaitingForVideo=YES;[self.session start];
+    [self append:@"NATIVE VIDEO TEST: open the fixed hotspot link on your Mac. Then switch to YouTube on iPhone, tap Cast → AirPlay & Bluetooth devices → ScreenLink VPN Phone. Do not start Control Center Screen Mirroring. Browser playback includes audio; press Play with sound on the Mac. A timed background session must be active before leaving ScreenLink. Native YouTube compatibility needs a device test."];
+}
 - (void)startSession {
+    self.session.allowWaitingForVideo=NO;
     if(!self.receiver.videoIsLive){[self append:@"The AirPlay video connection is not live yet. Reconnect ScreenLink VPN Phone in Screen Mirroring and wait for at least 10 fresh frames before starting the background test."];return;}
     [self.session start];
 }

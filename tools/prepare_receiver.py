@@ -66,3 +66,53 @@ const char *sl_dnssd_get_raop_txt(dnssd_t *dnssd, int *length) {
 }
 '''
     p.write_text(s)
+
+# AirPlay HTTP media shares the same paired listener as mirroring. Delegate
+# media requests before the RTSP CSeq gate; retain all original mirror handlers.
+p = vendor / 'lib' / 'httpd.h'
+s = p.read_text()
+if 'sl_httpd_connection_socket' not in s:
+    s += '\nint sl_httpd_connection_socket(httpd_t *httpd, void *user_data);\n'
+    p.write_text(s)
+p = vendor / 'lib' / 'httpd.c'
+s = p.read_text()
+if 'sl_httpd_connection_socket' not in s:
+    s += '''
+int sl_httpd_connection_socket(httpd_t *httpd, void *user_data) {
+    for (int i=0;i<httpd->max_connections;i++)
+        if (httpd->connections[i].connected && httpd->connections[i].user_data==user_data)
+            return httpd->connections[i].socket_fd;
+    return -1;
+}
+'''
+    p.write_text(s)
+p = vendor / 'lib' / 'http_request.c'
+s = p.read_text()
+s = s.replace('llhttp_init(&request->parser, HTTP_REQUEST,', 'llhttp_init(&request->parser, HTTP_BOTH,')
+s = s.replace('request->method = llhttp_method_name(request->parser.method);', 'request->method = request->parser.type == HTTP_RESPONSE ? "RESPONSE" : llhttp_method_name(request->parser.method);')
+s = s.replace('return (llhttp_get_errno(&request->parser) != HPE_OK);', 'return (llhttp_get_errno(&request->parser) != HPE_OK && !(request->complete && llhttp_get_errno(&request->parser) == HPE_PAUSED_UPGRADE));')
+p.write_text(s)
+p = vendor / 'lib' / 'raop.c'
+s = p.read_text()
+if 'sl_media_handle' not in s:
+    marker = 'static void\nconn_request('
+    assert marker in s
+    s = s.replace(marker, '''extern int sl_media_handle(void *, void *, int, http_request_t *, http_response_t **);
+extern void sl_media_closed(void *, void *);
+
+''' + marker, 1)
+    marker = '    if (!method || !cseq) {'
+    assert marker in s
+    s = s.replace(marker, '''    if (sl_media_handle(conn->raop->callbacks.cls, ptr,
+                        sl_httpd_connection_socket(conn->raop->httpd, ptr), request, response)) return;
+    if (!method) {''', 1)
+    s = s.replace('http_response_init("RTSP/1.0", 200, "OK")', 'http_response_init(cseq ? "RTSP/1.0" : "HTTP/1.1", 200, "OK")', 1)
+    s = s.replace('    http_response_add_header(*response, "CSeq", cseq);', '    if (cseq) http_response_add_header(*response, "CSeq", cseq);', 1)
+    marker = '    logger_log(conn->raop->logger, LOGGER_INFO, "Destroying connection");'
+    assert marker in s
+    s = s.replace(marker, marker+'\n    sl_media_closed(conn->raop->callbacks.cls, ptr);', 1)
+    p.write_text(s)
+# Enable video, HLS and video-volume flags, without advertising protected media.
+p = vendor / 'lib' / 'dnssdint.h'
+s = p.read_text().replace('"0x5A7FFEE6"', '"0x5A7FFEFB"')
+p.write_text(s)

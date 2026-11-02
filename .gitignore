@@ -5,3 +5,7 @@ build/
 *.xcodeproj/
 __pycache__/
 .DS_Store
+
+# Recreated from the integrity-pinned hls.js npm package during builds.
+App/HLSPlayer.js
+App/HLSPlayer-LICENSE.txt

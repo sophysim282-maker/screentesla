@@ -55,7 +55,7 @@
     if(!self.active)[self log:@"30-minute background session requested. Wait for BACKGROUND SESSION ACTIVE before switching apps. This is a device test; iOS can end the session early."];
 }
 - (void)launched:(id<SLContinuedTask>)task {
-    if(!self.videoIsLive || !self.videoIsLive()){
+    if(!self.allowWaitingForVideo && (!self.videoIsLive || !self.videoIsLive())){
         _pending=NO;[task setTaskCompletedWithSuccess:NO];
         [self log:@"Background request was accepted, but the AirPlay video disconnected before launch. Reconnect ScreenLink VPN Phone in Screen Mirroring, wait for live video, then start the background test again."];return;
     }
@@ -69,14 +69,14 @@
     });};
     _timer=[NSTimer scheduledTimerWithTimeInterval:1 repeats:YES block:^(NSTimer *timer){[weak tick];}];
     if(self.activityChanged)self.activityChanged(YES);
-    [self log:@"BACKGROUND SESSION ACTIVE: runtime task started; background video is NOT verified yet. Use H.264 in the viewer. System controls can cancel it. JPEG fallback needs floating preview while backgrounded. Unlimited background operation is not promised."];
+    [self log:@"BACKGROUND SESSION ACTIVE: runtime task started; background video is NOT verified yet. Use video-only mode for YouTube, or H.264 for mirroring. System controls can cancel it. JPEG fallback needs floating preview while backgrounded. Unlimited background operation is not promised."];
 }
 - (void)tick {
     NSTimeInterval elapsed=NSProcessInfo.processInfo.systemUptime-_started;
     BOOL live=self.videoIsLive && self.videoIsLive();
     if(!_reportedHealth && elapsed>=10 && UIApplication.sharedApplication.applicationState==UIApplicationStateBackground){
         _reportedHealth=YES;
-        [self log:live?@"BACKGROUND SOURCE CHECK: fresh AirPlay packets are still arriving. Check browser display FPS to verify playback.":@"BACKGROUND SOURCE STALLED: the task started, but fresh AirPlay packets are no longer arriving. Return to ScreenLink; use floating preview for the previously working background path. No additional permission prompt can restore a stopped source."];
+        [self log:live?@"BACKGROUND SOURCE CHECK: fresh AirPlay packets are still arriving. Check browser display FPS to verify playback.":@"BACKGROUND SOURCE WAITING: no fresh video or browser playback report. In native media mode, open the hotspot viewer and select ScreenLink through YouTube AirPlay. For mirroring, return and use floating preview if needed."];
     }
     // Progress is the completed part of this explicitly timed, live session;
     // a disconnected stream never claims useful progress.
