@@ -9,6 +9,8 @@ This milestone tests connection setup only. It does NOT stream Maps or YouTube o
 5. Approve the request on the iPhone. Wait for LOCAL P2P PING VERIFIED.
 6. If it fails, Copy diagnostics from the test screen. No SDP or role secrets are included.
 
+For Lovable: deploy docs/webrtc-ping-viewer.html on an HTTPS route such as /screenlink-ping. That reference client is provided in this repository; its deployment to your website is a separate step.
+
 The viewer must implement the v2 API and the ordered data channel named ping, with UTF-8 ping/pong replies. Browser API support alone is not an end-to-end connection test. Local streaming modes remain available on the previous screen.
 
 VERSION 0.13.1 — MANUAL PHONE SCREEN PRIVACY
@@ -50,13 +52,10 @@ Sign the entire IPA with KravaSign, retaining the embedded ScreenLinkLocalTunnel
 
 A VPN connection does not provide unlimited background execution for the receiver app. Native YouTube playback, background behavior and this new VPN require physical iPhone testing. This build includes the 0.10.4 playlist status-zero and reverse EVENT fixes.
 
-This ZIP contains experimental iPhone app SOURCE CODE.
-It is NOT an IPA and cannot be installed by tapping the ZIP.
-The exact same-iPhone AirPlay behavior you requested is not verified yet.
+The source ZIP contains code and cannot be installed by tapping it. The separately supplied ScreenLink-AirPlay-Lab-unsigned.ipa is the installable app package after re-signing. Physical device behavior still needs testing.
 
 If you have a Mac with Xcode: follow README.md → Free build routes.
 If you do not: the included GitHub workflow can attempt an unsigned cloud build.
 Signing and a real-iPhone test are still necessary after that build.
 
-The app needs no custom VPN entitlement. We test native local discovery first.
-Do not pay $99 to try this experiment.
+The built-in VPN requires the packet-tunnel-provider entitlement in both the app and VPN extension. Use a compatible signing profile and keep both embedded extensions and WebRTC.framework.
