@@ -63,8 +63,12 @@ xcodegen generate
 xcodebuild -project ScreenLinkAirPlayLab.xcodeproj -scheme ScreenLinkAirPlayLab -configuration Release -destination 'generic/platform=iOS' -derivedDataPath build/DerivedData CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build 2>&1 | tee -a build/xcodebuild.log
 mkdir -p build/Payload
 cp -R build/DerivedData/Build/Products/Release-iphoneos/ScreenLinkAirPlayLab.app build/Payload/
+# Embed the requested entitlement template so IPA re-signers can preserve it.
+# Ad-hoc signatures are NOT device-authorized signing or provisioning profiles.
+codesign --force --sign - --generate-entitlement-der --entitlements Tunnel/LocalTunnel.entitlements build/Payload/ScreenLinkAirPlayLab.app/PlugIns/ScreenLinkLocalTunnel.appex
+codesign --force --sign - --generate-entitlement-der --entitlements App/ScreenLink.entitlements build/Payload/ScreenLinkAirPlayLab.app
 python3 - <<'VERIFY_VPN'
-import plistlib
+import plistlib, subprocess
 from pathlib import Path
 app=Path('build/Payload/ScreenLinkAirPlayLab.app')
 plugins=list((app/'PlugIns').glob('*.appex'))
@@ -76,7 +80,11 @@ assert (plugins[0]/info['CFBundleExecutable']).is_file()
 parent=plistlib.loads((app/'Info.plist').read_bytes())
 assert info['CFBundleIdentifier'].startswith(parent['CFBundleIdentifier']+'.')
 assert info['CFBundleVersion']==parent['CFBundleVersion']
-print('Embedded VPN packaging verified:', info['CFBundleIdentifier'])
+for bundle in [plugins[0],app]:
+    result=subprocess.run(['codesign','-d','--entitlements',':-',str(bundle)],capture_output=True,check=True)
+    entitlements=plistlib.loads(result.stdout)
+    assert 'packet-tunnel-provider' in entitlements['com.apple.developer.networking.networkextension']
+print('Embedded VPN packaging and re-signing entitlement templates verified:', info['CFBundleIdentifier'])
 VERIFY_VPN
 (cd build && zip -qry ScreenLink-AirPlay-Lab-unsigned.ipa Payload)
 echo 'Unsigned IPA built. Free signing still required. Same-phone AirPlay has NOT been tested by this build.'
