@@ -1,11 +1,18 @@
 #import "SLPingPeer.h"
+#import "SLTestVideo.h"
 #import <WebRTC/WebRTC.h>
 #import <arpa/inet.h>
-@interface SLPingPeer () <RTCPeerConnectionDelegate,RTCDataChannelDelegate>
+@interface SLPingPeer () <RTCPeerConnectionDelegate,RTCDataChannelDelegate,RTCVideoRenderer>
 @property(nonatomic,strong) RTCPeerConnectionFactory *factory;
 @property(nonatomic,strong) RTCPeerConnection *peer;
 @property(nonatomic,strong) RTCDataChannel *channel;
 @property(nonatomic,strong) NSTimer *pingTimer;
+@property(nonatomic,strong) RTCVideoSource *videoSource;
+@property(nonatomic,strong) RTCVideoTrack *videoTrack,*receivedTrack;
+@property(nonatomic,strong) SLTestVideo *testVideo;
+@property(nonatomic) NSUInteger decodedFrames,changedFrames,remoteFrames;
+@property(nonatomic) uint32_t lastChecksum;
+@property(nonatomic) NSTimeInterval lastDecoded,lastRemoteProgress;
 @property(nonatomic) BOOL strict,closed,waiting,pingSent;
 @property(nonatomic) NSUInteger offerGeneration;
 @property(nonatomic) NSTimeInterval lastVerified;
@@ -17,6 +24,25 @@
         _peer=[_factory peerConnectionWithConfiguration:config constraints:[[RTCMediaConstraints alloc]initWithMandatoryConstraints:nil optionalConstraints:nil] delegate:self];
         if(offerer){RTCDataChannelConfiguration *channel=[RTCDataChannelConfiguration new];channel.isOrdered=YES;_channel=[_peer dataChannelForLabel:@"ping" configuration:channel];_channel.delegate=self;}
     }return self;
+}
+- (BOOL)enableTestVideo:(NSError **)error {
+    if(self.closed||self.peer.localDescription||self.videoTrack){if(error)*error=[self error:@"Video must be enabled before starting pairing."];return NO;}
+    self.videoSource=[self.factory videoSource];self.videoTrack=[self.factory videoTrackWithSource:self.videoSource trackId:@"screenlink-test-video"];
+    RTCRtpTransceiverInit *init=[RTCRtpTransceiverInit new];init.direction=RTCRtpTransceiverDirectionSendOnly;init.streamIds=@[@"screenlink-test"];
+    RTCRtpTransceiver *transceiver=[self.peer addTransceiverWithTrack:self.videoTrack init:init];
+    NSMutableArray *codecs=[NSMutableArray array];for(RTCRtpCodecCapability *codec in [self.factory rtpSenderCapabilitiesForKind:@"video"].codecs)if([codec.name caseInsensitiveCompare:@"H264"]==NSOrderedSame)[codecs addObject:codec];
+    NSError *codecError=nil;if(!transceiver||!codecs.count||![transceiver setCodecPreferences:codecs error:&codecError]){if(error)*error=[self error:@"H.264 WebRTC video is unavailable on this device."];return NO;}
+    RTCRtpParameters *parameters=transceiver.sender.parameters;for(RTCRtpEncodingParameters *encoding in parameters.encodings){encoding.maxBitrateBps=@1500000;encoding.maxFramerate=@30;}transceiver.sender.parameters=parameters;
+    self.testVideo=[[SLTestVideo alloc]initWithSource:self.videoSource];if(!self.testVideo){if(error)*error=[self error:@"Could not allocate bounded video buffers."];return NO;}return YES;
+}
+- (void)setSize:(CGSize)size {}
+- (void)renderFrame:(RTCVideoFrame *)frame {
+    if(!frame)return;id<RTCI420Buffer> pixels=[frame.buffer toI420];if(!pixels||pixels.width<=0||pixels.height<=0)return;
+    uint32_t hash=2166136261u;for(int y=0;y<pixels.height;y+=MAX(1,pixels.height/18))for(int x=0;x<pixels.width;x+=MAX(1,pixels.width/32)){hash^=pixels.dataY[y*pixels.strideY+x];hash*=16777619u;}
+    @synchronized(self){self.decodedFrames++;if(hash!=self.lastChecksum)self.changedFrames++;self.lastChecksum=hash;self.lastDecoded=NSProcessInfo.processInfo.systemUptime;}
+}
+- (void)peerConnection:(RTCPeerConnection *)peer didAddReceiver:(RTCRtpReceiver *)receiver streams:(NSArray<RTCMediaStream *> *)streams {
+    if(![receiver.track isKindOfClass:RTCVideoTrack.class])return;dispatch_async(dispatch_get_main_queue(),^{if(self.closed)return;[self.receivedTrack removeRenderer:self];self.receivedTrack=(RTCVideoTrack *)receiver.track;[self.receivedTrack addRenderer:self];});
 }
 - (void)log:(NSString *)message {if(self.status)self.status(message);}
 - (NSError *)error:(NSString *)message {return [NSError errorWithDomain:@"ScreenLink.WebRTC" code:1 userInfo:@{NSLocalizedDescriptionKey:message}];}
@@ -45,7 +71,7 @@
 - (void)offerRestart:(BOOL)restart completion:(void (^)(NSString *,NSString *,NSError *))completion {
     self.offerCompletion=completion;self.waiting=NO;NSUInteger generation=++self.offerGeneration;if(restart)[self.peer restartIce];
     RTCMediaConstraints *constraints=[[RTCMediaConstraints alloc]initWithMandatoryConstraints:restart?@{@"IceRestart":@"true"}:nil optionalConstraints:nil];
-    [self.peer offerForConstraints:constraints completionHandler:^(RTCSessionDescription *sdp,NSError *error){dispatch_async(dispatch_get_main_queue(),^{if(self.closed||generation!=self.offerGeneration)return;if(error||!sdp){self.offerCompletion=nil;completion(nil,nil,[self error:@"WebRTC could not create a data-channel offer."]);return;}[self localDescription:sdp generation:generation];});}];
+    [self.peer offerForConstraints:constraints completionHandler:^(RTCSessionDescription *sdp,NSError *error){dispatch_async(dispatch_get_main_queue(),^{if(self.closed||generation!=self.offerGeneration)return;if(error||!sdp){self.offerCompletion=nil;completion(nil,nil,[self error:@"WebRTC could not create an offer."]);return;}[self localDescription:sdp generation:generation];});}];
 }
 - (void)answerOffer:(NSString *)offer completion:(void (^)(NSString *,NSString *,NSError *))completion {
     self.offerCompletion=completion;NSUInteger generation=++self.offerGeneration;
@@ -65,7 +91,8 @@
     dispatch_async(dispatch_get_main_queue(),^{if(self.closed||channel!=self.channel)return;
         if([text isEqual:@"ping"]){if([self send:@"pong"])self.lastVerified=NSProcessInfo.processInfo.systemUptime;}
         else if([text isEqual:@"pong"]&&self.pingSent)self.lastVerified=NSProcessInfo.processInfo.systemUptime;
-        else {id object=[NSJSONSerialization JSONObjectWithData:buffer.data options:0 error:nil];if([object isKindOfClass:NSDictionary.class]&&[object[@"type"] isEqual:@"ping"]){NSMutableDictionary *reply=[@{@"type":@"pong"} mutableCopy];if([object[@"id"] isKindOfClass:NSString.class]&&[object[@"id"] length]<=64)reply[@"id"]=object[@"id"];NSData *bytes=[NSJSONSerialization dataWithJSONObject:reply options:0 error:nil];if([self send:[[NSString alloc]initWithData:bytes encoding:NSUTF8StringEncoding]])self.lastVerified=NSProcessInfo.processInfo.systemUptime;}}
+        else {id object=[NSJSONSerialization JSONObjectWithData:buffer.data options:0 error:nil];if([object isKindOfClass:NSDictionary.class]&&[object[@"type"] isEqual:@"video-report"]){id count=object[@"framesRendered"];if([count isKindOfClass:NSNumber.class]&&[count unsignedLongLongValue]<=1000000000ULL){NSUInteger n=[count unsignedIntegerValue];if(n>self.remoteFrames){self.remoteFrames=n;self.lastRemoteProgress=NSProcessInfo.processInfo.systemUptime;}}}
+        else if([object isKindOfClass:NSDictionary.class]&&[object[@"type"] isEqual:@"ping"]){NSMutableDictionary *reply=[@{@"type":@"pong"} mutableCopy];if([object[@"id"] isKindOfClass:NSString.class]&&[object[@"id"] length]<=64)reply[@"id"]=object[@"id"];NSData *bytes=[NSJSONSerialization dataWithJSONObject:reply options:0 error:nil];if([self send:[[NSString alloc]initWithData:bytes encoding:NSUTF8StringEncoding]])self.lastVerified=NSProcessInfo.processInfo.systemUptime;}}
     });
 }
 static BOOL privateIP(NSString *host,BOOL strict){struct in_addr address;if(inet_pton(AF_INET,host.UTF8String,&address)!=1)return NO;uint32_t ip=ntohl(address.s_addr);if(strict)return (ip&0xffffff00)==0xac140a00;return (ip>>24)==10||(ip>>24)==127||(ip>>20)==0xac1||(ip>>16)==0xc0a8;}
@@ -82,11 +109,15 @@ static BOOL privateIP(NSString *host,BOOL strict){struct in_addr address;if(inet
         BOOL connected=self.peer.connectionState==RTCPeerConnectionStateConnected,verified=connected&&self.channel.readyState==RTCDataChannelStateOpen&&self.pingOK&&sent>0&&received>0&&localRoute;
         NSArray *states=@[@"new",@"connecting",@"connected",@"disconnected",@"failed",@"closed"];NSUInteger index=self.peer.connectionState;
         NSDictionary *selected=@{@"local":[NSString stringWithFormat:@"%@:%@",lh,local.values[@"port"]?:@0],@"remote":[NSString stringWithFormat:@"%@:%@",rh,remote.values[@"port"]?:@0],@"protocol":local.values[@"protocol"]?:@"unknown"};
-        completion(@{@"connectionState":index<states.count?states[index]:@"unknown",@"bytesSent":@(sent),@"bytesReceived":@(received),@"dataChannelPingOk":@(self.pingOK),@"localRouteVerified":@(localRoute),@"verified":@(verified),@"selectedPair":selected});
+        uint64_t encoded=0,videoBytes=0;NSString *codec=@"";
+        for(RTCStatistics *stat in all.allValues)if([stat.type isEqual:@"outbound-rtp"]&&([(id)stat.values[@"kind"] isEqual:@"video"]||[(id)stat.values[@"mediaType"] isEqual:@"video"])){encoded+=[(id)stat.values[@"framesEncoded"] unsignedLongLongValue];videoBytes+=[(id)stat.values[@"bytesSent"] unsignedLongLongValue];RTCStatistics *type=all[stat.values[@"codecId"]?:@""];codec=(id)type.values[@"mimeType"]?:@"";}
+        NSUInteger decoded,changed;NSTimeInterval fresh;@synchronized(self){decoded=self.decodedFrames;changed=self.changedFrames;fresh=self.lastDecoded;}
+        NSTimeInterval now=NSProcessInfo.processInfo.systemUptime;BOOL videoVerified=verified&&((self.testVideo&&encoded>0&&self.remoteFrames>0&&now-self.lastRemoteProgress<4)||(!self.testVideo&&decoded>0&&now-fresh<4));
+        completion(@{@"videoFramesEncoded":@(encoded),@"videoBytesSent":@(videoBytes),@"videoFramesDecoded":@(decoded),@"videoFramesChanged":@(changed),@"viewerFramesRendered":@(self.remoteFrames),@"videoCodec":codec,@"videoVerified":@(videoVerified),@"connectionState":index<states.count?states[index]:@"unknown",@"bytesSent":@(sent),@"bytesReceived":@(received),@"dataChannelPingOk":@(self.pingOK),@"localRouteVerified":@(localRoute),@"verified":@(verified),@"selectedPair":selected});
     });}];
 }
-- (void)close {self.closed=YES;self.offerGeneration++;self.offerCompletion=nil;[self.pingTimer invalidate];self.pingTimer=nil;self.channel.delegate=nil;[self.channel close];self.channel=nil;self.peer.delegate=nil;[self.peer close];self.peer=nil;self.factory=nil;}
-- (void)peerConnection:(RTCPeerConnection *)peer didChangeConnectionState:(RTCPeerConnectionState)state {dispatch_async(dispatch_get_main_queue(),^{if(!self.closed)[self log:@"WebRTC connection state changed; traffic and route checks determine verification."];});}
+- (void)close {self.closed=YES;[self.testVideo stop];self.testVideo=nil;[self.receivedTrack removeRenderer:self];self.receivedTrack=nil;self.videoTrack=nil;self.videoSource=nil;self.offerGeneration++;self.offerCompletion=nil;[self.pingTimer invalidate];self.pingTimer=nil;self.channel.delegate=nil;[self.channel close];self.channel=nil;self.peer.delegate=nil;[self.peer close];self.peer=nil;self.factory=nil;}
+- (void)peerConnection:(RTCPeerConnection *)peer didChangeConnectionState:(RTCPeerConnectionState)state {dispatch_async(dispatch_get_main_queue(),^{if(!self.closed){if(state==RTCPeerConnectionStateConnected)[self.testVideo start];else [self.testVideo stop];[self log:@"WebRTC connection state changed; traffic and route checks determine verification."];}});}
 - (void)peerConnection:(RTCPeerConnection *)p didChangeIceGatheringState:(RTCIceGatheringState)state {dispatch_async(dispatch_get_main_queue(),^{if(state==RTCIceGatheringStateComplete)[self finishGathering:YES generation:self.offerGeneration];});}
 - (void)peerConnection:(RTCPeerConnection *)p didOpenDataChannel:(RTCDataChannel *)channel {dispatch_async(dispatch_get_main_queue(),^{if(self.closed||![channel.label isEqual:@"ping"]){[channel close];return;}self.channel=channel;channel.delegate=self;[self dataChannelDidChangeState:channel];});}
 - (void)peerConnection:(RTCPeerConnection *)p didChangeSignalingState:(RTCSignalingState)s {}

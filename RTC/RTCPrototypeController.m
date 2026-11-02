@@ -19,18 +19,18 @@
     [super viewDidLoad];self.view.backgroundColor=UIColor.systemBackgroundColor;
     UIStackView *stack=[UIStackView new];stack.axis=UILayoutConstraintAxisVertical;stack.spacing=10;stack.translatesAutoresizingMaskIntoConstraints=NO;[self.view addSubview:stack];
     [NSLayoutConstraint activateConstraints:@[[stack.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor constant:12],[stack.bottomAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.bottomAnchor constant:-12],[stack.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor constant:18],[stack.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor constant:-18]]];
-    UILabel *title=[UILabel new];title.text=@"WebRTC pairing test · Milestone 1";title.font=[UIFont boldSystemFontOfSize:20];title.numberOfLines=0;[stack addArrangedSubview:title];
-    UILabel *help=[UILabel new];help.numberOfLines=0;help.font=[UIFont systemFontOfSize:14];help.text=@"Connect the viewer to this iPhone’s Personal Hotspot. Keep this test screen open. Start the test, enter its code in the website’s WebRTC pairing page, then approve the request here. This tests a ping channel only; Maps and YouTube still use the existing local player.";[stack addArrangedSubview:help];
+    UILabel *title=[UILabel new];title.text=@"WebRTC video test · Milestone 2";title.font=[UIFont boldSystemFontOfSize:20];title.numberOfLines=0;[stack addArrangedSubview:title];
+    UILabel *help=[UILabel new];help.numberOfLines=0;help.font=[UIFont systemFontOfSize:14];help.text=@"Connect the viewer to this iPhone’s Personal Hotspot. Keep this test screen open. Start the test, enter its code in the website’s WebRTC pairing page, then approve the request here. The website will show moving test video. Keep this screen open. Maps and YouTube still use the existing local player.";[stack addArrangedSubview:help];
     self.codeLabel=[UILabel new];self.codeLabel.text=@"— — — — — —";self.codeLabel.font=[UIFont monospacedDigitSystemFontOfSize:38 weight:UIFontWeightBold];self.codeLabel.textAlignment=NSTextAlignmentCenter;[stack addArrangedSubview:self.codeLabel];
     self.stateLabel=[UILabel new];self.stateLabel.text=@"Ready · tesla4khmer.com";self.stateLabel.numberOfLines=0;[stack addArrangedSubview:self.stateLabel];
     self.requestLabel=[UILabel new];self.requestLabel.numberOfLines=0;self.requestLabel.font=[UIFont systemFontOfSize:13];self.requestLabel.text=@"No viewer approval requested.";[stack addArrangedSubview:self.requestLabel];
     UIStackView *approval=[UIStackView new];approval.axis=UILayoutConstraintAxisHorizontal;approval.distribution=UIStackViewDistributionFillEqually;
     self.approveButton=[self button:@"Approve viewer" action:@selector(approve)];self.rejectButton=[self button:@"Reject" action:@selector(reject)];[approval addArrangedSubview:self.approveButton];[approval addArrangedSubview:self.rejectButton];[stack addArrangedSubview:approval];[self updateApproval];
-    self.startButton=[self button:@"Start pairing test" action:@selector(startTest)];[stack addArrangedSubview:self.startButton];
+    self.startButton=[self button:@"Start video test" action:@selector(startTest)];[stack addArrangedSubview:self.startButton];
     UIStackView *actions=[UIStackView new];actions.axis=UILayoutConstraintAxisHorizontal;actions.distribution=UIStackViewDistributionFillEqually;
     [actions addArrangedSubview:[self button:@"Stop test" action:@selector(stopTest)]];[actions addArrangedSubview:[self button:@"Copy diagnostics" action:@selector(copyDiagnostics)]];[actions addArrangedSubview:[self button:@"Done" action:@selector(done)]];[stack addArrangedSubview:actions];
     self.logView=[UITextView new];self.logView.editable=NO;self.logView.font=[UIFont monospacedSystemFontOfSize:11 weight:UIFontWeightRegular];[stack addArrangedSubview:self.logView];
-    [self log:@"Native ping prototype. No STUN/TURN configured, no media tracks, no microphone/screen capture. Existing local viewer tokens are never passed to signaling. Pairing secrets and SDP are excluded from diagnostics."];
+    [self log:@"Native H.264 moving-video test, 640 × 360 up to 30 fps. No STUN/TURN configured, no microphone/camera/screen capture. Existing local viewer tokens are never passed to signaling. Pairing secrets and SDP are excluded from diagnostics."];
 }
 - (UIButton *)button:(NSString *)title action:(SEL)action {UIButton *button=[UIButton buttonWithType:UIButtonTypeSystem];[button setTitle:title forState:UIControlStateNormal];[button.heightAnchor constraintEqualToConstant:36].active=YES;[button addTarget:self action:action forControlEvents:UIControlEventTouchUpInside];return button;}
 - (void)log:(NSString *)message {self.logView.text=[self.logView.text stringByAppendingFormat:@"%@ %@\n",NSDate.date,message];if(self.logView.text.length>10000)self.logView.text=[self.logView.text substringFromIndex:self.logView.text.length-8000];[self.logView scrollRangeToVisible:NSMakeRange(self.logView.text.length,0)];}
@@ -44,7 +44,7 @@
 - (void)startTest {
     [self stopTest];self.generation++;NSUInteger generation=self.generation;self.startButton.enabled=NO;self.revision=1;self.answerRevision=0;self.approved=NO;self.lastHeartbeat=0;self.lastErrorTime=0;
     self.api=[[SLSignaling alloc]initWithBaseURL:[NSURL URLWithString:@"https://tesla4khmer.com/api/public/screenlink"]];self.peer=[[SLPingPeer alloc]initWithHotspotOnly:YES offerer:YES];__weak RTCPrototypeController *weak=self;
-    self.peer.status=^(NSString *message){[weak log:message];};self.stateLabel.text=@"Gathering local hotspot candidates…";
+    self.peer.status=^(NSString *message){[weak log:message];};NSError *videoError=nil;if(![self.peer enableTestVideo:&videoError]){[self error:videoError];self.startButton.enabled=YES;return;}self.stateLabel.text=@"Gathering local hotspot candidates…";
     [self.peer offerRestart:NO completion:^(NSString *sdp,NSString *gathering,NSError *error){
         if(generation!=self.generation)return;if(error){[self error:error];self.startButton.enabled=YES;return;}
         self.stateLabel.text=@"Creating signaling session…";
@@ -58,9 +58,9 @@
 }
 - (void)poll {
     if(!self.peer)return;NSUInteger generation=self.generation;
-    [self.peer snapshot:^(NSDictionary *snapshot){if(generation!=self.generation)return;self.lastSnapshot=snapshot;BOOL verified=[snapshot[@"verified"] boolValue];if(verified!=self.verified){self.verified=verified;[self log:verified?@"LOCAL P2P PING VERIFIED: real bidirectional data and a private hotspot route. No video streaming has been added.":@"Ping verification is no longer fresh; checking the existing connection."];}
-        if(verified)self.stateLabel.text=@"LOCAL P2P PING VERIFIED · no video yet";
-        if(self.sessionId.length&&!self.heartbeatBusy&&NSProcessInfo.processInfo.systemUptime-self.lastHeartbeat>=10){self.lastHeartbeat=NSProcessInfo.processInfo.systemUptime;self.heartbeatBusy=YES;NSMutableDictionary *body=[snapshot mutableCopy];[body removeObjectForKey:@"verified"];[body removeObjectForKey:@"localRouteVerified"];body[@"state"]=verified?@"connected":@"heartbeat";body[@"negotiationRevision"]=@(self.revision);
+    [self.peer snapshot:^(NSDictionary *snapshot){if(generation!=self.generation)return;self.lastSnapshot=snapshot;BOOL verified=[snapshot[@"verified"] boolValue];if(verified!=self.verified){self.verified=verified;[self log:verified?@"LOCAL P2P PING VERIFIED: real bidirectional data and a private hotspot route. Waiting for video frames to render on the viewer.":@"Ping verification is no longer fresh; checking the existing connection."];}
+        if(verified)self.stateLabel.text=[snapshot[@"videoVerified"] boolValue]?[NSString stringWithFormat:@"VIDEO ACTIVE · %@ encoded · %@ rendered by viewer",snapshot[@"videoFramesEncoded"],snapshot[@"viewerFramesRendered"]]:@"Connected · waiting for viewer video frames";
+        if(self.sessionId.length&&!self.heartbeatBusy&&NSProcessInfo.processInfo.systemUptime-self.lastHeartbeat>=10){self.lastHeartbeat=NSProcessInfo.processInfo.systemUptime;self.heartbeatBusy=YES;NSMutableDictionary *body=[NSMutableDictionary dictionary];for(NSString *key in @[@"connectionState",@"bytesSent",@"bytesReceived",@"selectedPair"])if(snapshot[key])body[key]=snapshot[key];body[@"state"]=verified?@"connected":@"heartbeat";body[@"negotiationRevision"]=@(self.revision);
             [self.api call:@"POST" path:[self path:@"state"] authorization:self.authorization body:body completion:^(NSInteger code,NSDictionary *reply,NSError *error){if(generation!=self.generation)return;self.heartbeatBusy=NO;if(error){[self error:error];if(code==410||code==401)[self signalingExpired];return;}id wanted=reply[@"restartRequestedRevision"];if([wanted isKindOfClass:NSNumber.class]&&[wanted unsignedIntegerValue]==self.revision)[self restart];}];
         }
     }];
@@ -104,9 +104,9 @@
 - (void)stopTest {
     self.generation++;[self.timer invalidate];self.timer=nil;[self.peer close];self.peer=nil;SLSignaling *api=self.api;
     if(self.sessionId.length&&self.secret.length){[api call:@"DELETE" path:[@"/sessions/" stringByAppendingString:self.sessionId] authorization:self.authorization body:nil completion:^(NSInteger code,NSDictionary *body,NSError *error){[api close];}];}else [api close];
-    self.api=nil;self.sessionId=nil;self.secret=nil;self.pendingJoin=nil;self.approved=NO;self.busy=NO;self.heartbeatBusy=NO;self.approvalBusy=NO;self.negotiating=NO;self.verified=NO;self.lastSnapshot=nil;self.startButton.enabled=YES;self.codeLabel.text=@"— — — — — —";self.stateLabel.text=@"Test stopped · no WebRTC media";self.requestLabel.text=@"No viewer approval requested.";[self updateApproval];
+    self.api=nil;self.sessionId=nil;self.secret=nil;self.pendingJoin=nil;self.approved=NO;self.busy=NO;self.heartbeatBusy=NO;self.approvalBusy=NO;self.negotiating=NO;self.verified=NO;self.lastSnapshot=nil;self.startButton.enabled=YES;self.codeLabel.text=@"— — — — — —";self.stateLabel.text=@"Video test stopped";self.requestLabel.text=@"No viewer approval requested.";[self updateApproval];
 }
-- (void)copyDiagnostics {NSDictionary *data=@{@"version":@"0.14.0",@"milestone":@"pairing-and-ping-only",@"snapshot":self.lastSnapshot?:@{},@"events":self.logView.text?:@""};NSData *json=[NSJSONSerialization dataWithJSONObject:data options:NSJSONWritingPrettyPrinted error:nil];UIPasteboard.generalPasteboard.string=[[NSString alloc]initWithData:json encoding:NSUTF8StringEncoding];[self log:@"Sanitized diagnostics copied; no SDP, pairing code, or role secrets included."];}
+- (void)copyDiagnostics {NSDictionary *data=@{@"version":@"0.15.0",@"milestone":@"h264-moving-test-video",@"snapshot":self.lastSnapshot?:@{},@"events":self.logView.text?:@""};NSData *json=[NSJSONSerialization dataWithJSONObject:data options:NSJSONWritingPrettyPrinted error:nil];UIPasteboard.generalPasteboard.string=[[NSString alloc]initWithData:json encoding:NSUTF8StringEncoding];[self log:@"Sanitized diagnostics copied; no SDP, pairing code, or role secrets included."];}
 - (void)done {[self stopTest];[self dismissViewControllerAnimated:YES completion:nil];}
 - (void)viewDidDisappear:(BOOL)animated {[super viewDidDisappear:animated];if(self.isBeingDismissed||self.navigationController.isBeingDismissed)[self stopTest];}
 @end
