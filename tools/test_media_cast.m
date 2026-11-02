@@ -35,11 +35,12 @@ int main(void){@autoreleasepool{
     NSDictionary *play=@{@"Content-Location":@"mlhls://localhost/master.m3u8",@"uuid":@"video-1",@"Start-Position-Seconds":@3};
     assert(status(exchange(media,@"POST",@"/play",@"S1",play,NULL,-1))==200);assert([event(fds[1])[@"state"] isEqual:@"loading"]);NSDictionary *masterRequest=event(fds[1]);assert([masterRequest[@"type"] isEqual:@"unhandledURLRequest"]);
     deliver(media,masterRequest,@"#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1000000\nvideo.m3u8\n",@"S1");
+    NSDictionary *childRequest=event(fds[1]); // Prefetched before any browser variant request.
     NSDictionary *state=[media state];assert([state[@"active"] boolValue]);assert([state[@"start"] intValue]==3);NSString *identifier=[NSURLComponents componentsWithString:state[@"url"]].path.lastPathComponent;
     NSDictionary *master=[media resource:identifier range:nil];assert([master[@"code"] intValue]==200);NSString *masterText=[[NSString alloc]initWithData:master[@"data"] encoding:NSUTF8StringEncoding];assert([masterText containsString:@"/media/resource/"]);assert(![masterText containsString:@"mlhls://"]);
     NSString *child=nil;for(NSString *line in [masterText componentsSeparatedByString:@"\n"])if([line hasPrefix:@"/media/resource/"])child=[NSURLComponents componentsWithString:line].path.lastPathComponent;assert(child);
     dispatch_semaphore_t done=dispatch_semaphore_create(0);__block NSDictionary *variant=nil;dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED,0),^{variant=[media resource:child range:nil];dispatch_semaphore_signal(done);});
-    NSDictionary *childRequest=event(fds[1]);assert([childRequest[@"request"][@"FCUP_Response_URL"] isEqual:@"mlhls://localhost/video.m3u8"]);
+    assert([childRequest[@"request"][@"FCUP_Response_URL"] isEqual:@"mlhls://localhost/video.m3u8"]);
     deliver(media,childRequest,@"#EXTM3U\n#YT-EXT-CONDENSED-URL:BASE-URI=\"https://example.test/videoplayback\",PARAMS=\"sq,lmt\",PREFIX=\"s/\"\n#EXTINF:2.0,\ns/1/42\n#EXT-X-ENDLIST\n",@"S1");assert(!dispatch_semaphore_wait(done,dispatch_time(DISPATCH_TIME_NOW,5*NSEC_PER_SEC)));assert([variant[@"code"] intValue]==200);NSString *variantText=[[NSString alloc]initWithData:variant[@"data"] encoding:NSUTF8StringEncoding];assert([variantText containsString:@"/media/resource/"]);assert(![variantText containsString:@"s/1/42"]);
     [media report:@{@"epoch":state[@"epoch"],@"command":@0,@"position":@4,@"duration":@10,@"ready":@YES,@"paused":@NO}];assert(media.videoIsLive);assert([event(fds[1])[@"state"] isEqual:@"playing"]);
     NSDictionary *info=responsePlist(exchange(media,@"GET",@"/playback-info",@"S1",nil,NULL,-1));assert([info[@"duration"] intValue]==10 && [info[@"position"] intValue]==4);
@@ -47,6 +48,11 @@ int main(void){@autoreleasepool{
     assert(status(exchange(media,@"POST",@"/rate?value=0",@"S1",nil,NULL,-1))==200);assert([[media state][@"paused"] boolValue]);
     // HTTP response acknowledgements on the upgraded PTTH socket must parse.
     http_request_t *ack=http_request_init();const char *wire="HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n";http_request_add_data(ack,wire,(int)strlen(wire));assert(!http_request_has_error(ack));http_response_t *none=NULL;assert([media handle:ack connection:connection socket:fds[0] response:&none]);assert(!none);http_request_destroy(ack);
-    [media connectionClosed:connection];[media stop];assert(!media.active);assert([[media resource:identifier range:nil][@"code"] intValue]==404);close(fds[0]);close(fds[1]);
-    puts("Native media passed: persistent HTTP response completion, HTTP/PTTH, FCUP master/variant handoff, condensed YouTube HLS, browser playback feedback, pause/seek and cleanup.");
+    [media connectionClosed:connection];
+    [NSThread sleepForTimeInterval:2.1];NSTimeInterval began=NSDate.timeIntervalSinceReferenceDate;
+    assert([[media resource:identifier range:nil][@"code"] intValue]==200);
+    assert([[media resource:child range:nil][@"code"] intValue]==200);
+    assert(NSDate.timeIntervalSinceReferenceDate-began<1); // Cached VOD survives sender-channel loss and old 2s TTL.
+    [media stop];assert(!media.active);assert([[media resource:identifier range:nil][@"code"] intValue]==404);close(fds[0]);close(fds[1]);
+    puts("Native media passed: persistent HTTP response completion, HTTP/PTTH, FCUP master/variant handoff, condensed YouTube HLS, early variant prefetch, durable VOD cache, playback feedback, pause/seek and cleanup.");
 }return 0;}

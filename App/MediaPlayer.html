@@ -6,36 +6,52 @@
 const token=new URLSearchParams(location.search).get('token'),player=document.getElementById('player'),status=document.getElementById('status'),detail=document.getElementById('detail');
 const endpoint=path=>path+'?token='+encodeURIComponent(token);
 let current='',command=-1,hls=null,lastError='',state=null,loadingHLS=null,mediaRecoveries=0;
+let engine='none',generation=0,fallbackPending=false,nativeRetries=0,stallRetries=0,lastPosition=0,lastProgress=performance.now();
 async function request(path,options={}){const control=new AbortController(),timeout=setTimeout(()=>control.abort(),6000);try{const r=await fetch(endpoint(path),{cache:'no-store',...options,signal:control.signal});if(!r.ok)throw Error('Receiver returned '+r.status);return await r.json();}finally{clearTimeout(timeout);}}
 async function library(){if(window.Hls)return;if(!loadingHLS)loadingHLS=new Promise((resolve,reject)=>{const s=document.createElement('script');s.src=endpoint('/media/hls.js');s.onload=resolve;s.onerror=()=>{loadingHLS=null;reject(Error('HLS player could not load'));};document.head.appendChild(s);});await loadingHLS;}
 function clear(){if(hls){hls.destroy();hls=null;}player.pause();player.removeAttribute('src');player.load();}
-async function start(next){
- current=next.epoch;command=-1;lastError='';mediaRecoveries=0;clear();
- const source=next.url;const mine=current;
- const seek=()=>{if(mine!==current)return;const position=next.start>0?next.start:(next.fraction>0 && Number.isFinite(player.duration)?next.fraction*player.duration:0);if(position>0)player.currentTime=position;};
+function errorText(){return player.error?('MediaError '+player.error.code+': '+(player.error.message||'decoder rejected media')):lastError;}
+function feedback(){return {epoch:current,command,position:Number.isFinite(player.currentTime)?player.currentTime:0,duration:Number.isFinite(player.duration)?player.duration:0,paused:player.paused,ready:player.readyState>=2&&!player.error,ended:player.ended,error:errorText()};}
+function recordError(message){lastError=message;request('/media/report',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...feedback(),error:message})}).catch(()=>{});}
+async function start(next,nativeOnly=false,preserve=false){
+ const resume=preserve?player.currentTime:0;current=next.epoch;command=-1;if(!preserve){lastError='';nativeRetries=0;stallRetries=0;}mediaRecoveries=0;fallbackPending=false;clear();
+ const source=next.url,mine=++generation;lastPosition=0;lastProgress=performance.now();
+ const seek=()=>{if(mine!==generation)return;const position=resume>0?resume:(next.start>0?next.start:(next.fraction>0&&Number.isFinite(player.duration)?next.fraction*player.duration:0));if(position>0)player.currentTime=position;};
  player.addEventListener('loadedmetadata',seek,{once:true});
- if(player.canPlayType('application/vnd.apple.mpegurl')){player.src=source;}
- else {await library();if(mine!==current)return;if(!Hls.isSupported())throw Error('This browser cannot play HLS video. Try Safari or Chrome on your Mac.');
-  hls=new Hls({maxBufferLength:20,maxMaxBufferLength:40,backBufferLength:15,capLevelToPlayerSize:true});
-  hls.on(Hls.Events.ERROR,(_event,data)=>{if(!data.fatal)return;lastError=data.details||data.type;if(data.type===Hls.ErrorTypes.NETWORK_ERROR && mediaRecoveries++<3)hls.startLoad();else if(data.type===Hls.ErrorTypes.MEDIA_ERROR && mediaRecoveries++<3)hls.recoverMediaError();else detail.textContent='Video error: '+lastError+' · select Reconnect or send the ScreenLink log.';});
-  hls.loadSource(source);hls.attachMedia(player);
- }
+ const native=!!player.canPlayType('application/vnd.apple.mpegurl');
+ if(!nativeOnly){try{await library();}catch(error){if(!native)throw error;}}
+ if(mine!==generation)return;
+ if(!nativeOnly && window.Hls && Hls.isSupported()){
+  engine='HLS.js';const client=new Hls({maxBufferLength:20,maxMaxBufferLength:40,backBufferLength:15,capLevelToPlayerSize:true});hls=client;
+  client.on(Hls.Events.ERROR,(_event,data)=>{if(hls!==client||mine!==generation||!data.fatal)return;
+   recordError((data.type||'HLS')+'/'+(data.details||'unknown')+(data.response?.code?' HTTP '+data.response.code:''));
+   if(data.type===Hls.ErrorTypes.NETWORK_ERROR && mediaRecoveries++<2)client.startLoad();
+   else if(data.type===Hls.ErrorTypes.MEDIA_ERROR && mediaRecoveries++<2)client.recoverMediaError();
+   else fallbackPending=native;
+  });
+  client.on(Hls.Events.FRAG_BUFFERED,()=>{if(hls===client)lastError='';});client.loadSource(source);client.attachMedia(player);
+ }else if(native){engine='Native HLS';player.src=source;}
+ else throw Error('This browser cannot play HLS video. Try Safari or Chrome on your Mac.');
  player.play().catch(()=>{detail.textContent='Press Play with sound to start playback.';});
 }
 async function tick(){
  try{const next=await request('/media/state');state=next;
-  if(!next.active){if(current){clear();current='';}status.textContent='Waiting for YouTube AirPlay…';detail.textContent=next.error||'Start video-only AirPlay in ScreenLink, then select ScreenLink from YouTube’s AirPlay menu.';return;}
+  if(!next.active){if(current){clear();current='';generation++;}status.textContent='Waiting for YouTube AirPlay…';detail.textContent=next.error||'Start video-only AirPlay in ScreenLink, then select ScreenLink from YouTube’s AirPlay menu.';return;}
   if(next.epoch!==current)await start(next);
-  if(next.command!==command){command=next.command;if(next.commandKind==='seek' && player.readyState)player.currentTime=next.seek;if(next.paused)player.pause();else player.play().catch(()=>{});}
-  const report={epoch:current,command,position:Number.isFinite(player.currentTime)?player.currentTime:0,duration:Number.isFinite(player.duration)?player.duration:0,paused:player.paused,ready:player.readyState>=2&&!player.error,ended:player.ended,error:player.error?.message||lastError};
-  await request('/media/report',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(report)});
-  status.textContent=player.error?'Video playback error':(player.readyState<2?'Loading video-only AirPlay…':(player.paused?'Video paused':'Video-only AirPlay · '+Math.floor(player.currentTime)+' seconds'));
-  detail.textContent=lastError||next.error||(player.muted?'Video + audio available · press Play with sound to enable audio.':'Playing the media only · no screen capture or JPEG conversion.');
+  if(next.command!==command){command=next.command;if(next.commandKind==='seek'&&player.readyState)player.currentTime=next.seek;if(next.paused)player.pause();else player.play().catch(()=>{});}
+  await request('/media/report',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(feedback())});
+  status.textContent=player.error?'Video playback error · see details below':(player.readyState<2?'Loading video-only AirPlay…':(player.paused?'Video paused':'Video-only AirPlay · '+Math.floor(player.currentTime)+' seconds'));
+  detail.textContent=engine+' · '+(errorText()||next.error||(player.muted?'Press Play with sound to enable audio.':'Original video + audio'));
+  if(fallbackPending){await start(next,true,true);return;}
+  if(player.error&&engine==='Native HLS'&&nativeRetries++<1){recordError(errorText());await start(next,true,true);return;}
+  const now=performance.now();if(Math.abs(player.currentTime-lastPosition)>0.05||player.paused){lastPosition=player.currentTime;lastProgress=now;}
+  if(!player.paused&&player.readyState>=2&&now-lastProgress>8000&&stallRetries++<2){recordError('Playback stalled; rebuilding browser player');await start(next,engine==='Native HLS',true);}
  }catch(error){status.textContent='Waiting for ScreenLink connection…';detail.textContent=error.message;}
  finally{setTimeout(tick,1000);}
 }
 document.getElementById('sound').onclick=()=>{player.muted=false;player.play().catch(error=>{detail.textContent=error.message;});};
 document.getElementById('reconnect').onclick=()=>{current='';};
 document.getElementById('full').onclick=()=>{const full=player.requestFullscreen||player.webkitEnterFullscreen;if(full)full.call(player);};
+window.addEventListener('online',()=>{current='';});
 tick();
 </script></html>

@@ -64,7 +64,7 @@
     __weak BackgroundSession *weak=self;
     task.expirationHandler=^{dispatch_async(dispatch_get_main_queue(),^{
         BackgroundSession *owner=weak;if(!owner || owner->_task!=task)return;
-        [owner log:@"iOS ended the background session or you cancelled it in system controls. Sharing is stopping."];
+        [owner log:@"iOS ended the background session or you cancelled it in system controls. Receiver state is retained; iOS may suspend the app without floating preview."];
         [owner complete:NO notify:YES];
     });};
     _timer=[NSTimer scheduledTimerWithTimeInterval:1 repeats:YES block:^(NSTimer *timer){[weak tick];}];
@@ -82,7 +82,7 @@
     // a disconnected stream never claims useful progress.
     if(live)_task.progress.completedUnitCount=MIN(1799,(int64_t)elapsed);
     if(((NSInteger)elapsed)%5==0)[_task updateTitle:@"ScreenLink · 30-minute cast" subtitle:live?[NSString stringWithFormat:@"%ld minutes remaining",(long)MAX(0,30-(NSInteger)(elapsed/60))]:@"Waiting for the AirPlay stream"];
-    if(elapsed>=1800){[self log:@"The 30-minute background session finished. Sharing is stopping. Start another session in ScreenLink if needed."];[self complete:live notify:YES];}
+    if(elapsed>=1800){[self log:@"The 30-minute background session finished. Receiver state is retained; iOS may suspend the app without floating preview. Start another session in ScreenLink if needed."];[self complete:live notify:YES];}
 }
 - (void)complete:(BOOL)success notify:(BOOL)notify {
     [_timer invalidate];_timer=nil;_pending=NO;
