@@ -38,7 +38,7 @@ async function stop(){generation++;clearInterval(timer);clearInterval(pingTimer)
 async function discoverReceiver(mine){
  const machineSecret=Array.from(crypto.getRandomValues(new Uint8Array(32)),x=>x.toString(16).padStart(2,'0')).join(''),deadline=performance.now()+180000;let networkRetries=0;
  while(mine===generation){
-  try{const result=await call('POST','/auto-join',{viewerSecret:machineSecret},false);if(mine!==generation)return null;if(!/^[A-Za-z0-9-]{1,128}$/.test(result.joinId)||result.viewerSecret!==machineSecret)throw Error('Invalid automatic connection response');return result;}
+  try{const result=await call('POST','/auto-join',{viewerSecret:machineSecret},false);if(!/^[A-Za-z0-9-]{1,128}$/.test(result.joinId)||result.viewerSecret!==machineSecret)throw Error('Invalid automatic connection response');if(mine!==generation){const abort=new AbortController(),timeout=setTimeout(()=>abort.abort(),5000);try{await fetch(API+'/join/'+result.joinId,{method:'DELETE',credentials:'omit',redirect:'error',headers:{Authorization:'Viewer '+machineSecret},signal:abort.signal});}catch{}finally{clearTimeout(timeout);}return null;}return result;}
   catch(error){if(mine!==generation)return null;const reason=error.reason||'';
    if(error.code===409)throw Error(reason==='ambiguous_receiver'?'More than one ScreenLink receiver is waiting. Stop the extra session and press Connect phone again.':'Another viewer is already waiting or connected. Disconnect it or reject its request on the phone.');
    if(error.code===503)throw Error('Automatic receiver discovery is unavailable on this network. The service cannot safely identify a phone.');
