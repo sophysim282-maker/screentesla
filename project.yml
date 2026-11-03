@@ -11,6 +11,7 @@ settings:
     LIBRARY_SEARCH_PATHS: ['$(SRCROOT)/deps/lib']
     OTHER_LDFLAGS: ['$(inherited)', '-lssl', '-lcrypto', '-lplist-2.0']
     ENABLE_BITCODE: NO
+    SWIFT_VERSION: '5.0'
     TARGETED_DEVICE_FAMILY: '1,2'
 targets:
   ScreenLinkAirPlayLab:
@@ -18,6 +19,8 @@ targets:
     platform: iOS
     sources:
       - path: RTC
+      - path: ScreenLinkActivityAttributes.swift
+      - path: SLLiveActivityController.swift
       - path: App
       - path: Vendor/RPiPlay/lib
         excludes: ['**/CMakeLists.txt', '**/*.md']
@@ -30,6 +33,10 @@ targets:
         embed: true
       - target: ScreenLinkBroadcast
         embed: true
+      - target: ScreenLinkIsland
+        embed: true
+      - sdk: ActivityKit.framework
+        weak: true
       - sdk: ReplayKit.framework
       - target: ScreenLinkLocalTunnel
         embed: true
@@ -49,8 +56,9 @@ targets:
       path: App/Info.plist
       properties:
         CFBundleDisplayName: ScreenLink Lab
-        CFBundleShortVersionString: '0.19.4'
-        CFBundleVersion: '36'
+        CFBundleShortVersionString: '0.20.0'
+        CFBundleVersion: '50'
+        NSSupportsLiveActivities: true
         UILaunchScreen: {}
         UIBackgroundModes: [audio, processing]
         BGTaskSchedulerPermittedIdentifiers:
@@ -86,8 +94,8 @@ targets:
       path: Tunnel/Info.plist
       properties:
         CFBundleDisplayName: ScreenLink Local VPN
-        CFBundleShortVersionString: '0.19.4'
-        CFBundleVersion: '36'
+        CFBundleShortVersionString: '0.20.0'
+        CFBundleVersion: '50'
         NSExtension:
           NSExtensionPointIdentifier: com.apple.networkextension.packet-tunnel
           NSExtensionPrincipalClass: PacketTunnelProvider
@@ -97,6 +105,8 @@ targets:
     deploymentTarget: '16.0'
     sources:
       - path: Broadcast
+      - path: ScreenLinkActivityAttributes.swift
+      - path: SLLiveActivityController.swift
       - path: RTC
         excludes: ['RTCPrototypeController.h', 'RTCPrototypeController.m', 'SLMediaController.h', 'SLMediaController.m']
       - path: App
@@ -111,9 +121,12 @@ targets:
         APPLICATION_EXTENSION_API_ONLY: YES
         SKIP_INSTALL: YES
         GCC_PREPROCESSOR_DEFINITIONS: ['$(inherited)', 'SL_BROADCAST_EXTENSION=1']
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: ['$(inherited)', SCREENLINK_BROADCAST]
     dependencies:
       - framework: Vendor/WebRTC.xcframework
         embed: false
+      - sdk: ActivityKit.framework
+        weak: true
       - sdk: ReplayKit.framework
       - sdk: UIKit.framework
       - sdk: Foundation.framework
@@ -130,8 +143,8 @@ targets:
       path: Broadcast/Info.plist
       properties:
         CFBundleDisplayName: ScreenLink Screen
-        CFBundleShortVersionString: '0.19.4'
-        CFBundleVersion: '36'
+        CFBundleShortVersionString: '0.20.0'
+        CFBundleVersion: '50'
         NSLocalNetworkUsageDescription: Share the live iPhone screen and AirPlay media with your hotspot viewer during a screen broadcast.
         NSBonjourServices: ['_airplay._tcp', '_raop._tcp']
         NSAppTransportSecurity:
@@ -140,6 +153,32 @@ targets:
           NSExtensionPointIdentifier: com.apple.broadcast-services-upload
           NSExtensionPrincipalClass: SampleHandler
           RPBroadcastProcessMode: RPBroadcastProcessModeSampleBuffer
+  ScreenLinkIsland:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: '16.2'
+    sources:
+      - path: ScreenLinkActivityAttributes.swift
+      - path: ScreenLinkIsland.swift
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: local.screenlink.airplaylab.Island
+        PRODUCT_NAME: ScreenLinkIsland
+        APPLICATION_EXTENSION_API_ONLY: YES
+        OTHER_LDFLAGS: ['$(inherited)']
+        SKIP_INSTALL: YES
+    dependencies:
+      - sdk: WidgetKit.framework
+      - sdk: SwiftUI.framework
+      - sdk: ActivityKit.framework
+    info:
+      path: ScreenLinkIsland-Info.plist
+      properties:
+        CFBundleDisplayName: ScreenLink Island
+        CFBundleShortVersionString: '0.20.0'
+        CFBundleVersion: '50'
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
 schemes:
   ScreenLinkAirPlayLab:
     build:
