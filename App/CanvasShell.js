@@ -18,7 +18,7 @@ async function connect(){if(joining||connected)return;joining=true;stopped=false
  const deadline=Date.now()+120000;
  while(!stopped&&Date.now()<deadline){const r=await raw('/local-viewer/request',{method:'POST',headers:{'Content-Type':'application/json','X-ScreenLink-Viewer':'request'},body:JSON.stringify({nonce})}),next=await r.json();
   if(next.phase==='approved'&&typeof next.token==='string'){token=next.token;connected=true;wsAttempt=0;mediaFailed=false;status.textContent='Approved · local HTTPS · Canvas + WebCodecs';openSocket();tick();return;}
-  if(['busy','rejected','invalid'].includes(next.phase))throw Error('Phone approval: '+next.phase);await new Promise(r=>setTimeout(r,1200));}
+  if(next.phase==='busy')throw Error('Another viewer is approved. Disconnect local viewer on the phone, then retry.');if(['rejected','invalid'].includes(next.phase))throw Error('Phone approval: '+next.phase);await new Promise(r=>setTimeout(r,1200));}
  if(!stopped)throw Error('Approval timed out. Press Connect phone to retry.');
  }catch(error){status.textContent=error.name==='AbortError'?'Phone request timed out. Keep VPN and broadcast active.':error.message;}finally{joining=false;$('connect').disabled=connected;}}
 function openSocket(){if(!connected||stopped)return;clearTimeout(wsTimer);pendingPacket=null;wsWork=Promise.resolve();const socket=new WebSocket(location.origin.replace(/^http/,'ws')+'/stream?token='+encodeURIComponent(token));socket.binaryType='arraybuffer';ws=socket;
