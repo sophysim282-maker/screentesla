@@ -21,6 +21,13 @@ jobs:
           node-version: '22'
       - run: npm install --no-save playwright@${{ matrix.playwright }}
       - run: npx playwright install --with-deps chromium
+      - name: Pin official Chrome 140 matching Tesla's reported version
+        if: matrix.playwright == '1.55.0'
+        run: |
+          curl --fail --location --retry 3 https://storage.googleapis.com/chrome-for-testing-public/140.0.7339.207/linux64/chrome-linux64.zip -o /tmp/chrome140.zip
+          unzip -q /tmp/chrome140.zip -d /tmp/screenlink-chrome140
+          echo "SCREENLINK_CHROME_BIN=/tmp/screenlink-chrome140/chrome-linux64/chrome" >> "$GITHUB_ENV"
+          echo "NODE_OPTIONS=--require=$PWD/tools/test_browser_engine.cjs" >> "$GITHUB_ENV"
       - name: HLS range and error-propagation regression
         run: |
           node tools/test_rtc_ice_diagnostics.cjs
