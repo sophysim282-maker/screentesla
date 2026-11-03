@@ -126,7 +126,7 @@ class CanvasPlayer {
  async decodeSegment(segment,kind,serial){
   let init=null;if(segment.map){const key=JSON.stringify(segment.map);if(!this.initializers.has(key))this.initializers.set(key,await this.bytes(segment.map.url,segment.map.range));init=this.initializers.get(key);}
   const bytes=await this.bytes(segment.url,segment.range);if(serial!==this.serial||this.closed)return;
-  const samples=demux(bytes,init).filter(s=>s.track&&(kind==='all'||(kind==='audio'?!!s.track.audio:!!s.track.video)));
+  const samples=demux(bytes,init).filter(s=>s.track&&(kind==='all'||(kind==='audio'?!!s.track.audio:!!s.track.video))).sort((a,b)=>(a.dts??a.cts)/a.timescale-(b.dts??b.cts)/b.timescale);
   if(!samples.length)throw Error('Selected HLS track has no samples');
   // Preserve inter-track offsets; normalize each fragment onto its playlist timeline.
   const origin=Math.min(...samples.map(s=>s.cts/s.timescale));
@@ -141,21 +141,21 @@ class CanvasPlayer {
    decoder.decode(new Chunk({type:type==='audio'||sample.is_sync?'key':'delta',timestamp,duration,data:sample.data}));
    while(decoder.decodeQueueSize>12){if(serial!==this.serial||this.closed)return;await sleep(5);}
   }
-  for(const decoder of this.decoders.values())if(decoder.state==='configured')await decoder.flush();
+  for(const type of new Set(samples.map(s=>s.track.video?'video':'audio'))){const decoder=this.decoders.get(type);if(decoder?.state==='configured')await decoder.flush();}
  }
  async seek(value){
   if(!this.videoList||this.closed)return;this.serial++;const serial=this.serial;
   this.abort?.abort();this.abort=new AbortController();this.position=Math.max(0,Math.min(Number(value)||0,Math.max(0,this.duration-0.01)));this.videoEnd=this.position;this.anchor=this.clock();this.running=false;this.ended=false;this.readyState=0;this.release();
   const run=async()=>{
-   // Serialize audio/video demux and decoder configuration across segment boundaries.
-   const work=this.videoList.segments.filter(s=>s.start+s.duration>this.position).map(segment=>({segment,kind:this.audioList?'video':'all'}));
-   if(this.audioList)work.push(...this.audioList.segments.filter(s=>s.start+s.duration>this.position).map(segment=>({segment,kind:'audio'})));
-   work.sort((a,b)=>a.segment.start-b.segment.start);
-   for(const item of work){
-    while(serial===this.serial&&!this.closed&&item.segment.start>this.currentTime+2)await sleep(30);
+   // Interleave muxed samples by decode time; independently pace alternate tracks.
+   // Otherwise a bounded video queue can starve audio while waiting for drawing.
+   const consume=async(list,kind)=>{for(const segment of list.segments.filter(s=>s.start+s.duration>this.position)){
+    while(serial===this.serial&&!this.closed&&segment.start>this.currentTime+2)await sleep(30);
     if(serial!==this.serial||this.closed)return;
-    await this.decodeSegment(item.segment,item.kind,serial);
-   }
+    await this.decodeSegment(segment,kind,serial);
+   }};
+   if(this.audioList)await Promise.all([consume(this.videoList,'video'),consume(this.audioList,'audio')]);
+   else await consume(this.videoList,'all');
    if(serial===this.serial)this.finished=true;
   };
   this.finished=false;run().catch(error=>{if(serial===this.serial)this.fail(error);});

@@ -45,6 +45,13 @@ jobs:
           cc tools/test_fmp4.c -o build/mux
           build/mux build/source.h264 build/live.mp4
           node --require ./tools/test_browser_engine.cjs tools/test_browser_live.cjs App/Viewer.html build/live.mp4
+      - name: Pure Canvas HTTPS/WSS, privacy and offline UI
+        run: |
+          python3 tools/fetch_canvas.py
+          mkdir -p build/pure
+          ffmpeg -v error -f lavfi -i testsrc2=size=640x360:rate=30 -f lavfi -i sine=frequency=440:sample_rate=48000 -t 10 -c:v libx264 -preset ultrafast -tune zerolatency -g 60 -c:a aac -hls_time 2 -hls_playlist_type vod -hls_segment_filename build/pure/part%02d.ts build/pure/master.m3u8
+          ffmpeg -v error -f lavfi -i testsrc2=size=640x360:rate=30 -f lavfi -i sine=frequency=440:sample_rate=48000 -t 10 -c:v libx264 -preset ultrafast -g 60 -c:a aac -hls_time 2 -hls_segment_type fmp4 -hls_playlist_type vod -hls_segment_filename build/pure/fragment%02d.m4s build/pure/fragmented.m3u8
+          node --require ./tools/test_browser_engine.cjs tools/test_pure_canvas.cjs App build/pure build/live.mp4
       - name: Native media HLS video and audio player
         run: |
           python3 tools/fetch_hls.py
@@ -62,8 +69,6 @@ jobs:
           node --require ./tools/test_browser_engine.cjs tools/test_canvas_browser.cjs App build/quality --quality
           node --require ./tools/test_browser_engine.cjs tools/test_youtube_rtc_browser.cjs build/quality --quality
           node --require ./tools/test_browser_engine.cjs tools/test_youtube_rtc_browser.cjs build/quality --quality --maps --screen-fixture=build/live.mp4
-      - name: Pure Canvas HTTPS/WSS, privacy and offline UI
-        run: node --require ./tools/test_browser_engine.cjs tools/test_pure_canvas.cjs App build/media build/live.mp4
       - name: Viewer state and pacing checks
         run: |
           python3 tools/test_h264_viewer.py
