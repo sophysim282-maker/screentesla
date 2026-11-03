@@ -16,3 +16,5 @@ App/TSDemux.js
 App/TSDemux-LICENSE.txt
 
 App/WebRTC-ThirdParty.txt
+
+node_modules/
