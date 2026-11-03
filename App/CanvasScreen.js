@@ -10,7 +10,7 @@ class CanvasScreen {
   if(meta.kind==='init'){this.clear();this.epoch=meta.epoch;this.init=bytes;return;}
   if(meta.kind!=='data'||!this.init||this.epoch!==meta.epoch)return;
   const serial=this.serial,samples=ScreenLinkCanvas.demux(bytes,this.init).filter(s=>s.track?.video);
-  for(const sample of samples){if(this.closed||serial!==this.serial||this.hold)return;const t=sample.track;let config={codec:t.codec,codedWidth:t.video.width,codedHeight:t.video.height,description:t.description,hardwareAcceleration:'prefer-hardware'};
+  for(const sample of samples){if(this.closed||serial!==this.serial||this.hold)return;const t=sample.track;let config={codec:t.codec,codedWidth:t.video.width,codedHeight:t.video.height,description:t.description,hardwareAcceleration:'prefer-hardware',optimizeForLatency:true};
    const key=JSON.stringify({...config,description:Array.from(t.description||[])});
    if(this.config!==key){let support=await VideoDecoder.isConfigSupported(config);if(!support.supported){delete config.hardwareAcceleration;support=await VideoDecoder.isConfigSupported(config);}if(serial!==this.serial||this.hold||this.closed)return;if(!support.supported)throw Error('Screen codec unsupported: '+t.codec);this.decoder?.close();this.decoder=new VideoDecoder({output:frame=>{if(serial!==this.serial||this.closed||this.hold){frame.close();return;}this.frame?.close();this.frame=frame;if(!this.raf)this.raf=requestAnimationFrame(()=>this.paint());},error:e=>this.onerror(e)});this.decoder.configure(config);this.config=key;this.needKey=true;}
    if(this.needKey&&!sample.is_sync)continue;if(sample.is_sync)this.needKey=false;

@@ -29,8 +29,8 @@ It is intended for playback while parked and does not override vehicle policy.
 
 Capture starts hidden. Show requires the current phone privacy revision. Hide
 clears the client decoder/frame immediately and reports whether the phone has
-confirmed. A lost connection never claims that Hide is confirmed. Disconnection
-revokes approval and hides capture. WSS reconnects with bounded backoff; showing
+confirmed. A lost connection never claims that Hide is confirmed. The Disconnect button
+revokes approval and hides capture when the phone confirms the request. WSS reconnects with bounded backoff; showing
 screen content again requires an explicit Show after a lost connection.
 
 A Service Worker caches only the static UI assets after a successful first load.
