@@ -9,7 +9,7 @@ settings:
     GCC_PREPROCESSOR_DEFINITIONS: ['$(inherited)', 'OPENSSL_API_COMPAT=0x10100000L']
     HEADER_SEARCH_PATHS: ['$(SRCROOT)/App', '$(SRCROOT)/RTC', '$(SRCROOT)/deps/include', '$(SRCROOT)/Vendor/RPiPlay/lib', '$(SRCROOT)/Vendor/RPiPlay/lib/playfair', '$(SRCROOT)/Vendor/RPiPlay/lib/llhttp']
     LIBRARY_SEARCH_PATHS: ['$(SRCROOT)/deps/lib']
-    OTHER_LDFLAGS: ['$(inherited)', '-lcrypto', '-lplist-2.0']
+    OTHER_LDFLAGS: ['$(inherited)', '-lssl', '-lcrypto', '-lplist-2.0']
     ENABLE_BITCODE: NO
     TARGETED_DEVICE_FAMILY: '1,2'
 targets:
@@ -49,8 +49,8 @@ targets:
       path: App/Info.plist
       properties:
         CFBundleDisplayName: ScreenLink Lab
-        CFBundleShortVersionString: '0.19.3'
-        CFBundleVersion: '35'
+        CFBundleShortVersionString: '0.19.4'
+        CFBundleVersion: '36'
         UILaunchScreen: {}
         UIBackgroundModes: [audio, processing]
         BGTaskSchedulerPermittedIdentifiers:
@@ -86,8 +86,8 @@ targets:
       path: Tunnel/Info.plist
       properties:
         CFBundleDisplayName: ScreenLink Local VPN
-        CFBundleShortVersionString: '0.19.3'
-        CFBundleVersion: '35'
+        CFBundleShortVersionString: '0.19.4'
+        CFBundleVersion: '36'
         NSExtension:
           NSExtensionPointIdentifier: com.apple.networkextension.packet-tunnel
           NSExtensionPrincipalClass: PacketTunnelProvider
@@ -130,8 +130,8 @@ targets:
       path: Broadcast/Info.plist
       properties:
         CFBundleDisplayName: ScreenLink Screen
-        CFBundleShortVersionString: '0.19.3'
-        CFBundleVersion: '35'
+        CFBundleShortVersionString: '0.19.4'
+        CFBundleVersion: '36'
         NSLocalNetworkUsageDescription: Share the live iPhone screen and AirPlay media with your hotspot viewer during a screen broadcast.
         NSBonjourServices: ['_airplay._tcp', '_raop._tcp']
         NSAppTransportSecurity:

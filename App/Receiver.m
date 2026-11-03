@@ -1,4 +1,5 @@
 #import "Receiver.h"
+#import "LocalTLS.h"
 #import "VPNDiscovery.h"
 #import "AnnexB.h"
 #import "FrameCadence.h"
@@ -50,7 +51,7 @@ _Static_assert(kVTInvalidSessionErr == -12903, "Check decoder error mapping agai
     CMVideoFormatDescriptionRef _format;
     NSData *_sps,*_pps,*_jpeg;
     CIContext *_ci;
-    int _socket;
+    int _socket,_httpsSocket;
     BOOL _running;
     BOOL _previewPending;
     BOOL _jpegBusy;
@@ -85,6 +86,7 @@ _Static_assert(kVTInvalidSessionErr == -12903, "Check decoder error mapping agai
 - (void)image:(CVImageBufferRef)pixel;
 - (void)decode:(NSData *)data timestamp:(uint64_t)timestamp;
 - (BOOL)startWeb;
+- (BOOL)startListener:(unsigned short)port context:(SSL_CTX *)context;
 - (void)serveClient:(int)client generation:(NSUInteger)generation;
 - (void)streamClient:(int)client generation:(NSUInteger)generation;
 - (void)discardDecoder;
@@ -116,7 +118,7 @@ static void decoded(void *c,void *source,OSStatus status,VTDecodeInfoFlags flags
 }
 static BOOL send_all(int fd, const void *bytes,size_t length) {
     const char *p=bytes;
-    while(length) { ssize_t n=send(fd,p,length,0); if(n<=0)return NO; p+=n;length-=(size_t)n; }
+    while(length) { ssize_t n=sl_tls_write(fd,p,length); if(n<=0)return NO; p+=n;length-=(size_t)n; }
     return YES;
 }
 static BOOL hotspotClient(int client) {
@@ -154,7 +156,7 @@ static SLVideoSettings videoSettings(SLVideoProfile profile) {
     }
 }
 @implementation Receiver
-- (instancetype)init { if((self=[super init])) { _socket=-1;_localViewer=[LocalViewerApproval new];_h264=[H264Stream new];_media=[MediaCast new];
+- (instancetype)init { if((self=[super init])) { _socket=-1;_httpsSocket=-1;_localViewer=[LocalViewerApproval new];_h264=[H264Stream new];_media=[MediaCast new];
 #if SL_BROADCAST_EXTENSION
         _h264=[[H264Stream alloc]initWithMaxBytes:2*1024*1024 packets:90];_screenStream=[[H264Stream alloc]initWithMaxBytes:3*1024*1024 packets:120];_broadcastLog=[NSMutableArray array];_appBackgrounded=YES;_compressedOnlyInBackground=YES;
 #else
@@ -403,21 +405,35 @@ static NSArray *txtStrings(const char *bytes,int length) {
     [_vpnDiscovery startWithProfile:self.discoveryProfile];
 }
 - (BOOL)startWeb {
-    _socket=socket(AF_INET,SOCK_STREAM,0);if(_socket<0)return NO;
-    int yes=1;setsockopt(_socket,SOL_SOCKET,SO_REUSEADDR,&yes,sizeof yes);
-    struct sockaddr_in address={0};address.sin_len=sizeof address;address.sin_family=AF_INET;address.sin_port=htons(8080);address.sin_addr.s_addr=INADDR_ANY;
-    if(bind(_socket,(struct sockaddr *)&address,sizeof address)<0 || listen(_socket,8)<0){close(_socket);_socket=-1;[self emit:@"Browser port 8080 is unavailable."];return NO;}
-    int server=_socket;NSUInteger generation;@synchronized(self){generation=_generation;}
+    if(![self startListener:8080 context:NULL])return NO;
+    NSString *directory=[NSBundle.mainBundle.bundlePath stringByAppendingPathComponent:@"PrivateTLS"];
+    SSL_CTX *context=sl_tls_context([[directory stringByAppendingPathComponent:@"fullchain.pem"] fileSystemRepresentation],[[directory stringByAppendingPathComponent:@"private.key"] fileSystemRepresentation]);
+    if(context){if([self startListener:443 context:context])[self emit:@"LOCAL HTTPS READY: https://car.tesla4khmer.com/ — approve the viewer on this phone. Open /capabilities to check browser APIs."];else [self emit:@"HTTPS port 443 unavailable. HTTP viewer remains available."];SSL_CTX_free(context);}
+    else [self emit:@"Local HTTPS not started: certificate missing, expired, wrong hostname or mismatched key. HTTP viewer remains available."];
+    return YES;
+}
+- (BOOL)startListener:(unsigned short)port context:(SSL_CTX *)context {
+    int server=socket(AF_INET,SOCK_STREAM,0);if(server<0)return NO;
+    int yes=1;setsockopt(server,SOL_SOCKET,SO_REUSEADDR,&yes,sizeof yes);
+    struct sockaddr_in address={0};address.sin_len=sizeof address;address.sin_family=AF_INET;address.sin_port=htons(port);address.sin_addr.s_addr=INADDR_ANY;
+    if(bind(server,(struct sockaddr *)&address,sizeof address)<0 || listen(server,8)<0){close(server);return NO;}
+    if(context)_httpsSocket=server;else _socket=server;
+    NSUInteger generation;@synchronized(self){generation=_generation;}
+    if(context)SSL_CTX_up_ref(context);
     dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY,0),^{
         while(YES) {
             BOOL current;@synchronized(self){current=generation==self->_generation;}if(!current)break;
             int client=accept(server,NULL,NULL);if(client<0)break;
             if(dispatch_semaphore_wait(self->_httpSlots,DISPATCH_TIME_NOW)!=0){close(client);continue;}
+            if(context)SSL_CTX_up_ref(context);
             dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED,0),^{
-                @autoreleasepool {[self serveClient:client generation:generation];}
-                close(client);dispatch_semaphore_signal(self->_httpSlots);
+                struct timeval timeout={5,0};setsockopt(client,SOL_SOCKET,SO_RCVTIMEO,&timeout,sizeof timeout);setsockopt(client,SOL_SOCKET,SO_SNDTIMEO,&timeout,sizeof timeout);
+                int one=1;setsockopt(client,SOL_SOCKET,SO_NOSIGPIPE,&one,sizeof one);
+                @try {@autoreleasepool {if(!context || sl_tls_begin(context,client))[self serveClient:client generation:generation];}}
+                @finally {if(context){sl_tls_end();SSL_CTX_free(context);}close(client);dispatch_semaphore_signal(self->_httpSlots);}
             });
         }
+        if(context)SSL_CTX_free(context);
     });return YES;
 }
 - (void)serveClient:(int)client generation:(NSUInteger)generation {
@@ -425,7 +441,7 @@ static NSArray *txtStrings(const char *bytes,int length) {
     int one=1;setsockopt(client,SOL_SOCKET,SO_NOSIGPIPE,&one,sizeof one);setsockopt(client,IPPROTO_TCP,TCP_NODELAY,&one,sizeof one);
     NSMutableData *request=[NSMutableData data];char buffer[1024];
     while(request.length<8192) {
-        ssize_t n=recv(client,buffer,sizeof buffer,0);if(n<=0)return;[request appendBytes:buffer length:n];
+        ssize_t n=sl_tls_read(client,buffer,sizeof buffer);if(n<=0)return;[request appendBytes:buffer length:n];
         if([request rangeOfData:[@"\r\n\r\n" dataUsingEncoding:NSUTF8StringEncoding] options:0 range:NSMakeRange(0,request.length)].location!=NSNotFound)break;
     }
     NSString *line=[[NSString alloc]initWithData:request encoding:NSUTF8StringEncoding] ?: @"";
@@ -435,16 +451,20 @@ static NSArray *txtStrings(const char *bytes,int length) {
     for(NSURLQueryItem *item in url.queryItems){if([item.name isEqual:@"epoch"])epoch=item.value;else if([item.name isEqual:@"token"])token=item.value;else if([item.name isEqual:@"after"]){after=strtoull(item.value.UTF8String,NULL,10);longPoll=YES;}}
     NSString *mime=@"text/plain; charset=utf-8",*status=@"200 OK",*extra=@"";NSData *body=[NSData data];
     NSRange headerEnd=[request rangeOfData:[@"\r\n\r\n" dataUsingEncoding:NSUTF8StringEncoding] options:0 range:NSMakeRange(0,request.length)];
-    NSUInteger bodyOffset=headerEnd.location==NSNotFound?request.length:NSMaxRange(headerEnd);NSUInteger bodyLength=0;NSString *byteRange=nil,*origin=nil;BOOL localControl=NO,viewerHeaderValid=NO;
+    NSUInteger bodyOffset=headerEnd.location==NSNotFound?request.length:NSMaxRange(headerEnd);NSUInteger bodyLength=0;NSString *byteRange=nil,*origin=nil,*host=nil;BOOL localControl=NO,viewerHeaderValid=NO;
     for(NSString *field in [line componentsSeparatedByString:@"\r\n"]){
+        if([field.lowercaseString hasPrefix:@"host:"])host=[[[field substringFromIndex:5] stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceCharacterSet] lowercaseString];
         if([field.lowercaseString hasPrefix:@"x-screenlink-control:"] && [[[field substringFromIndex:21] stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceCharacterSet] isEqual:@"app"])localControl=YES;
         if([field.lowercaseString hasPrefix:@"content-length:"])bodyLength=(NSUInteger)MAX(0,[[field substringFromIndex:15] integerValue]);
         if([field.lowercaseString hasPrefix:@"origin:"])origin=[[field substringFromIndex:7] stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceCharacterSet];
         if([field.lowercaseString hasPrefix:@"x-screenlink-viewer:"])viewerHeaderValid=sl_local_viewer_request_header(field.UTF8String);
         if([field.lowercaseString hasPrefix:@"range:"])byteRange=[[field substringFromIndex:6] stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceCharacterSet];
     }
+    BOOL secureTransport=sl_tls_active(client);
+    if(secureTransport && ![@[@"car.tesla4khmer.com",@"car.tesla4khmer.com:443"] containsObject:host])return;
+    NSString *expectedOrigin=secureTransport?@"https://car.tesla4khmer.com":@"http://240.3.3.3:8080";
     if(bodyLength>8192)return;
-    while(request.length-bodyOffset<bodyLength){ssize_t n=recv(client,buffer,MIN(sizeof buffer,bodyLength-(request.length-bodyOffset)),0);if(n<=0)return;[request appendBytes:buffer length:n];}
+    while(request.length-bodyOffset<bodyLength){ssize_t n=sl_tls_read(client,buffer,MIN(sizeof buffer,bodyLength-(request.length-bodyOffset)));if(n<=0)return;[request appendBytes:buffer length:n];}
     struct sockaddr_in peer={0};socklen_t peerSize=sizeof peer;BOOL loopback=getpeername(client,(struct sockaddr *)&peer,&peerSize)==0 && peer.sin_family==AF_INET && (ntohl(peer.sin_addr.s_addr)>>24)==127;
     BOOL localOwner=loopback && localControl && [parts.firstObject isEqual:@"GET"] && [url.path isEqual:@"/local/owner"];
     BOOL localStop=loopback && localControl && [parts.firstObject isEqual:@"POST"] && [url.path isEqual:@"/local/broadcast/stop"];
@@ -466,9 +486,10 @@ static NSArray *txtStrings(const char *bytes,int length) {
         status=changed?@"200 OK":@"409 Conflict";mime=@"application/json";body=[@"{}" dataUsingEncoding:NSUTF8StringEncoding];
     }
     else if(current && [url.path isEqual:@"/local-viewer/request"]){
-        if(!aliasClient || ![parts.firstObject isEqual:@"POST"] || ![origin isEqual:@"http://240.3.3.3:8080"] || !viewerHeaderValid){status=@"403 Forbidden";[self emit:[NSString stringWithFormat:@"LOCAL APPROVAL REQUEST REJECTED: owned-alias/hotspot=%d, POST=%d, expected-origin=%d, request-header=%d. No media access granted.",aliasClient,[parts.firstObject isEqual:@"POST"],[origin isEqual:@"http://240.3.3.3:8080"],viewerHeaderValid]];}
+        if(!aliasClient || ![parts.firstObject isEqual:@"POST"] || ![origin isEqual:expectedOrigin] || !viewerHeaderValid){status=@"403 Forbidden";[self emit:[NSString stringWithFormat:@"LOCAL APPROVAL REQUEST REJECTED: owned-alias/hotspot=%d, POST=%d, expected-origin=%d, request-header=%d. No media access granted.",aliasClient,[parts.firstObject isEqual:@"POST"],[origin isEqual:expectedOrigin],viewerHeaderValid]];}
         else{id object=[NSJSONSerialization JSONObjectWithData:[request subdataWithRange:NSMakeRange(bodyOffset,bodyLength)] options:0 error:nil];NSString *nonce=[object isKindOfClass:NSDictionary.class]?object[@"nonce"]:nil;NSDictionary *result=[_localViewer request:nonce peer:peerHost now:localNow];mime=@"application/json";body=[NSJSONSerialization dataWithJSONObject:result options:0 error:nil];}
     }
+    else if(current && aliasClient && [parts.firstObject isEqual:@"GET"] && [url.path isEqual:@"/capabilities"]){mime=@"text/html; charset=utf-8";body=[NSData dataWithContentsOfFile:[NSBundle.mainBundle pathForResource:@"Capabilities" ofType:@"html"]]?:NSData.data;}
     else if(current && aliasClient && [parts.firstObject isEqual:@"GET"] && !token && [@[@"/",@"/split",@"/map",@"/video"] containsObject:url.path]){
         mime=@"text/html; charset=utf-8";NSString *path=[NSBundle.mainBundle pathForResource:@"LocalViewer" ofType:@"html"];body=path?[NSData dataWithContentsOfFile:path]:NSData.data;
     }
@@ -516,7 +537,7 @@ static NSArray *txtStrings(const char *bytes,int length) {
         else {body=part[@"data"];if(!body.length)status=@"204 No Content";}
         mime=@"video/mp4";extra=[NSString stringWithFormat:@"X-Stream-Epoch: %@\r\nX-Last-ID: %@\r\n",part[@"epoch"],part[@"id"] ?: @0];
     }
-    else if([url.path isEqual:@"/stream.mjpg"]){[self streamClient:client generation:generation];return;}
+    else if([url.path isEqual:@"/stream.mjpg"]){if(secureTransport){status=@"501 Not Implemented";body=[@"Use the MP4 screen viewer on HTTPS." dataUsingEncoding:NSUTF8StringEncoding];}else{[self streamClient:client generation:generation];return;}}
     else if([url.path isEqual:@"/status.json"]) {
         NSDictionary *snapshot;
         @synchronized(self){
@@ -589,6 +610,7 @@ static NSArray *txtStrings(const char *bytes,int length) {
     [_localViewer reset];[_screenStream reset];[_media stop];[_vpnDiscovery stop];_vpnDiscovery=nil;[_h264 reset];
     @synchronized(self){_running=NO;_generation++;_mirrorTransportOpen=NO;_sessionFrames=0;_controlClients=0;}
     [_frameReady lock];[_frameReady broadcast];[_frameReady unlock];
+    if(_httpsSocket>=0){shutdown(_httpsSocket,SHUT_RDWR);close(_httpsSocket);_httpsSocket=-1;}
     if(_socket>=0){shutdown(_socket,SHUT_RDWR);close(_socket);_socket=-1;}
     if(_raop){raop_stop(_raop);raop_destroy(_raop);_raop=NULL;}
     if(_dns){dnssd_unregister_airplay(_dns);dnssd_unregister_raop(_dns);dnssd_destroy(_dns);_dns=NULL;}

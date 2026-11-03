@@ -18,3 +18,11 @@ App/TSDemux-LICENSE.txt
 App/WebRTC-ThirdParty.txt
 
 node_modules/
+
+# Private local HTTPS identity must never enter source control.
+PrivateTLS/
+**/PrivateTLS/
+*.key
+*.p12
+*.pfx
+fullchain.pem

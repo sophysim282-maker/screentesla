@@ -13,7 +13,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install build prerequisites
-        run: brew install xcodegen autoconf automake libtool
+        run: brew install xcodegen autoconf automake libtool openssl@3
       - name: Build
         id: native-build
         run: bash tools/build.sh

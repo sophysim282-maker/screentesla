@@ -8,6 +8,11 @@ fi
 for tool in xcodegen autoconf automake glibtoolize; do
   command -v "$tool" >/dev/null || { echo "Missing $tool. Install prerequisites: brew install xcodegen autoconf automake libtool" >&2; exit 1; }
 done
+openssl_root="$(brew --prefix openssl@3)"
+mkdir -p build/tls-test
+"$openssl_root/bin/openssl" req -x509 -newkey rsa:2048 -nodes -days 1 -subj '/CN=car.tesla4khmer.com' -addext 'subjectAltName=DNS:car.tesla4khmer.com' -keyout build/tls-test/key.pem -out build/tls-test/cert.pem 2>/dev/null
+cc -std=c11 -Wall -Wextra -Werror -I"$openssl_root/include" -L"$openssl_root/lib" -Wl,-rpath,"$openssl_root/lib" tools/test_local_tls.c App/LocalTLS.c -lssl -lcrypto -pthread -o build/tls-test/test
+build/tls-test/test build/tls-test/cert.pem build/tls-test/key.pem
 mkdir -p build
 cc -std=c11 -Wall -Wextra -Werror tools/test_local_viewer_header.c -o build/test-local-viewer-header
 build/test-local-viewer-header
@@ -70,7 +75,7 @@ root="$PWD"
 sdk="$(xcrun --sdk iphoneos --show-sdk-path)"
 compiler="$(xcrun --sdk iphoneos --find clang)"
 mkdir -p .deps-src deps build
-if [[ ! -f deps/lib/libcrypto.a ]]; then
+if [[ ! -f deps/lib/libcrypto.a || ! -f deps/lib/libssl.a ]]; then
   if [[ ! -d .deps-src/openssl ]]; then
     git clone --depth 1 --branch OpenSSL_1_1_1w https://github.com/openssl/openssl.git .deps-src/openssl
   fi
