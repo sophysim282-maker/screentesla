@@ -16,6 +16,8 @@ codesign --force --sign - "$rtc_mac/WebRTC.framework"
 xcrun --sdk macosx clang -fobjc-arc -fblocks -IRTC -F"$rtc_mac" tools/test_rtc_peer.m RTC/SLPingPeer.m RTC/SLTestVideo.m RTC/SLSignaling.m -framework CoreVideo -framework Foundation -framework WebRTC -Wl,-rpath,"$rtc_mac" -o build/test-rtc-peer
 xcrun --sdk macosx clang -fobjc-arc -fblocks -IRTC -F"$rtc_mac" tools/test_rtc_gather.m RTC/SLPingPeer.m RTC/SLTestVideo.m -framework CoreVideo -framework Foundation -framework WebRTC -Wl,-rpath,"$rtc_mac" -o build/test-rtc-gather
 build/test-rtc-gather
+xcrun --sdk macosx clang -fobjc-arc -fblocks -IRTC tools/test_signaling_slow.m RTC/SLSignaling.m -framework Foundation -o build/test-signaling-slow
+build/test-signaling-slow
 xcrun --sdk macosx clang -fobjc-arc -fblocks -IRTC -F"$rtc_mac" tools/test_rtc_restart.m RTC/SLMediaSession.m RTC/SLMediaBridge.m RTC/SLPingPeer.m RTC/SLTestVideo.m RTC/SLSignaling.m -framework CoreVideo -framework Foundation -framework WebRTC -Wl,-rpath,"$rtc_mac" -o build/test-rtc-restart
 build/test-rtc-restart
 build/test-rtc-peer
