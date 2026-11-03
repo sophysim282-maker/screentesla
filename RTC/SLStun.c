@@ -59,7 +59,7 @@ SLStunServer *SLStunStart(const char *address,uint16_t port){
     if(!loopback&&ip!=0xac140a01u)return NULL;
     SLStunServer *s=calloc(1,sizeof *s);if(!s)return NULL;s->socket=-1;s->loopback=loopback;atomic_init(&s->stopping,false);pthread_mutex_init(&s->lock,NULL);
     s->socket=socket(AF_INET,SOCK_DGRAM,0);if(s->socket<0)goto fail;
-    if(fcntl(s->socket,F_SETFL,O_NONBLOCK)<0||bind(s->socket,(struct sockaddr *)&bindTo,sizeof bindTo)<0)goto fail;
+    if(fcntl(s->socket,F_SETFD,FD_CLOEXEC)<0||fcntl(s->socket,F_SETFL,O_NONBLOCK)<0||bind(s->socket,(struct sockaddr *)&bindTo,sizeof bindTo)<0)goto fail;
     socklen_t size=sizeof bindTo;if(getsockname(s->socket,(struct sockaddr *)&bindTo,&size)<0)goto fail;s->stats.boundPort=ntohs(bindTo.sin_port);
     if(pthread_create(&s->thread,NULL,serve,s)!=0)goto fail;
     return s;
