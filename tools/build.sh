@@ -9,19 +9,22 @@ for tool in xcodegen autoconf automake glibtoolize; do
   command -v "$tool" >/dev/null || { echo "Missing $tool. Install prerequisites: brew install xcodegen autoconf automake libtool" >&2; exit 1; }
 done
 mkdir -p build
+cc -std=c11 -Wall -Wextra -Werror -c RTC/SLStun.c -o build/local-stun.o
+cc -std=c11 -Wall -Wextra -Werror tools/test_stun.c build/local-stun.o -o build/test-stun
+build/test-stun
 node tools/test_rtc_ice_diagnostics.cjs
 python3 tools/fetch_webrtc.py
 rtc_mac="$PWD/Vendor/WebRTC.xcframework/macos-x86_64_arm64"
 codesign --force --sign - "$rtc_mac/WebRTC.framework"
-xcrun --sdk macosx clang -fobjc-arc -fblocks -IRTC -F"$rtc_mac" tools/test_rtc_peer.m RTC/SLPingPeer.m RTC/SLTestVideo.m RTC/SLSignaling.m -framework CoreVideo -framework Foundation -framework WebRTC -Wl,-rpath,"$rtc_mac" -o build/test-rtc-peer
-xcrun --sdk macosx clang -fobjc-arc -fblocks -IRTC -F"$rtc_mac" tools/test_rtc_gather.m RTC/SLPingPeer.m RTC/SLTestVideo.m -framework CoreVideo -framework Foundation -framework WebRTC -Wl,-rpath,"$rtc_mac" -o build/test-rtc-gather
+xcrun --sdk macosx clang -fobjc-arc -fblocks -IRTC -F"$rtc_mac" tools/test_rtc_peer.m RTC/SLPingPeer.m RTC/SLTestVideo.m build/local-stun.o RTC/SLSignaling.m -framework CoreVideo -framework Foundation -framework WebRTC -Wl,-rpath,"$rtc_mac" -o build/test-rtc-peer
+xcrun --sdk macosx clang -fobjc-arc -fblocks -IRTC -F"$rtc_mac" tools/test_rtc_gather.m RTC/SLPingPeer.m RTC/SLTestVideo.m build/local-stun.o -framework CoreVideo -framework Foundation -framework WebRTC -Wl,-rpath,"$rtc_mac" -o build/test-rtc-gather
 build/test-rtc-gather
 xcrun --sdk macosx clang -fobjc-arc -fblocks -IRTC tools/test_signaling_slow.m RTC/SLSignaling.m -framework Foundation -o build/test-signaling-slow
 build/test-signaling-slow
-xcrun --sdk macosx clang -fobjc-arc -fblocks -IRTC -F"$rtc_mac" tools/test_rtc_restart.m RTC/SLMediaSession.m RTC/SLMediaBridge.m RTC/SLPingPeer.m RTC/SLTestVideo.m RTC/SLSignaling.m -framework CoreVideo -framework Foundation -framework WebRTC -Wl,-rpath,"$rtc_mac" -o build/test-rtc-restart
+xcrun --sdk macosx clang -fobjc-arc -fblocks -IRTC -F"$rtc_mac" tools/test_rtc_restart.m RTC/SLMediaSession.m RTC/SLMediaBridge.m RTC/SLPingPeer.m RTC/SLTestVideo.m build/local-stun.o RTC/SLSignaling.m -framework CoreVideo -framework Foundation -framework WebRTC -Wl,-rpath,"$rtc_mac" -o build/test-rtc-restart
 build/test-rtc-restart
 build/test-rtc-peer
-xcrun --sdk macosx clang -fobjc-arc -fblocks -IRTC -F"$rtc_mac" tools/test_rtc_media.m RTC/SLMediaSession.m RTC/SLMediaBridge.m RTC/SLPingPeer.m RTC/SLTestVideo.m RTC/SLSignaling.m -framework CoreVideo -framework Foundation -framework WebRTC -Wl,-rpath,"$rtc_mac" -o build/test-rtc-media
+xcrun --sdk macosx clang -fobjc-arc -fblocks -IRTC -F"$rtc_mac" tools/test_rtc_media.m RTC/SLMediaSession.m RTC/SLMediaBridge.m RTC/SLPingPeer.m RTC/SLTestVideo.m build/local-stun.o RTC/SLSignaling.m -framework CoreVideo -framework Foundation -framework WebRTC -Wl,-rpath,"$rtc_mac" -o build/test-rtc-media
 for media_attempt in 1 2 3; do build/test-rtc-media; done
 if [[ "${SCREENLINK_LIVE_SIGNALING_TEST:-0}" == 1 ]]; then
   build/test-rtc-peer --live

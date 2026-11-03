@@ -1,5 +1,6 @@
 #import "SLPingPeer.h"
 #import "SLTestVideo.h"
+#import "SLStun.h"
 #import <WebRTC/WebRTC.h>
 #import <arpa/inet.h>
 #import <ifaddrs.h>
@@ -11,6 +12,10 @@ static NSDictionary *candidateInfo(NSString *sdp){NSMutableArray *details=[NSMut
 static NSArray *localInterfaces(void){NSMutableArray *out=[NSMutableArray array];struct ifaddrs *head=NULL;if(getifaddrs(&head)==0){for(struct ifaddrs *it=head;it&&out.count<16;it=it->ifa_next){if(!it->ifa_addr||it->ifa_addr->sa_family!=AF_INET||!(it->ifa_flags&IFF_UP))continue;char address[INET_ADDRSTRLEN];if(!inet_ntop(AF_INET,&((struct sockaddr_in *)it->ifa_addr)->sin_addr,address,sizeof(address)))continue;NSString *host=[NSString stringWithUTF8String:address];if(privateIP(host,NO))[out addObject:@{@"name":[NSString stringWithUTF8String:it->ifa_name],@"address":host}];}freeifaddrs(head);}return out;}
 @interface SLPingPeer () <RTCPeerConnectionDelegate,RTCDataChannelDelegate,RTCVideoRenderer>
 @property(nonatomic,strong) RTCPeerConnectionFactory *factory;
+@property(nonatomic,assign) SLStunServer *localStun;
+@property(nonatomic,copy) NSString *localStunURL;
+@property(nonatomic) BOOL offerer;
+@property(nonatomic) uint64_t lastStunResponses;
 @property(nonatomic,strong) RTCPeerConnection *peer;
 @property(nonatomic,strong) RTCDataChannel *channel,*mediaChannel,*screenChannel;
 @property(nonatomic,strong) NSTimer *pingTimer;
@@ -29,7 +34,7 @@ static NSArray *localInterfaces(void){NSMutableArray *out=[NSMutableArray array]
 @implementation SLPingPeer
 - (instancetype)initWithHotspotOnly:(BOOL)strict offerer:(BOOL)offerer {return [self initWithHotspotOnly:strict offerer:offerer dataOnly:NO];}
 - (instancetype)initWithHotspotOnly:(BOOL)strict offerer:(BOOL)offerer dataOnly:(BOOL)dataOnly {
-    if((self=[super init])){static dispatch_once_t once;dispatch_once(&once,^{RTCInitializeSSL();RTCSetMinDebugLogLevel(RTCLoggingSeverityError);});_strict=strict;if(dataOnly){_factory=[RTCPeerConnectionFactory new];}else{RTCDefaultVideoEncoderFactory *encoders=[RTCDefaultVideoEncoderFactory new];for(RTCVideoCodecInfo *codec in [RTCDefaultVideoEncoderFactory supportedCodecs])if([codec.name isEqual:@"H264"]){encoders.preferredCodec=codec;break;}_factory=[[RTCPeerConnectionFactory alloc]initWithEncoderFactory:encoders decoderFactory:[RTCDefaultVideoDecoderFactory new]];}// NWPathMonitor describes the Internet path and can omit the hotspot bridge.
+    if((self=[super init])){static dispatch_once_t once;dispatch_once(&once,^{RTCInitializeSSL();RTCSetMinDebugLogLevel(RTCLoggingSeverityError);});_strict=strict;_offerer=offerer;if(offerer){_localStun=SLStunStart(strict?"172.20.10.1":"127.0.0.1",strict?3478:0);if(_localStun)_localStunURL=[NSString stringWithFormat:@"stun:%@:%u",strict?@"172.20.10.1":@"127.0.0.1",SLStunSnapshot(_localStun).boundPort];}if(dataOnly){_factory=[RTCPeerConnectionFactory new];}else{RTCDefaultVideoEncoderFactory *encoders=[RTCDefaultVideoEncoderFactory new];for(RTCVideoCodecInfo *codec in [RTCDefaultVideoEncoderFactory supportedCodecs])if([codec.name isEqual:@"H264"]){encoders.preferredCodec=codec;break;}_factory=[[RTCPeerConnectionFactory alloc]initWithEncoderFactory:encoders decoderFactory:[RTCDefaultVideoDecoderFactory new]];}// NWPathMonitor describes the Internet path and can omit the hotspot bridge.
         // Use native interface enumeration so an UP hotspot interface survives path updates.
         RTCPeerConnectionFactoryOptions *options=[RTCPeerConnectionFactoryOptions new];options.disableNetworkMonitor=YES;options.disableEncryption=NO;options.ignoreLoopbackNetworkAdapter=strict;options.ignoreCellularNetworkAdapter=strict;options.ignoreVPNNetworkAdapter=strict;[_factory setOptions:options];
         RTCSetMinDebugLogLevel(RTCLoggingSeverityNone);RTCConfiguration *config=[RTCConfiguration new];config.iceServers=@[];config.iceTransportPolicy=RTCIceTransportPolicyAll;config.sdpSemantics=RTCSdpSemanticsUnifiedPlan;config.bundlePolicy=RTCBundlePolicyMaxBundle;config.tcpCandidatePolicy=RTCTcpCandidatePolicyEnabled;config.continualGatheringPolicy=RTCContinualGatheringPolicyGatherOnce;
@@ -69,8 +74,10 @@ static NSArray *localInterfaces(void){NSMutableArray *out=[NSMutableArray array]
 - (NSError *)error:(NSString *)message {return [NSError errorWithDomain:@"ScreenLink.WebRTC" code:1 userInfo:@{NSLocalizedDescriptionKey:message}];}
 - (BOOL)pingOK {return self.lastVerified>0&&NSProcessInfo.processInfo.systemUptime-self.lastVerified<15;}
 - (NSString *)filteredSDP:(NSString *)sdp {
-    NSMutableArray *lines=[NSMutableArray array];NSUInteger usable=0;
+    NSMutableArray *lines=[NSMutableArray array];NSUInteger usable=0;BOOL hinted=NO;
     for(NSString *line in [sdp componentsSeparatedByString:@"\r\n"]){
+        if([line hasPrefix:@"a=x-screenlink-stun:"])continue;
+        if(!hinted&&self.localStunURL.length&&[line hasPrefix:@"m="]){[lines addObject:[@"a=x-screenlink-stun:" stringByAppendingString:self.localStunURL]];hinted=YES;}
         if([line hasPrefix:@"a=candidate:"]){NSArray *fields=[[line componentsSeparatedByCharactersInSet:NSCharacterSet.whitespaceCharacterSet] filteredArrayUsingPredicate:[NSPredicate predicateWithFormat:@"length > 0"]];BOOL host=fields.count>=8&&[fields[6] isEqual:@"typ"]&&[fields[7] isEqual:@"host"];struct in_addr address;BOOL ipv4=fields.count>=8&&inet_pton(AF_INET,[fields[4] UTF8String],&address)==1;if(!host||!ipv4|| (self.strict&&![fields[4] isEqual:@"172.20.10.1"]))continue;usable++;}
         [lines addObject:line];
     }
@@ -98,6 +105,7 @@ static NSArray *localInterfaces(void){NSMutableArray *out=[NSMutableArray array]
     });}];
 }
 - (void)offerRestart:(BOOL)restart completion:(void (^)(NSString *,NSString *,NSError *))completion {
+    if(self.offerer&&!self.localStun){completion(nil,nil,[self error:@"Local route discovery could not bind the hotspot UDP port. Restart the broadcast and check hotspot availability."]);return;}
     self.offerCompletion=completion;self.waiting=NO;NSUInteger generation=++self.offerGeneration;if(restart)[self.peer restartIce];
     RTCMediaConstraints *constraints=[[RTCMediaConstraints alloc]initWithMandatoryConstraints:restart?@{@"IceRestart":@"true"}:nil optionalConstraints:nil];
     [self.peer offerForConstraints:constraints completionHandler:^(RTCSessionDescription *sdp,NSError *error){dispatch_async(dispatch_get_main_queue(),^{if(self.closed||generation!=self.offerGeneration)return;if(error||!sdp){self.offerCompletion=nil;completion(nil,nil,[self error:@"WebRTC could not create an offer."]);return;}[self localDescription:sdp generation:generation];});}];
@@ -160,10 +168,12 @@ static BOOL privateIP(NSString *host,BOOL strict){struct in_addr address;if(inet
         for(RTCStatistics *stat in all.allValues)if([stat.type isEqual:@"outbound-rtp"]&&([(id)stat.values[@"kind"] isEqual:@"video"]||[(id)stat.values[@"mediaType"] isEqual:@"video"])){encoded+=[(id)stat.values[@"framesEncoded"] unsignedLongLongValue];videoBytes+=[(id)stat.values[@"bytesSent"] unsignedLongLongValue];RTCStatistics *type=all[stat.values[@"codecId"]?:@""];codec=(id)type.values[@"mimeType"]?:@"";}
         NSUInteger decoded,changed;NSTimeInterval fresh;@synchronized(self){decoded=self.decodedFrames;changed=self.changedFrames;fresh=self.lastDecoded;}
         NSTimeInterval now=NSProcessInfo.processInfo.systemUptime;BOOL videoVerified=verified&&((self.testVideo&&encoded>0&&self.remoteFrames>0&&now-self.lastRemoteProgress<4)||(!self.testVideo&&decoded>0&&now-fresh<4));
-        completion(@{@"networkEnumeration":@"native-interfaces",@"localCandidates":candidateInfo(self.peer.localDescription.sdp),@"remoteCandidates":candidateInfo(self.peer.remoteDescription.sdp),@"localInterfaces":localInterfaces(),@"gatheringPending":@(self.waiting),@"iceChecks":checks,@"dtlsStates":dtls,@"screenChannelOpen":@(self.screenOpen),@"videoFramesEncoded":@(encoded),@"videoBytesSent":@(videoBytes),@"videoFramesDecoded":@(decoded),@"videoFramesChanged":@(changed),@"viewerFramesRendered":@(self.remoteFrames),@"videoCodec":codec,@"videoVerified":@(videoVerified),@"connectionState":index<states.count?states[index]:@"unknown",@"bytesSent":@(sent),@"bytesReceived":@(received),@"dataChannelPingOk":@(self.pingOK),@"localRouteVerified":@(localRoute),@"verified":@(verified),@"selectedPair":selected});
+        SLStunStats stun=SLStunSnapshot(self.localStun);struct in_addr observed={.s_addr=htonl(stun.lastAddress)};NSString *observedAddress=stun.lastAddress?[NSString stringWithUTF8String:inet_ntoa(observed)]:@"";
+        if(stun.responses>self.lastStunResponses){self.lastStunResponses=stun.responses;[self log:[NSString stringWithFormat:@"LOCAL STUN ROUTE: browser observed at %@:%u; %llu Binding responses. Media connectivity is verified separately.",observedAddress,stun.lastPort,(unsigned long long)stun.responses]];}
+        completion(@{@"localStun":@{@"requests":@(stun.requests),@"responses":@(stun.responses),@"rejected":@(stun.rejected),@"observedAddress":observedAddress,@"observedPort":@(stun.lastPort)},@"networkEnumeration":@"native-interfaces",@"localCandidates":candidateInfo(self.peer.localDescription.sdp),@"remoteCandidates":candidateInfo(self.peer.remoteDescription.sdp),@"localInterfaces":localInterfaces(),@"gatheringPending":@(self.waiting),@"iceChecks":checks,@"dtlsStates":dtls,@"screenChannelOpen":@(self.screenOpen),@"videoFramesEncoded":@(encoded),@"videoBytesSent":@(videoBytes),@"videoFramesDecoded":@(decoded),@"videoFramesChanged":@(changed),@"viewerFramesRendered":@(self.remoteFrames),@"videoCodec":codec,@"videoVerified":@(videoVerified),@"connectionState":index<states.count?states[index]:@"unknown",@"bytesSent":@(sent),@"bytesReceived":@(received),@"dataChannelPingOk":@(self.pingOK),@"localRouteVerified":@(localRoute),@"verified":@(verified),@"selectedPair":selected});
     });}];
 }
-- (void)close {self.closed=YES;self.screenChannel.delegate=nil;[self.screenChannel close];self.screenChannel=nil;self.screenMessage=nil;self.screenOpened=nil;self.mediaChannel.delegate=nil;[self.mediaChannel close];self.mediaChannel=nil;self.mediaMessage=nil;self.mediaOpened=nil;[self.testVideo stop];self.testVideo=nil;[self.receivedTrack removeRenderer:self];self.receivedTrack=nil;self.videoTrack=nil;self.videoSource=nil;self.offerGeneration++;self.offerCompletion=nil;[self.pingTimer invalidate];self.pingTimer=nil;self.channel.delegate=nil;[self.channel close];self.channel=nil;self.peer.delegate=nil;[self.peer close];self.peer=nil;self.factory=nil;}
+- (void)close {SLStunStop(self.localStun);self.localStun=NULL;self.localStunURL=nil;self.closed=YES;self.screenChannel.delegate=nil;[self.screenChannel close];self.screenChannel=nil;self.screenMessage=nil;self.screenOpened=nil;self.mediaChannel.delegate=nil;[self.mediaChannel close];self.mediaChannel=nil;self.mediaMessage=nil;self.mediaOpened=nil;[self.testVideo stop];self.testVideo=nil;[self.receivedTrack removeRenderer:self];self.receivedTrack=nil;self.videoTrack=nil;self.videoSource=nil;self.offerGeneration++;self.offerCompletion=nil;[self.pingTimer invalidate];self.pingTimer=nil;self.channel.delegate=nil;[self.channel close];self.channel=nil;self.peer.delegate=nil;[self.peer close];self.peer=nil;self.factory=nil;}
 - (void)peerConnection:(RTCPeerConnection *)peer didChangeConnectionState:(RTCPeerConnectionState)state {dispatch_async(dispatch_get_main_queue(),^{if(!self.closed){if(state==RTCPeerConnectionStateConnected)[self.testVideo start];else [self.testVideo stop];NSArray *states=@[@"new",@"connecting",@"connected",@"disconnected",@"failed",@"closed"];[self log:[NSString stringWithFormat:@"WEBRTC TRANSPORT: %@. Local traffic verification is separate.",state<states.count?states[state]:@"unknown"]];}});}
 - (void)peerConnection:(RTCPeerConnection *)p didChangeIceGatheringState:(RTCIceGatheringState)state {dispatch_async(dispatch_get_main_queue(),^{if(state==RTCIceGatheringStateComplete)[self finishGathering:YES generation:self.offerGeneration];});}
 - (void)peerConnection:(RTCPeerConnection *)p didOpenDataChannel:(RTCDataChannel *)channel {
@@ -185,5 +195,6 @@ static BOOL privateIP(NSString *host,BOOL strict){struct in_addr address;if(inet
 - (void)peerConnection:(RTCPeerConnection *)p didAddStream:(RTCMediaStream *)s {}
 - (void)peerConnection:(RTCPeerConnection *)p didRemoveStream:(RTCMediaStream *)s {}
 - (void)peerConnectionShouldNegotiate:(RTCPeerConnection *)p {}
+- (void)dealloc {SLStunStop(_localStun);}
 @end
 
