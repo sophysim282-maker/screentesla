@@ -1,4 +1,5 @@
 #import "Receiver.h"
+#import "LiveActivityBridge.h"
 #import "LocalTLS.h"
 #import "VPNDiscovery.h"
 #import "AnnexB.h"
@@ -37,6 +38,7 @@ _Static_assert(kVTInvalidSessionErr == -12903, "Check decoder error mapping agai
     NSUInteger _screenFrames;
     NSInteger _screenOrientation;
     CFTimeInterval _screenTime;
+    NSTimer *_islandTimer;
     MediaCast *_media;
     LocalViewerApproval *_localViewer;
     SLMediaSession *_rtcMedia;
@@ -358,6 +360,19 @@ static NSArray *txtStrings(const char *bytes,int length) {
         if(item)[result addObject:item];offset+=size;}
     return result;
 }
+- (NSDictionary *)liveActivitySnapshot {
+    BOOL running=self.running;
+    NSDictionary *media=[_media state];
+    BOOL active=[media[@"active"] boolValue];
+    BOOL paused=[media[@"paused"] boolValue];
+    BOOL streaming=active && [media[@"ready"] boolValue] && !paused;
+    BOOL approved=[[_localViewer statusAt:NSProcessInfo.processInfo.systemUptime][@"phase"] isEqual:@"approved"];
+    NSString *status=streaming?@"AirPlay active":(active&&paused?@"Media paused":(approved?@"Viewer approved":@"Ready for viewer"));
+    return @{@"running":@(running),@"status":status,@"screenVisible":@(!self.screenHidden),@"streaming":@(streaming)};
+}
+- (void)publishIslandStatus {
+    SLPublishLiveActivity([self liveActivitySnapshot],NO);
+}
 - (BOOL)start {
     if(_running)return YES;
     @synchronized(self){_generation++;}
@@ -389,6 +404,14 @@ static NSArray *txtStrings(const char *bytes,int length) {
     self.discoveryProfile=@{@"name":serviceName,@"host":host,@"port":@(port),@"peer":@"10.7.0.1",@"raopName":[NSString stringWithFormat:@"%@@%@",hex,serviceName],@"airplayTXT":airplayTXT,@"raopTXT":txtStrings(txt,txtLength),@"externalDiscovery":@(self.externalDiscovery),@"discoveryMode":@(self.discoveryMode)};
     if(![self startWeb]){[self stop];return NO;}
     _running=YES;
+    NSUInteger islandGeneration=_generation;
+    dispatch_async(dispatch_get_main_queue(),^{
+        if(!self->_running || self->_generation!=islandGeneration)return;
+        [self->_islandTimer invalidate];
+        __weak Receiver *weak=self;
+        self->_islandTimer=[NSTimer scheduledTimerWithTimeInterval:5 repeats:YES block:^(NSTimer *timer){[weak publishIslandStatus];}];
+        [self publishIslandStatus];
+    });
     if(self.discoveryMode==SLDiscoveryPhoneVPN)[self refreshDiscovery];
     else [self emit:self.externalDiscovery?@"Receiver ready in Mac VPN discovery mode. Start the Mac helper with your viewer link, then select ScreenLink VPN. Phone advertisements are disabled to avoid duplicates.":@"Receiver ready with native discovery. Look for ScreenLink in Screen Mirroring; same-phone discovery can vary."];
     return YES;
@@ -507,7 +530,7 @@ static NSArray *txtStrings(const char *bytes,int length) {
             body=[message dataUsingEncoding:NSUTF8StringEncoding];[self emit:message];
         }
     }
-    else if(current && localOwner){mime=@"application/json";NSDictionary *owner;@synchronized(self){owner=@{@"broadcast":@(_screenStream!=nil),@"running":@(_running),@"frames":@(_screenFrames),@"token":self.token,@"logs":_broadcastLog.copy?:@[],@"localViewer":[_localViewer statusAt:localNow]};}body=[NSJSONSerialization dataWithJSONObject:owner options:0 error:NULL];}
+    else if(current && localOwner){mime=@"application/json";NSDictionary *owner;@synchronized(self){owner=@{@"broadcast":@(_screenStream!=nil),@"running":@(_running),@"frames":@(_screenFrames),@"token":self.token,@"logs":_broadcastLog.copy?:@[],@"localViewer":[_localViewer statusAt:localNow],@"island":[self liveActivitySnapshot]};}body=[NSJSONSerialization dataWithJSONObject:owner options:0 error:NULL];}
     else if(current&&localRTC){__block NSDictionary *result;NSString *command=[url.path substringFromIndex:11];BOOL allowed=([parts.firstObject isEqual:@"GET"]&&[command isEqual:@"status"])||([parts.firstObject isEqual:@"POST"]&&[@[@"start",@"approve",@"reject",@"stop"] containsObject:command]);if(!allowed){status=@"405 Method Not Allowed";}else{dispatch_sync(dispatch_get_main_queue(),^{if(!self->_rtcMedia&&[command isEqual:@"start"]){self->_rtcMedia=[[SLMediaSession alloc]initWithMedia:self->_media];__weak Receiver *weak=self;self->_rtcMedia.status=^(NSString *message){[weak emit:message];};self->_rtcMedia.screenProvider=^NSDictionary *(NSString *path,NSDictionary *request){return [weak rtcScreenRequest:path request:request]?:@{@"code":@503};};}result=self->_rtcMedia?[self->_rtcMedia control:command]:@{@"phase":@"idle",@"approvalRequested":@NO,@"events":@[]};});mime=@"application/json";body=[NSJSONSerialization dataWithJSONObject:result options:0 error:nil];}}
     else if(current && localStop && _screenStream){mime=@"application/json";body=[@"{}" dataUsingEncoding:NSUTF8StringEncoding];dispatch_after(dispatch_time(DISPATCH_TIME_NOW,NSEC_PER_MSEC*250),dispatch_get_main_queue(),^{if(self.broadcastStop)self.broadcastStop();});}
     else if(!current || (![parts.firstObject isEqual:@"GET"] && !report && !privacy) || !(aliasDestination?(aliasClient && [_localViewer allowsToken:token peer:peerHost now:localNow]):[token isEqual:self.token])){status=@"403 Forbidden";body=[(aliasDestination?@"Open http://240.3.3.3:8080/ and request approval on the iPhone.":@"On the iPhone hotspot, open http://172.20.10.1:8080/ . On other Wi-Fi, use the complete viewer link from ScreenLink.") dataUsingEncoding:NSUTF8StringEncoding];}
@@ -606,6 +629,11 @@ static NSArray *txtStrings(const char *bytes,int length) {
     }
 }
 - (void)stop {
+    BOOL islandWasRunning=_running;
+    dispatch_async(dispatch_get_main_queue(),^{
+        if(!self->_running){[self->_islandTimer invalidate];self->_islandTimer=nil;}
+    });
+    if(islandWasRunning)SLPublishLiveActivity(@{@"running":@NO},NO);
     void (^closeRTC)(void)=^{[self->_rtcMedia stop];self->_rtcMedia=nil;};if(NSThread.isMainThread)closeRTC();else dispatch_sync(dispatch_get_main_queue(),closeRTC);
     [_localViewer reset];[_screenStream reset];[_media stop];[_vpnDiscovery stop];_vpnDiscovery=nil;[_h264 reset];
     @synchronized(self){_running=NO;_generation++;_mirrorTransportOpen=NO;_sessionFrames=0;_controlClients=0;}

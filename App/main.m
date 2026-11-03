@@ -2,6 +2,7 @@
 #import <ifaddrs.h>
 #import <arpa/inet.h>
 #import "Receiver.h"
+#import "LiveActivityBridge.h"
 #import "FloatingPreview.h"
 #import "BackgroundSession.h"
 #import "LocalVPN.h"
@@ -37,7 +38,7 @@
     UIStackView *stack=[UIStackView new];stack.axis=UILayoutConstraintAxisVertical;stack.spacing=6;stack.translatesAutoresizingMaskIntoConstraints=NO;
     UIScrollView *scroll=[UIScrollView new];scroll.translatesAutoresizingMaskIntoConstraints=NO;[self.view addSubview:scroll];[NSLayoutConstraint activateConstraints:@[[scroll.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor],[scroll.bottomAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.bottomAnchor],[scroll.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],[scroll.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor]]];[scroll addSubview:stack];
     [NSLayoutConstraint activateConstraints:@[[stack.topAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.topAnchor constant:8],[stack.bottomAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.bottomAnchor constant:-8],[stack.leadingAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.leadingAnchor constant:16],[stack.trailingAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.trailingAnchor constant:-16],[stack.widthAnchor constraintEqualToAnchor:scroll.frameLayoutGuide.widthAnchor constant:-32]]];
-    UILabel *title=[UILabel new];title.text=@"ScreenLink · AirPlay Lab 0.19.3";title.font=[UIFont boldSystemFontOfSize:21];[stack addArrangedSubview:title];
+    UILabel *title=[UILabel new];title.text=@"ScreenLink · AirPlay Lab 0.20.0";title.font=[UIFont boldSystemFontOfSize:21];[stack addArrangedSubview:title];
     self.bookmark=[UILabel new];self.bookmark.font=[UIFont monospacedSystemFontOfSize:14 weight:UIFontWeightMedium];self.bookmark.numberOfLines=0;self.bookmark.text=@"Connect your Mac to the hotspot, then start receiver.";[stack addArrangedSubview:self.bookmark];
     UILabel *help=[UILabel new];help.numberOfLines=0;help.font=[UIFont systemFontOfSize:13];help.text=@"Connect built-in VPN → allow setup → Start YouTube video-only → wait for background session → open YouTube AirPlay. Keep the Mac on your hotspot.";[stack addArrangedSubview:help];
     self.discoveryMode=[[UISegmentedControl alloc]initWithItems:@[@"iPhone VPN",@"Mac VPN",@"Native"]];
@@ -129,6 +130,7 @@
     self.broadcastChecking=YES;NSMutableURLRequest *request=[NSMutableURLRequest requestWithURL:[NSURL URLWithString:@"http://127.0.0.1:8080/local/owner"]];[request setValue:@"app" forHTTPHeaderField:@"X-ScreenLink-Control"];request.timeoutInterval=2;request.cachePolicy=NSURLRequestReloadIgnoringLocalCacheData;
     [[NSURLSession.sharedSession dataTaskWithRequest:request completionHandler:^(NSData *data,NSURLResponse *response,NSError *error){dispatch_async(dispatch_get_main_queue(),^{
         self.broadcastChecking=NO;if(!self.broadcastArmed||!data.length){self.localViewerRequestID=nil;self.localViewerApprove.enabled=NO;self.localViewerReject.enabled=NO;return;}NSDictionary *owner=[NSJSONSerialization JSONObjectWithData:data options:0 error:nil];if(![owner isKindOfClass:NSDictionary.class]||![owner[@"broadcast"] boolValue])return;
+        if([owner[@"island"] isKindOfClass:NSDictionary.class])SLPublishLiveActivity(owner[@"island"],YES);
         NSDictionary *local=[owner[@"localViewer"] isKindOfClass:NSDictionary.class]?owner[@"localViewer"]:@{};BOOL pending=[local[@"phase"] isEqual:@"pending"];self.localViewerRequestID=pending?local[@"requestID"]:nil;self.localViewerApprove.enabled=pending;self.localViewerReject.enabled=pending;
         self.localViewerStatus.text=[NSString stringWithFormat:@"Local alias viewer: %@%@. Experimental HTTP, not HTTPS. Approve only your parked Tesla; screen starts hidden.",local[@"phase"]?:@"idle",[local[@"peer"] length]?[@" · " stringByAppendingString:local[@"peer"]]:@""];
         self.broadcastToken=owner[@"token"];NSArray *logs=[owner[@"logs"] isKindOfClass:NSArray.class]?owner[@"logs"]:@[];NSUInteger begin=0;if(self.lastBroadcastLine){NSUInteger last=[logs indexOfObject:self.lastBroadcastLine];begin=last==NSNotFound?(logs.count>10?logs.count-10:0):last+1;}
@@ -169,9 +171,9 @@
 - (void)start { if(self.broadcastArmed){[self probeBroadcast];[self append:@"Screen broadcast mode is selected. Start it using the system broadcast button; Stop sharing exits this mode before starting the normal receiver."];return;} [self withVPN:^{[self startReceiver];}]; }
 - (void)startReceiver {
     if(!self.receiver.isRunning)self.receiver.discoveryMode=2-self.discoveryMode.selectedSegmentIndex;
-    if([self.receiver start]){[NSUserDefaults.standardUserDefaults setBool:YES forKey:@"receiverArmed"];UIApplication.sharedApplication.idleTimerDisabled=YES;[self links];}
+    if([self.receiver start]){SLPublishLiveActivity([self.receiver liveActivitySnapshot],YES);[NSUserDefaults.standardUserDefaults setBool:YES forKey:@"receiverArmed"];UIApplication.sharedApplication.idleTimerDisabled=YES;[self links];}
 }
-- (void)stop { [self stopBroadcast]; [NSUserDefaults.standardUserDefaults setBool:NO forKey:@"receiverArmed"];[self.session finish];[self endGrace];[self.receiver stop];[self.preview reset];[self.preview removeFromSuperview];self.preview=nil;if(_lastPixel){CVPixelBufferRelease(_lastPixel);_lastPixel=NULL;}UIApplication.sharedApplication.idleTimerDisabled=NO;[self append:@"Stopped. Video frames cleared."]; }
+- (void)stop { SLPublishLiveActivity(@{@"running":@NO},NO); [self stopBroadcast]; [NSUserDefaults.standardUserDefaults setBool:NO forKey:@"receiverArmed"];[self.session finish];[self endGrace];[self.receiver stop];[self.preview reset];[self.preview removeFromSuperview];self.preview=nil;if(_lastPixel){CVPixelBufferRelease(_lastPixel);_lastPixel=NULL;}UIApplication.sharedApplication.idleTimerDisabled=NO;[self append:@"Stopped. Video frames cleared."]; }
 - (void)startMedia {
     if(self.broadcastArmed){[self probeBroadcast];[self append:@"In screen broadcast mode, select ScreenLink VPN Phone inside YouTube AirPlay, then open Google Maps. The extension owns the receiver; no timed task or floating preview is needed for the main app. Verify both streams on your iPhone."];return;}
     [self withVPN:^{[self startMediaReady];}];
