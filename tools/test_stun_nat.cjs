@@ -6,15 +6,15 @@ const fs=require('fs'),path=require('path'),assert=require('assert'),cp=require(
  let host,car,server;let serverLog='';
  try{
   server=cp.spawn(path.resolve('build/stun-server'),['172.20.10.1','3478']);server.stderr.on('data',b=>serverLog+=b);await new Promise((resolve,reject)=>{server.once('error',reject);server.once('exit',code=>reject(Error('STUN server exited '+code)));server.stdout.once('data',b=>{assert.equal(b.toString().trim(),'3478');resolve();});});
-  host=await chromium.launch({executablePath:process.env.SCREENLINK_REAL_CHROME,headless:true,args:['--no-sandbox','--disable-features=WebRtcHideLocalIpsWithMdns']});
-  car=await chromium.launch({executablePath:process.env.SCREENLINK_NAT_CHROME,headless:true,args:['--no-sandbox','--disable-features=WebRtcHideLocalIpsWithMdns']});console.log('NAT browser version:',await car.version());
+  host=await chromium.launch({executablePath:process.env.SCREENLINK_REAL_CHROME,headless:true,args:['--no-sandbox','--disable-features=WebRtcHideLocalIpsWithMdns','--force-webrtc-ip-handling-policy=default']});
+  car=await chromium.launch({executablePath:process.env.SCREENLINK_NAT_CHROME,headless:true,args:['--no-sandbox','--disable-features=WebRtcHideLocalIpsWithMdns','--force-webrtc-ip-handling-policy=default']});console.log('NAT browser version:',await car.version());
   const phone=await host.newPage();await phone.goto('about:blank');
   const offer=await phone.evaluate(async()=>{
    window.peer=new RTCPeerConnection({iceServers:[]});window.ping=peer.createDataChannel('ping');window.pongs=0;
    ping.onmessage=e=>{if(e.data==='ping')ping.send('pong');else if(e.data==='pong')pongs++;};ping.onopen=()=>{window.tick=setInterval(()=>{if(ping.readyState==='open')ping.send('ping');},500);};
    const canvas=document.createElement('canvas');canvas.width=640;canvas.height=360;const c=canvas.getContext('2d');let n=0;window.motion=setInterval(()=>{c.fillStyle='#135';c.fillRect(0,0,640,360);c.fillStyle='#fff';c.fillRect((n++*8)%600,100,40,40);},50);peer.addTrack(canvas.captureStream(20).getVideoTracks()[0]);
    await peer.setLocalDescription(await peer.createOffer());const end=performance.now()+10000;while(peer.iceGatheringState!=='complete'&&performance.now()<end)await new Promise(r=>setTimeout(r,30));
-   let lines=peer.localDescription.sdp.split('\r\n').filter(l=>!l.startsWith('a=candidate:')||l.trim().split(/\s+/)[4]==='172.20.10.1');if(!lines.some(l=>l.startsWith('a=candidate:')))throw Error('Host lacks phone-side candidate');const m=lines.findIndex(l=>l.startsWith('m='));lines.splice(m,0,'a=x-screenlink-stun:stun:172.20.10.1:3478');return lines.join('\r\n');
+   let lines=peer.localDescription.sdp.split('\r\n').filter(l=>!l.startsWith('a=candidate:')||l.trim().split(/\s+/)[4]==='172.20.10.1');if(!lines.some(l=>l.startsWith('a=candidate:')))throw Error('Host lacks phone-side candidate: '+JSON.stringify(peer.localDescription.sdp.split('\r\n').filter(l=>l.startsWith('a=candidate:')).map(l=>{const f=l.trim().split(/\s+/);return {address:f[4],protocol:f[2]};})));const m=lines.findIndex(l=>l.startsWith('m='));lines.splice(m,0,'a=x-screenlink-stun:stun:172.20.10.1:3478');return lines.join('\r\n');
   });
   const viewer=await car.newPage();let approved=false,secret='',answer='',answerSeen=false;const errors=[];viewer.on('pageerror',e=>errors.push(e.message));
   await viewer.route('https://viewer.screenlink.test/**',r=>r.fulfill({contentType:'text/html',body:fs.readFileSync('docs/webrtc-ping-viewer.html')}));

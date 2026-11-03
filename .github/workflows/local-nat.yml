@@ -31,10 +31,11 @@ jobs:
       - name: Reproduce private browser subnet behind hotspot NAT
         run: |
           sudo bash tools/setup_nat_test.sh
-          sudo env SCREENLINK_REAL_CHROME=/tmp/screenlink-nat-chrome/chrome-linux64/chrome SCREENLINK_NAT_CHROME="$PWD/build/nat-chrome" node tools/test_stun_nat.cjs
+          sudo ip netns exec slphonebrowser env SCREENLINK_REAL_CHROME=/tmp/screenlink-nat-chrome/chrome-linux64/chrome SCREENLINK_NAT_CHROME="$PWD/build/nat-chrome" node tools/test_stun_nat.cjs
       - name: Clean up isolated test network
         if: always()
         run: |
           sudo ip netns del slbrowser || true
           sudo ip netns del slrouter || true
+          sudo ip netns del slphonebrowser || true
           sudo ip link del slphone || true
