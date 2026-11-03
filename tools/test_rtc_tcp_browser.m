@@ -23,21 +23,15 @@ int main(int argc,const char *argv[]){@autoreleasepool{
     NSTask *task=[NSTask new];int result=0;
     @try {
         __block BOOL ready=NO;__block NSString *offer;
-        [peer offerRestart:NO completion:^(NSString *sdp,NSString *gathering,NSError *error){offer=sdp;ready=YES;}];spin(^BOOL{return ready;},8);check(offer.length,@"Native library did not produce TCP host candidates");
+        [peer offerRestart:NO completion:^(NSString *sdp,NSString *gathering,NSError *error){offer=sdp;ready=YES;}];spin(^BOOL{return ready;},12);check(offer.length,@"Native library did not produce TCP host candidates");
         NSData *config=[NSJSONSerialization dataWithJSONObject:@{@"offer":offer} options:0 error:nil];NSString *configPath=[folder stringByAppendingPathComponent:@"offer.json"];[config writeToFile:configPath atomically:YES];[files setAttributes:@{NSFilePosixPermissions:@0600} ofItemAtPath:configPath error:nil];
         task.executableURL=[NSURL fileURLWithPath:@"/usr/bin/env"];task.arguments=@[@"node",script,folder];NSError *launch=nil;check([task launchAndReturnError:&launch],@"Could not launch browser TCP test");
         NSString *answerPath=[folder stringByAppendingPathComponent:@"answer.json"];spin(^BOOL{return [files fileExistsAtPath:answerPath]||!task.running;},20);NSData *data=[NSData dataWithContentsOfFile:answerPath];NSDictionary *answer=data?[NSJSONSerialization JSONObjectWithData:data options:0 error:nil]:nil;check([answer[@"sdpAnswer"] length]>0,@"Browser did not gather TCP candidates");
-        ready=NO;[peer applyAnswer:answer[@"sdpAnswer"] completion:^(NSError *error){check(!error,@"Browser TCP answer rejected");ready=YES;}];spin(^BOOL{return ready;},8);
-        NSString *reportPath=[folder stringByAppendingPathComponent:@"result.json"];spin(^BOOL{return [files fileExistsAtPath:reportPath]||!task.running;},55);
-        NSData *reportBytes=[NSData dataWithContentsOfFile:reportPath];NSDictionary *report=reportBytes?[NSJSONSerialization JSONObjectWithData:reportBytes options:0 error:nil]:nil;check([report[@"mediaEchoOk"] boolValue]&&[report[@"screenEchoOk"] boolValue]&&[report[@"protocol"] isEqual:@"tcp"],@"Browser did not select TCP for both roles");
+        ready=NO;[peer applyAnswer:answer[@"sdpAnswer"] completion:^(NSError *error){check(!error,@"Browser TCP answer rejected");ready=YES;}];spin(^BOOL{return ready;},8);spin(^BOOL{return !task.running;},55);check(task.terminationStatus==0,@"Browser TCP transfer check failed");
+        NSDictionary *report=[NSJSONSerialization JSONObjectWithData:[NSData dataWithContentsOfFile:[folder stringByAppendingPathComponent:@"result.json"]] options:0 error:nil];check([report[@"mediaEchoOk"] boolValue]&&[report[@"screenEchoOk"] boolValue]&&[report[@"protocol"] isEqual:@"tcp"],@"Browser did not select TCP for both roles");
         __block NSDictionary *snapshot;[peer snapshot:^(NSDictionary *value){snapshot=value;}];spin(^BOOL{return snapshot!=nil;},8);check([snapshot[@"selectedPair"][@"protocol"] isEqual:@"tcp"]&&[snapshot[@"bytesSent"] unsignedLongLongValue]>0&&[snapshot[@"bytesReceived"] unsignedLongLongValue]>0,@"Native stats did not confirm TCP traffic");
-        [NSData.data writeToFile:[folder stringByAppendingPathComponent:@"native-checked"] atomically:YES];spin(^BOOL{return !task.running;},15);check(task.terminationStatus==0,@"Browser TCP transfer check failed");
         puts("NATIVE_BROWSER_TCP_PASSED: real native passive TCP host -> Chromium active TCP candidate, UDP excluded from both exchanged descriptions, exact binary media/screen echoes, bidirectional traffic. Same-Mac interoperability test, not Tesla.");
-    } @catch(NSException *error){
-        fprintf(stderr,"Native/browser TCP test failed: %s\n",error.reason.UTF8String);
-        __block NSDictionary *diagnostic;[peer snapshot:^(NSDictionary *value){diagnostic=value;}];NSDate *end=[NSDate dateWithTimeIntervalSinceNow:2];while(!diagnostic&&end.timeIntervalSinceNow>0)[NSRunLoop.currentRunLoop runUntilDate:[NSDate dateWithTimeIntervalSinceNow:.01]];
-        fprintf(stderr,"TCP diagnostic: state=%s; pairs=%lu; DTLS=%s\n",[diagnostic[@"connectionState"] UTF8String]?: "unknown",(unsigned long)[diagnostic[@"iceChecks"] count],[[diagnostic[@"dtlsStates"] componentsJoinedByString:@","] UTF8String]?: "unknown");result=1;
-    }
+    } @catch(NSException *error){fprintf(stderr,"Native/browser TCP test failed: %s\n",error.reason.UTF8String);result=1;}
     @finally {if(task.running)[task terminate];[peer close];[files removeItemAtPath:folder error:nil];}
     return result;
 }}

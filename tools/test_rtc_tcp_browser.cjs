@@ -1,6 +1,7 @@
 // Real native-library interoperability. SDP/credentials stay in private temporary files.
 const fs=require('fs'),path=require('path'),assert=require('assert'),{chromium}=require('playwright');
 (async()=>{const folder=process.argv[2],input=JSON.parse(fs.readFileSync(path.join(folder,'offer.json'),'utf8')),browser=await chromium.launch({headless:true,args:['--no-sandbox']});try{
+ console.log('Native TCP interoperability browser: '+await browser.version());
  const page=await browser.newPage();await page.goto('about:blank');
  const answer=await page.evaluate(async offer=>{window.peer=new RTCPeerConnection({iceServers:[]});window.echoes={media:false,screen:false};window.pingOk=false;
   const payload=label=>Uint8Array.from({length:8192},(_,i)=>(i*17+(label==='media'?29:47))&255);
@@ -17,3 +18,4 @@ const fs=require('fs'),path=require('path'),assert=require('assert'),{chromium}=
  assert.equal(report.protocol,'tcp');assert(report.bytesSent>0&&report.bytesReceived>0);const result=path.join(folder,'result.json');fs.writeFileSync(result+'.tmp',JSON.stringify(report),{mode:0o600});fs.renameSync(result+'.tmp',result);
  const end=Date.now()+12000;while(!fs.existsSync(path.join(folder,'native-checked'))&&Date.now()<end)await new Promise(r=>setTimeout(r,25));assert(fs.existsSync(path.join(folder,'native-checked')));console.log('Chromium TCP-only echo and selected transport checks passed.');
  }finally{await browser.close();}})().catch(error=>{console.error(error.message);process.exit(1);});
+

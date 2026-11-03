@@ -2,6 +2,13 @@
 #import "SLTestVideo.h"
 #import <WebRTC/WebRTC.h>
 #import <arpa/inet.h>
+#import <ifaddrs.h>
+#import <net/if.h>
+static BOOL privateIP(NSString *host,BOOL strict);
+static NSString *iceUfrag(NSString *sdp){for(NSString *line in [sdp componentsSeparatedByString:@"\r\n"])if([line hasPrefix:@"a=ice-ufrag:"])return [line substringFromIndex:12];return @"";}
+static NSString *safeAddress(NSString *host){if(privateIP(host,NO))return host;if([host hasSuffix:@".local"])return @"mdns-host";return host.length?@"non-private-or-ipv6":@"unavailable";}
+static NSDictionary *candidateInfo(NSString *sdp){NSMutableArray *details=[NSMutableArray array];NSUInteger udp=0,tcp=0,hotspot=0;for(NSString *line in [sdp componentsSeparatedByString:@"\r\n"]){if(![line hasPrefix:@"a=candidate:"])continue;NSArray *f=[[line componentsSeparatedByCharactersInSet:NSCharacterSet.whitespaceCharacterSet] filteredArrayUsingPredicate:[NSPredicate predicateWithFormat:@"length > 0"]];if(f.count<8)continue;NSString *protocol=[f[2] lowercaseString];udp += [protocol isEqual:@"udp"];tcp += [protocol isEqual:@"tcp"];hotspot += [f[4] isEqual:@"172.20.10.1"];if(details.count<16)[details addObject:@{@"protocol":protocol,@"address":safeAddress(f[4]),@"port":@([f[5] integerValue]),@"type":f[7]}];}return @{@"udp":@(udp),@"tcp":@(tcp),@"hotspot":@(hotspot),@"details":details};}
+static NSArray *localInterfaces(void){NSMutableArray *out=[NSMutableArray array];struct ifaddrs *head=NULL;if(getifaddrs(&head)==0){for(struct ifaddrs *it=head;it&&out.count<16;it=it->ifa_next){if(!it->ifa_addr||it->ifa_addr->sa_family!=AF_INET||!(it->ifa_flags&IFF_UP))continue;char address[INET_ADDRSTRLEN];if(!inet_ntop(AF_INET,&((struct sockaddr_in *)it->ifa_addr)->sin_addr,address,sizeof(address)))continue;NSString *host=[NSString stringWithUTF8String:address];if(privateIP(host,NO))[out addObject:@{@"name":[NSString stringWithUTF8String:it->ifa_name],@"address":host}];}freeifaddrs(head);}return out;}
 @interface SLPingPeer () <RTCPeerConnectionDelegate,RTCDataChannelDelegate,RTCVideoRenderer>
 @property(nonatomic,strong) RTCPeerConnectionFactory *factory;
 @property(nonatomic,strong) RTCPeerConnection *peer;
@@ -15,7 +22,8 @@
 @property(nonatomic) NSTimeInterval lastDecoded,lastRemoteProgress;
 @property(nonatomic) BOOL strict,closed,waiting,pingSent;
 @property(nonatomic) NSUInteger offerGeneration;
-@property(nonatomic) NSTimeInterval lastVerified;
+@property(nonatomic) NSTimeInterval lastVerified,offerDeadline;
+@property(nonatomic,copy) NSString *expectedUfrag;
 @property(nonatomic,copy) void (^offerCompletion)(NSString *,NSString *,NSError *);
 @end
 @implementation SLPingPeer
@@ -66,16 +74,24 @@
     return usable?[lines componentsJoinedByString:@"\r\n"]:nil;
 }
 - (void)finishGathering:(BOOL)complete generation:(NSUInteger)generation {
-    if(self.closed||!self.waiting||generation!=self.offerGeneration)return;self.waiting=NO;
-    NSString *sdp=[self filteredSDP:self.peer.localDescription.sdp];void (^callback)(NSString *,NSString *,NSError *)=self.offerCompletion;self.offerCompletion=nil;
-    if(callback)callback(sdp,complete?@"complete":@"timeout",sdp?nil:[self error:self.strict?@"No iPhone hotspot host candidate. Turn on Personal Hotspot, connect the viewer, and retry. No session was published.":@"No usable local host candidates."]);
+    if(self.closed||!self.waiting||generation!=self.offerGeneration)return;
+    NSString *raw=self.peer.localDescription.sdp;
+    BOOL current=!self.expectedUfrag.length||[iceUfrag(raw) isEqual:self.expectedUfrag];
+    NSString *sdp=current?[self filteredSDP:raw]:nil;
+    // A completed notification/state can belong to the previous ICE generation.
+    // Do not consume the new callback while its description has no usable candidate.
+    if(!sdp&&NSProcessInfo.processInfo.systemUptime<self.offerDeadline)return;
+    self.waiting=NO;void (^callback)(NSString *,NSString *,NSError *)=self.offerCompletion;self.offerCompletion=nil;
+    if(!sdp)[self log:[NSString stringWithFormat:@"ICE GATHER FAILED: local candidates %@; interfaces %@. No SDP credentials included.",candidateInfo(raw),localInterfaces()]];
+    if(callback)callback(sdp,complete?@"complete":@"timeout",sdp?nil:[self error:self.strict?@"No usable hotspot candidate after waiting for this ICE attempt. Hotspot can already be on; check ScreenLink Local Network permission and copy diagnostics.":@"No usable local host candidates after gathering."]);
 }
 - (void)localDescription:(RTCSessionDescription *)sdp generation:(NSUInteger)generation {
+    self.expectedUfrag=iceUfrag(sdp.sdp);
     [self.peer setLocalDescription:sdp completionHandler:^(NSError *error){dispatch_async(dispatch_get_main_queue(),^{
         if(self.closed||generation!=self.offerGeneration)return;
         if(error){void (^done)(NSString *,NSString *,NSError *)=self.offerCompletion;self.offerCompletion=nil;if(done)done(nil,nil,[self error:@"WebRTC could not set its local description."]);return;}
-        self.waiting=YES;if(self.peer.iceGatheringState==RTCIceGatheringStateComplete)[self finishGathering:YES generation:generation];
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW,3*NSEC_PER_SEC),dispatch_get_main_queue(),^{[self finishGathering:self.peer.iceGatheringState==RTCIceGatheringStateComplete generation:generation];});
+        self.waiting=YES;self.offerDeadline=NSProcessInfo.processInfo.systemUptime+10;if(self.peer.iceGatheringState==RTCIceGatheringStateComplete)[self finishGathering:YES generation:generation];
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW,10*NSEC_PER_SEC),dispatch_get_main_queue(),^{[self finishGathering:self.peer.iceGatheringState==RTCIceGatheringStateComplete generation:generation];});
     });}];
 }
 - (void)offerRestart:(BOOL)restart completion:(void (^)(NSString *,NSString *,NSError *))completion {
@@ -140,7 +156,7 @@ static BOOL privateIP(NSString *host,BOOL strict){struct in_addr address;if(inet
         for(RTCStatistics *stat in all.allValues)if([stat.type isEqual:@"outbound-rtp"]&&([(id)stat.values[@"kind"] isEqual:@"video"]||[(id)stat.values[@"mediaType"] isEqual:@"video"])){encoded+=[(id)stat.values[@"framesEncoded"] unsignedLongLongValue];videoBytes+=[(id)stat.values[@"bytesSent"] unsignedLongLongValue];RTCStatistics *type=all[stat.values[@"codecId"]?:@""];codec=(id)type.values[@"mimeType"]?:@"";}
         NSUInteger decoded,changed;NSTimeInterval fresh;@synchronized(self){decoded=self.decodedFrames;changed=self.changedFrames;fresh=self.lastDecoded;}
         NSTimeInterval now=NSProcessInfo.processInfo.systemUptime;BOOL videoVerified=verified&&((self.testVideo&&encoded>0&&self.remoteFrames>0&&now-self.lastRemoteProgress<4)||(!self.testVideo&&decoded>0&&now-fresh<4));
-        completion(@{@"iceChecks":checks,@"dtlsStates":dtls,@"screenChannelOpen":@(self.screenOpen),@"videoFramesEncoded":@(encoded),@"videoBytesSent":@(videoBytes),@"videoFramesDecoded":@(decoded),@"videoFramesChanged":@(changed),@"viewerFramesRendered":@(self.remoteFrames),@"videoCodec":codec,@"videoVerified":@(videoVerified),@"connectionState":index<states.count?states[index]:@"unknown",@"bytesSent":@(sent),@"bytesReceived":@(received),@"dataChannelPingOk":@(self.pingOK),@"localRouteVerified":@(localRoute),@"verified":@(verified),@"selectedPair":selected});
+        completion(@{@"localCandidates":candidateInfo(self.peer.localDescription.sdp),@"remoteCandidates":candidateInfo(self.peer.remoteDescription.sdp),@"localInterfaces":localInterfaces(),@"gatheringPending":@(self.waiting),@"iceChecks":checks,@"dtlsStates":dtls,@"screenChannelOpen":@(self.screenOpen),@"videoFramesEncoded":@(encoded),@"videoBytesSent":@(videoBytes),@"videoFramesDecoded":@(decoded),@"videoFramesChanged":@(changed),@"viewerFramesRendered":@(self.remoteFrames),@"videoCodec":codec,@"videoVerified":@(videoVerified),@"connectionState":index<states.count?states[index]:@"unknown",@"bytesSent":@(sent),@"bytesReceived":@(received),@"dataChannelPingOk":@(self.pingOK),@"localRouteVerified":@(localRoute),@"verified":@(verified),@"selectedPair":selected});
     });}];
 }
 - (void)close {self.closed=YES;self.screenChannel.delegate=nil;[self.screenChannel close];self.screenChannel=nil;self.screenMessage=nil;self.screenOpened=nil;self.mediaChannel.delegate=nil;[self.mediaChannel close];self.mediaChannel=nil;self.mediaMessage=nil;self.mediaOpened=nil;[self.testVideo stop];self.testVideo=nil;[self.receivedTrack removeRenderer:self];self.receivedTrack=nil;self.videoTrack=nil;self.videoSource=nil;self.offerGeneration++;self.offerCompletion=nil;[self.pingTimer invalidate];self.pingTimer=nil;self.channel.delegate=nil;[self.channel close];self.channel=nil;self.peer.delegate=nil;[self.peer close];self.peer=nil;self.factory=nil;}
@@ -160,9 +176,10 @@ static BOOL privateIP(NSString *host,BOOL strict){struct in_addr address;if(inet
 }
 - (void)peerConnection:(RTCPeerConnection *)p didChangeSignalingState:(RTCSignalingState)s {}
 - (void)peerConnection:(RTCPeerConnection *)p didChangeIceConnectionState:(RTCIceConnectionState)s {}
-- (void)peerConnection:(RTCPeerConnection *)p didGenerateIceCandidate:(RTCIceCandidate *)c {}
+- (void)peerConnection:(RTCPeerConnection *)p didGenerateIceCandidate:(RTCIceCandidate *)c {dispatch_async(dispatch_get_main_queue(),^{if(self.waiting&&p==self.peer&&p.iceGatheringState==RTCIceGatheringStateComplete)[self finishGathering:YES generation:self.offerGeneration];});}
 - (void)peerConnection:(RTCPeerConnection *)p didRemoveIceCandidates:(NSArray<RTCIceCandidate *> *)c {}
 - (void)peerConnection:(RTCPeerConnection *)p didAddStream:(RTCMediaStream *)s {}
 - (void)peerConnection:(RTCPeerConnection *)p didRemoveStream:(RTCMediaStream *)s {}
 - (void)peerConnectionShouldNegotiate:(RTCPeerConnection *)p {}
 @end
+

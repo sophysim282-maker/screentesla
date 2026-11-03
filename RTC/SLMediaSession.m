@@ -13,8 +13,8 @@
 @property(nonatomic,strong) NSDictionary *snapshot;
 @property(nonatomic,strong) NSMutableArray *events;
 @property(nonatomic,copy) NSString *sessionId,*secret,*pairingCode,*pendingJoin,*phase,*failure,*lastTransportState;
-@property(nonatomic) NSUInteger generation,revision,answerRevision;
-@property(nonatomic) BOOL busy,approved,approvalBusy,heartbeatBusy,negotiating,snapshotBusy;
+@property(nonatomic) NSUInteger generation,revision,answerRevision,lastRestartRevision,restartCount;
+@property(nonatomic) BOOL busy,approved,approvalBusy,heartbeatBusy,negotiating,snapshotBusy,restartFailed;
 @property(nonatomic) NSTimeInterval lastHeartbeat,lastError;
 @end
 @implementation SLMediaSession
@@ -45,7 +45,7 @@
 }
 - (void)poll {
     if(!self.peer)return;NSUInteger generation=self.generation;
-    if(!self.snapshotBusy){self.snapshotBusy=YES;[self.peer snapshot:^(NSDictionary *value){if(generation!=self.generation)return;self.snapshotBusy=NO;self.snapshot=value;NSString *transport=value[@"connectionState"];if(![transport isEqual:self.lastTransportState]){self.lastTransportState=transport;if([transport isEqual:@"failed"]){uint64_t requests=0,responses=0;for(NSDictionary *pair in value[@"iceChecks"]){requests+=[pair[@"requestsSent"] unsignedLongLongValue];responses+=[pair[@"responsesReceived"] unsignedLongLongValue];}[self log:[NSString stringWithFormat:@"LOCAL CONNECTION FAILED: %lu ICE pairs, %llu check requests, %llu responses; DTLS states %@. Copy diagnostics for the route details.",(unsigned long)[value[@"iceChecks"] count],(unsigned long long)requests,(unsigned long long)responses,[value[@"dtlsStates"] componentsJoinedByString:@", "]?:@"unknown"]];}}if([value[@"verified"] boolValue]&&self.peer.mediaOpen)self.phase=@"connected";else if([value[@"connectionState"] isEqual:@"failed"])self.phase=@"failed";else if(self.approved)self.phase=@"connecting";
+    if(!self.snapshotBusy){self.snapshotBusy=YES;[self.peer snapshot:^(NSDictionary *value){if(generation!=self.generation)return;self.snapshotBusy=NO;self.snapshot=value;NSString *transport=value[@"connectionState"];if(![transport isEqual:self.lastTransportState]){self.lastTransportState=transport;if([transport isEqual:@"failed"]){uint64_t requests=0,responses=0;for(NSDictionary *pair in value[@"iceChecks"]){requests+=[pair[@"requestsSent"] unsignedLongLongValue];responses+=[pair[@"responsesReceived"] unsignedLongLongValue];}[self log:[NSString stringWithFormat:@"LOCAL CONNECTION FAILED: %lu ICE pairs, %llu check requests, %llu responses; DTLS states %@. Copy diagnostics for the route details.",(unsigned long)[value[@"iceChecks"] count],(unsigned long long)requests,(unsigned long long)responses,[value[@"dtlsStates"] componentsJoinedByString:@", "]?:@"unknown"]];}}if([value[@"verified"] boolValue]&&self.peer.mediaOpen){self.phase=@"connected";self.failure=nil;self.restartFailed=NO;}else if(self.restartFailed||[value[@"connectionState"] isEqual:@"failed"])self.phase=@"failed";else if(self.approved)self.phase=@"connecting";
         if(self.sessionId.length&&!self.heartbeatBusy&&!self.negotiating&&NSProcessInfo.processInfo.systemUptime-self.lastHeartbeat>=10){self.lastHeartbeat=NSProcessInfo.processInfo.systemUptime;self.heartbeatBusy=YES;NSMutableDictionary *body=[NSMutableDictionary dictionary];for(NSString *key in @[@"connectionState",@"bytesSent",@"bytesReceived",@"selectedPair"])if(value[key])body[key]=value[key];body[@"state"]=[value[@"verified"] boolValue]?@"connected":@"heartbeat";body[@"negotiationRevision"]=@(self.revision);
             [self.api call:@"POST" path:[self path:@"state"] authorization:self.authorization body:body completion:^(NSInteger code,NSDictionary *reply,NSError *error){if(generation!=self.generation)return;self.heartbeatBusy=NO;if(error){[self failed:error code:code];return;}id revision=reply[@"restartRequestedRevision"];if([revision isKindOfClass:NSNumber.class]&&[revision unsignedIntegerValue]==self.revision)[self restart];}];
         }
@@ -64,9 +64,9 @@
     [self.api call:@"POST" path:[self path:approve?@"approve":@"reject"] authorization:self.authorization body:@{@"joinId":self.pendingJoin} completion:^(NSInteger code,NSDictionary *body,NSError *error){if(generation!=self.generation)return;self.approvalBusy=NO;if(error){[self failed:error code:code];return;}self.approved=approve;self.pendingJoin=nil;if(approve){self.pairingCode=nil;self.phase=@"connecting";}else self.phase=@"waiting_for_viewer";[self log:approve?@"Viewer approved on phone. Open YouTube and select ScreenLink through AirPlay.":@"Viewer rejected on phone."];[self poll];}];
 }
 - (void)restart {
-    if(self.negotiating||!self.sessionId.length)return;self.negotiating=YES;NSUInteger generation=self.generation,next=self.revision+1;
-    [self.peer offerRestart:YES completion:^(NSString *sdp,NSString *gathering,NSError *error){if(generation!=self.generation)return;if(error){self.negotiating=NO;[self failed:error code:0];return;}
-        [self.api call:@"POST" path:[self path:@"offer"] authorization:self.authorization body:@{@"sdpOffer":sdp,@"iceGathering":gathering,@"negotiationRevision":@(next)} completion:^(NSInteger code,NSDictionary *body,NSError *failure){if(generation!=self.generation)return;self.negotiating=NO;if(failure){[self failed:failure code:code];return;}self.revision=next;self.answerRevision=0;self.lastHeartbeat=0;[self log:@"Local ICE restart offer published."];}];
+    if(self.negotiating||!self.sessionId.length||self.lastRestartRevision==self.revision||self.restartCount>=2)return;self.lastRestartRevision=self.revision;self.restartCount++;self.negotiating=YES;NSUInteger generation=self.generation,next=self.revision+1;
+    [self.peer offerRestart:YES completion:^(NSString *sdp,NSString *gathering,NSError *error){if(generation!=self.generation)return;if(error){self.negotiating=NO;self.restartFailed=YES;self.phase=@"failed";[self failed:error code:0];[self log:@"ICE restart failed; this request will not be replayed on every heartbeat. The local connection is not established."];return;}
+        [self.api call:@"POST" path:[self path:@"offer"] authorization:self.authorization body:@{@"sdpOffer":sdp,@"iceGathering":gathering,@"negotiationRevision":@(next)} completion:^(NSInteger code,NSDictionary *body,NSError *failure){if(generation!=self.generation)return;self.negotiating=NO;if(failure){self.restartFailed=YES;self.phase=@"failed";[self failed:failure code:code];return;}self.restartFailed=NO;self.failure=nil;self.revision=next;self.answerRevision=0;self.lastHeartbeat=0;[self log:@"Local ICE restart offer published."];}];
     }];
 }
 - (NSDictionary *)control:(NSString *)command {
@@ -76,6 +76,7 @@
 - (void)stop {
     if(self.screenProvider)self.screenProvider(@"/screen/privacy",@{@"body":@{@"hidden":@YES,@"expectedRevision":@0}});[self.screenBridge stop];self.screenBridge=nil;self.generation++;[self.timer invalidate];self.timer=nil;[self.bridge stop];self.bridge=nil;[self.peer close];self.peer=nil;SLSignaling *api=self.api;
     if(self.sessionId.length&&self.secret.length)[api call:@"DELETE" path:[@"/sessions/" stringByAppendingString:self.sessionId] authorization:self.authorization body:nil completion:^(NSInteger code,NSDictionary *body,NSError *error){[api close];}];else [api close];
-    self.api=nil;self.sessionId=nil;self.secret=nil;self.pairingCode=nil;self.pendingJoin=nil;self.snapshot=nil;self.lastTransportState=nil;self.approved=NO;self.busy=NO;self.approvalBusy=NO;self.heartbeatBusy=NO;self.negotiating=NO;self.snapshotBusy=NO;self.answerRevision=0;self.phase=@"idle";
+    self.api=nil;self.sessionId=nil;self.secret=nil;self.pairingCode=nil;self.pendingJoin=nil;self.snapshot=nil;self.lastTransportState=nil;self.approved=NO;self.busy=NO;self.approvalBusy=NO;self.heartbeatBusy=NO;self.negotiating=NO;self.snapshotBusy=NO;self.restartFailed=NO;self.lastRestartRevision=0;self.restartCount=0;self.answerRevision=0;self.phase=@"idle";
 }
 @end
+

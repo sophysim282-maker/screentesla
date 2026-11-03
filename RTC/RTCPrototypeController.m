@@ -10,7 +10,7 @@
 @property(nonatomic,strong) UIButton *startButton,*approveButton,*rejectButton;
 @property(nonatomic,copy) NSString *sessionId,*secret,*pendingJoin;
 @property(nonatomic,strong) NSDictionary *lastSnapshot;
-@property(nonatomic) NSUInteger generation,revision,answerRevision;
+@property(nonatomic) NSUInteger generation,revision,answerRevision,lastRestartRevision,restartCount;
 @property(nonatomic) BOOL busy,approvalBusy,approved,negotiating,verified,heartbeatBusy;
 @property(nonatomic) NSTimeInterval lastHeartbeat,lastErrorTime;
 @end
@@ -91,7 +91,7 @@
 - (void)approve {[self decision:YES];}
 - (void)reject {[self decision:NO];}
 - (void)restart {
-    if(self.negotiating||!self.sessionId.length)return;self.negotiating=YES;NSUInteger generation=self.generation,next=self.revision+1;[self log:@"Viewer requested an ICE restart; preparing the next revision."];
+    if(self.negotiating||!self.sessionId.length||self.lastRestartRevision==self.revision||self.restartCount>=2)return;self.lastRestartRevision=self.revision;self.restartCount++;self.negotiating=YES;NSUInteger generation=self.generation,next=self.revision+1;[self log:@"Viewer requested an ICE restart; preparing the next revision."];
     [self.peer offerRestart:YES completion:^(NSString *sdp,NSString *gathering,NSError *error){if(generation!=self.generation)return;if(error){self.negotiating=NO;[self error:error];return;}
         [self.api call:@"POST" path:[self path:@"offer"] authorization:self.authorization body:@{@"sdpOffer":sdp,@"iceGathering":gathering,@"negotiationRevision":@(next)} completion:^(NSInteger code,NSDictionary *body,NSError *failure){if(generation!=self.generation)return;self.negotiating=NO;if(failure){[self error:failure];return;}self.revision=next;self.answerRevision=0;self.lastHeartbeat=0;[self log:@"ICE restart offer published; waiting for the matching answer."];}];
     }];
@@ -104,9 +104,10 @@
 - (void)stopTest {
     self.generation++;[self.timer invalidate];self.timer=nil;[self.peer close];self.peer=nil;SLSignaling *api=self.api;
     if(self.sessionId.length&&self.secret.length){[api call:@"DELETE" path:[@"/sessions/" stringByAppendingString:self.sessionId] authorization:self.authorization body:nil completion:^(NSInteger code,NSDictionary *body,NSError *error){[api close];}];}else [api close];
-    self.api=nil;self.sessionId=nil;self.secret=nil;self.pendingJoin=nil;self.approved=NO;self.busy=NO;self.heartbeatBusy=NO;self.approvalBusy=NO;self.negotiating=NO;self.verified=NO;self.lastSnapshot=nil;self.startButton.enabled=YES;self.codeLabel.text=@"— — — — — —";self.stateLabel.text=@"Video test stopped";self.requestLabel.text=@"No viewer approval requested.";[self updateApproval];
+    self.lastRestartRevision=0;self.restartCount=0;self.api=nil;self.sessionId=nil;self.secret=nil;self.pendingJoin=nil;self.approved=NO;self.busy=NO;self.heartbeatBusy=NO;self.approvalBusy=NO;self.negotiating=NO;self.verified=NO;self.lastSnapshot=nil;self.startButton.enabled=YES;self.codeLabel.text=@"— — — — — —";self.stateLabel.text=@"Video test stopped";self.requestLabel.text=@"No viewer approval requested.";[self updateApproval];
 }
 - (void)copyDiagnostics {NSDictionary *data=@{@"version":@"0.15.0",@"milestone":@"h264-moving-test-video",@"snapshot":self.lastSnapshot?:@{},@"events":self.logView.text?:@""};NSData *json=[NSJSONSerialization dataWithJSONObject:data options:NSJSONWritingPrettyPrinted error:nil];UIPasteboard.generalPasteboard.string=[[NSString alloc]initWithData:json encoding:NSUTF8StringEncoding];[self log:@"Sanitized diagnostics copied; no SDP, pairing code, or role secrets included."];}
 - (void)done {[self stopTest];[self dismissViewControllerAnimated:YES completion:nil];}
 - (void)viewDidDisappear:(BOOL)animated {[super viewDidDisappear:animated];if(self.isBeingDismissed||self.navigationController.isBeingDismissed)[self stopTest];}
 @end
+

@@ -9,10 +9,15 @@ for tool in xcodegen autoconf automake glibtoolize; do
   command -v "$tool" >/dev/null || { echo "Missing $tool. Install prerequisites: brew install xcodegen autoconf automake libtool" >&2; exit 1; }
 done
 mkdir -p build
+node tools/test_rtc_ice_diagnostics.cjs
 python3 tools/fetch_webrtc.py
 rtc_mac="$PWD/Vendor/WebRTC.xcframework/macos-x86_64_arm64"
 codesign --force --sign - "$rtc_mac/WebRTC.framework"
 xcrun --sdk macosx clang -fobjc-arc -fblocks -IRTC -F"$rtc_mac" tools/test_rtc_peer.m RTC/SLPingPeer.m RTC/SLTestVideo.m RTC/SLSignaling.m -framework CoreVideo -framework Foundation -framework WebRTC -Wl,-rpath,"$rtc_mac" -o build/test-rtc-peer
+xcrun --sdk macosx clang -fobjc-arc -fblocks -IRTC -F"$rtc_mac" tools/test_rtc_gather.m RTC/SLPingPeer.m RTC/SLTestVideo.m -framework CoreVideo -framework Foundation -framework WebRTC -Wl,-rpath,"$rtc_mac" -o build/test-rtc-gather
+build/test-rtc-gather
+xcrun --sdk macosx clang -fobjc-arc -fblocks -IRTC -F"$rtc_mac" tools/test_rtc_restart.m RTC/SLMediaSession.m RTC/SLMediaBridge.m RTC/SLPingPeer.m RTC/SLTestVideo.m RTC/SLSignaling.m -framework CoreVideo -framework Foundation -framework WebRTC -Wl,-rpath,"$rtc_mac" -o build/test-rtc-restart
+build/test-rtc-restart
 build/test-rtc-peer
 xcrun --sdk macosx clang -fobjc-arc -fblocks -IRTC -F"$rtc_mac" tools/test_rtc_media.m RTC/SLMediaSession.m RTC/SLMediaBridge.m RTC/SLPingPeer.m RTC/SLTestVideo.m RTC/SLSignaling.m -framework CoreVideo -framework Foundation -framework WebRTC -Wl,-rpath,"$rtc_mac" -o build/test-rtc-media
 for media_attempt in 1 2 3; do build/test-rtc-media; done
@@ -119,3 +124,4 @@ print('Embedded VPN and broadcast extension packaging verified:', info['CFBundle
 VERIFY_VPN
 (cd build && zip -qry ScreenLink-AirPlay-Lab-unsigned.ipa Payload)
 echo 'Unsigned IPA built. Free signing still required. Same-phone AirPlay has NOT been tested by this build.'
+
