@@ -105,6 +105,7 @@ cp -R build/DerivedData/Build/Products/Release-iphoneos/ScreenLinkAirPlayLab.app
 # Ad-hoc signatures are NOT device-authorized signing or provisioning profiles.
 codesign --force --sign - --generate-entitlement-der --entitlements Tunnel/LocalTunnel.entitlements build/Payload/ScreenLinkAirPlayLab.app/PlugIns/ScreenLinkLocalTunnel.appex
 codesign --force --sign - --generate-entitlement-der --entitlements Broadcast/Broadcast.entitlements build/Payload/ScreenLinkAirPlayLab.app/PlugIns/ScreenLinkBroadcast.appex
+codesign --force --sign - build/Payload/ScreenLinkAirPlayLab.app/PlugIns/ScreenLinkIsland.appex
 codesign --force --sign - build/Payload/ScreenLinkAirPlayLab.app/Frameworks/WebRTC.framework
 codesign --force --sign - --generate-entitlement-der --entitlements App/ScreenLink.entitlements build/Payload/ScreenLinkAirPlayLab.app
 python3 - <<'VERIFY_VPN'
@@ -113,7 +114,12 @@ from pathlib import Path
 app=Path('build/Payload/ScreenLinkAirPlayLab.app')
 plugins=list((app/'PlugIns').glob('*.appex'))
 assert (app/'Frameworks/WebRTC.framework/WebRTC').is_file()
-assert len(plugins)==2, 'Expected embedded VPN and screen broadcast extensions'
+assert len(plugins)==3, 'Expected embedded VPN, broadcast and Dynamic Island extensions'
+island=next(p for p in plugins if p.name=='ScreenLinkIsland.appex')
+i=plistlib.loads((island/'Info.plist').read_bytes())
+assert i['NSExtension']['NSExtensionPointIdentifier']=='com.apple.widgetkit-extension'
+assert (island/i['CFBundleExecutable']).is_file()
+assert i['CFBundleVersion']=='50'
 vpn=next(p for p in plugins if p.name=='ScreenLinkLocalTunnel.appex')
 broadcast=next(p for p in plugins if p.name=='ScreenLinkBroadcast.appex')
 info=plistlib.loads((vpn/'Info.plist').read_bytes())
@@ -121,6 +127,9 @@ assert info['NSExtension']['NSExtensionPointIdentifier']=='com.apple.networkexte
 assert info['NSExtension']['NSExtensionPrincipalClass']=='PacketTunnelProvider'
 assert (vpn/info['CFBundleExecutable']).is_file()
 parent=plistlib.loads((app/'Info.plist').read_bytes())
+assert parent['NSSupportsLiveActivities'] is True
+assert i['CFBundleVersion']==parent['CFBundleVersion']
+assert i['CFBundleIdentifier'].startswith(parent['CFBundleIdentifier']+'.')
 assert info['CFBundleIdentifier'].startswith(parent['CFBundleIdentifier']+'.')
 assert info['CFBundleVersion']==parent['CFBundleVersion']
 for bundle in [vpn,app]:
