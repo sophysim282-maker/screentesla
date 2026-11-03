@@ -6,6 +6,7 @@
 #import "H264Stream.h"
 #import "VideoInbox.h"
 #import "HotspotLink.h"
+#import "RouteProbe.h"
 #import "MediaCast.h"
 #import "SLMediaSession.h"
 #import <VideoToolbox/VideoToolbox.h>
@@ -123,6 +124,20 @@ static BOOL hotspotClient(int client) {
         if(!p->ifa_addr || !p->ifa_netmask || p->ifa_addr->sa_family!=AF_INET || strncmp(p->ifa_name,"bridge",6)!=0)continue;
         struct sockaddr_in *bridge=(void *)p->ifa_addr,*mask=(void *)p->ifa_netmask;
         if(sl_hotspot_peer(peer.sin_addr.s_addr,local.sin_addr.s_addr,bridge->sin_addr.s_addr,mask->sin_addr.s_addr)){allowed=YES;break;}
+    }
+    freeifaddrs(head);return allowed;
+}
+static BOOL routeProbeClient(int client) {
+    struct sockaddr_in peer={0},local={0};socklen_t size=sizeof peer;
+    if(getpeername(client,(struct sockaddr *)&peer,&size)!=0 || peer.sin_family!=AF_INET)return NO;
+    size=sizeof local;if(getsockname(client,(struct sockaddr *)&local,&size)!=0 || local.sin_family!=AF_INET)return NO;
+    uint32_t peerIP=ntohl(peer.sin_addr.s_addr),localIP=ntohl(local.sin_addr.s_addr);
+    if(sl_route_probe_peer(peerIP,localIP,0,0,0))return YES;
+    struct ifaddrs *head=NULL;if(getifaddrs(&head)!=0)return NO;BOOL owned=NO,allowed=NO;
+    for(struct ifaddrs *p=head;p;p=p->ifa_next)if(p->ifa_addr && p->ifa_addr->sa_family==AF_INET && ntohl(((struct sockaddr_in *)p->ifa_addr)->sin_addr.s_addr)==0xf0030303u)owned=YES;
+    for(struct ifaddrs *p=head;p;p=p->ifa_next){
+        if(!p->ifa_addr || !p->ifa_netmask || p->ifa_addr->sa_family!=AF_INET || strncmp(p->ifa_name,"bridge",6)!=0)continue;
+        if(sl_route_probe_peer(peerIP,localIP,ntohl(((struct sockaddr_in *)p->ifa_addr)->sin_addr.s_addr),ntohl(((struct sockaddr_in *)p->ifa_netmask)->sin_addr.s_addr),owned)){allowed=YES;break;}
     }
     freeifaddrs(head);return allowed;
 }
@@ -434,6 +449,16 @@ static NSArray *txtStrings(const char *bytes,int length) {
     if(current && [parts.firstObject isEqual:@"GET"] && ([url.path isEqual:@"/"] || [url.path isEqual:@"/video"] || [url.path isEqual:@"/split"] || [url.path isEqual:@"/map"]) && !token && hotspotClient(client)){
         status=@"302 Found";
         extra=[NSString stringWithFormat:@"Location: %@?token=%@\r\nReferrer-Policy: no-referrer\r\n",url.path,self.token];
+    }
+    else if(current && [parts.firstObject isEqual:@"GET"] && [url.path isEqual:@"/local-route-probe"]){
+        extra=@"X-Content-Type-Options: nosniff\r\nReferrer-Policy: no-referrer\r\n";
+        if(!routeProbeClient(client)){status=@"403 Forbidden";body=[@"Route probe unavailable for this source." dataUsingEncoding:NSUTF8StringEncoding];}
+        else{
+            struct sockaddr_in local={0};socklen_t size=sizeof local;getsockname(client,(struct sockaddr *)&local,&size);
+            char localText[INET_ADDRSTRLEN]={0},peerText[INET_ADDRSTRLEN]={0};inet_ntop(AF_INET,&local.sin_addr,localText,sizeof localText);inet_ntop(AF_INET,&peer.sin_addr,peerText,sizeof peerText);
+            NSString *message=[NSString stringWithFormat:@"LOCAL TCP PROBE REACHED\nBuild: %@ (%@)\nPhone endpoint: %s:%u\nObserved client: %s:%u\nThis proves only this TCP request reached ScreenLink. Video, HTTPS and UDP are not verified. No screen or media is returned.\n",NSBundle.mainBundle.infoDictionary[@"CFBundleShortVersionString"]?:@"unknown",NSBundle.mainBundle.infoDictionary[@"CFBundleVersion"]?:@"unknown",localText,ntohs(local.sin_port),peerText,ntohs(peer.sin_port)];
+            body=[message dataUsingEncoding:NSUTF8StringEncoding];[self emit:message];
+        }
     }
     else if(current && localOwner){mime=@"application/json";NSDictionary *owner;@synchronized(self){owner=@{@"broadcast":@(_screenStream!=nil),@"running":@(_running),@"frames":@(_screenFrames),@"token":self.token,@"logs":_broadcastLog.copy?:@[]};}body=[NSJSONSerialization dataWithJSONObject:owner options:0 error:NULL];}
     else if(current&&localRTC){__block NSDictionary *result;NSString *command=[url.path substringFromIndex:11];BOOL allowed=([parts.firstObject isEqual:@"GET"]&&[command isEqual:@"status"])||([parts.firstObject isEqual:@"POST"]&&[@[@"start",@"approve",@"reject",@"stop"] containsObject:command]);if(!allowed){status=@"405 Method Not Allowed";}else{dispatch_sync(dispatch_get_main_queue(),^{if(!self->_rtcMedia&&[command isEqual:@"start"]){self->_rtcMedia=[[SLMediaSession alloc]initWithMedia:self->_media];__weak Receiver *weak=self;self->_rtcMedia.status=^(NSString *message){[weak emit:message];};self->_rtcMedia.screenProvider=^NSDictionary *(NSString *path,NSDictionary *request){return [weak rtcScreenRequest:path request:request]?:@{@"code":@503};};}result=self->_rtcMedia?[self->_rtcMedia control:command]:@{@"phase":@"idle",@"approvalRequested":@NO,@"events":@[]};});mime=@"application/json";body=[NSJSONSerialization dataWithJSONObject:result options:0 error:nil];}}

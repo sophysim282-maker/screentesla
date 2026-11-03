@@ -29,6 +29,8 @@ for media_attempt in 1 2 3; do build/test-rtc-media; done
 if [[ "${SCREENLINK_LIVE_SIGNALING_TEST:-0}" == 1 ]]; then
   build/test-rtc-peer --live
 fi
+cc -Wall -Wextra -Werror tools/test_route_probe.c -o build/test-route-probe
+build/test-route-probe
 cc -Wall -Wextra -Werror tools/test_local_packet.c -o build/test-local-packet
 build/test-local-packet
 cc -Wall -Wextra -Werror tools/test_reverse_channel.c -o build/test-reverse-channel
