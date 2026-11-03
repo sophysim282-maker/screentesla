@@ -62,6 +62,8 @@ jobs:
           node --require ./tools/test_browser_engine.cjs tools/test_canvas_browser.cjs App build/quality --quality
           node --require ./tools/test_browser_engine.cjs tools/test_youtube_rtc_browser.cjs build/quality --quality
           node --require ./tools/test_browser_engine.cjs tools/test_youtube_rtc_browser.cjs build/quality --quality --maps --screen-fixture=build/live.mp4
+      - name: Pure Canvas HTTPS/WSS, privacy and offline UI
+        run: node --require ./tools/test_browser_engine.cjs tools/test_pure_canvas.cjs App build/media build/live.mp4
       - name: Viewer state and pacing checks
         run: |
           python3 tools/test_h264_viewer.py

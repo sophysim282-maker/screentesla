@@ -13,6 +13,8 @@ mkdir -p build/tls-test
 "$openssl_root/bin/openssl" req -x509 -newkey rsa:2048 -nodes -days 1 -subj '/CN=car.tesla4khmer.com' -addext 'subjectAltName=DNS:car.tesla4khmer.com' -keyout build/tls-test/key.pem -out build/tls-test/cert.pem 2>/dev/null
 cc -std=c11 -Wall -Wextra -Werror -I"$openssl_root/include" -L"$openssl_root/lib" -Wl,-rpath,"$openssl_root/lib" tools/test_local_tls.c App/LocalTLS.c -lssl -lcrypto -pthread -o build/tls-test/test
 build/tls-test/test build/tls-test/cert.pem build/tls-test/key.pem
+cc -std=c11 -Wall -Wextra -Werror -I"$openssl_root/include" -L"$openssl_root/lib" -Wl,-rpath,"$openssl_root/lib" tools/test_local_websocket.c App/LocalWebSocket.c -lcrypto -o build/test-local-websocket
+build/test-local-websocket
 mkdir -p build
 cc -std=c11 -Wall -Wextra -Werror tools/test_local_viewer_header.c -o build/test-local-viewer-header
 build/test-local-viewer-header

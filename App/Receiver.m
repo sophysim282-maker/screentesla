@@ -1,5 +1,6 @@
 #import "Receiver.h"
 #import "LocalTLS.h"
+#import "LocalWebSocket.h"
 #import "VPNDiscovery.h"
 #import "AnnexB.h"
 #import "FrameCadence.h"
@@ -89,6 +90,7 @@ _Static_assert(kVTInvalidSessionErr == -12903, "Check decoder error mapping agai
 - (BOOL)startListener:(unsigned short)port context:(SSL_CTX *)context;
 - (void)serveClient:(int)client generation:(NSUInteger)generation;
 - (void)streamClient:(int)client generation:(NSUInteger)generation;
+- (void)screenSocket:(int)client generation:(NSUInteger)generation token:(NSString *)token peer:(NSString *)peer;
 - (void)discardDecoder;
 - (BOOL)createDecoder;
 - (void)decoderFailed:(OSStatus)error;
@@ -120,6 +122,17 @@ static BOOL send_all(int fd, const void *bytes,size_t length) {
     const char *p=bytes;
     while(length) { ssize_t n=sl_tls_write(fd,p,length); if(n<=0)return NO; p+=n;length-=(size_t)n; }
     return YES;
+}
+static BOOL wsSend(int fd,uint8_t opcode,NSData *data){uint8_t header[10];size_t size=sl_ws_header(opcode,data.length,header);return size&&send_all(fd,header,size)&&send_all(fd,data.bytes,data.length);}
+static BOOL readExact(int fd,void *bytes,size_t size){uint8_t *p=bytes;while(size){ssize_t n=sl_tls_read(fd,p,size);if(n<=0)return NO;p+=n;size-=(size_t)n;}return YES;}
+static BOOL wsNext(int fd){
+    for(int control=0;control<8;control++){uint8_t bytes[131],out[126],opcode;size_t size;if(!readExact(fd,bytes,2))return NO;
+        if(!(bytes[1]&0x80)||(bytes[1]&127)>125)return NO;size_t rest=4+(bytes[1]&127);if(!readExact(fd,bytes+2,rest)||!sl_ws_client(bytes,2+rest,&opcode,out,&size))return NO;
+        if(opcode==8){wsSend(fd,8,[NSData dataWithBytes:out length:size]);return NO;}
+        if(opcode==9){if(!wsSend(fd,10,[NSData dataWithBytes:out length:size]))return NO;continue;}
+        if(opcode==10)continue;
+        return opcode==1&&size==4&&!memcmp(out,"next",4);
+    }return NO;
 }
 static BOOL hotspotClient(int client) {
     struct sockaddr_in peer={0},local={0};socklen_t size=sizeof peer;
@@ -451,8 +464,11 @@ static NSArray *txtStrings(const char *bytes,int length) {
     for(NSURLQueryItem *item in url.queryItems){if([item.name isEqual:@"epoch"])epoch=item.value;else if([item.name isEqual:@"token"])token=item.value;else if([item.name isEqual:@"after"]){after=strtoull(item.value.UTF8String,NULL,10);longPoll=YES;}}
     NSString *mime=@"text/plain; charset=utf-8",*status=@"200 OK",*extra=@"";NSData *body=[NSData data];
     NSRange headerEnd=[request rangeOfData:[@"\r\n\r\n" dataUsingEncoding:NSUTF8StringEncoding] options:0 range:NSMakeRange(0,request.length)];
-    NSUInteger bodyOffset=headerEnd.location==NSNotFound?request.length:NSMaxRange(headerEnd);NSUInteger bodyLength=0;NSString *byteRange=nil,*origin=nil,*host=nil;BOOL localControl=NO,viewerHeaderValid=NO;
+    if(headerEnd.location==NSNotFound)return;
+    NSUInteger bodyOffset=headerEnd.location==NSNotFound?request.length:NSMaxRange(headerEnd);NSUInteger bodyLength=0;NSString *byteRange=nil,*origin=nil,*host=nil;NSMutableDictionary *wsHeaders=[NSMutableDictionary dictionary];BOOL duplicateWS=NO;BOOL localControl=NO,viewerHeaderValid=NO;
     for(NSString *field in [line componentsSeparatedByString:@"\r\n"]){
+        NSRange separator=[field rangeOfString:@":"];if(separator.location!=NSNotFound){NSString *name=[[field substringToIndex:separator.location] lowercaseString];if([@[@"upgrade",@"connection",@"sec-websocket-key",@"sec-websocket-version",@"origin",@"host"] containsObject:name]){if(wsHeaders[name])duplicateWS=YES;wsHeaders[name]=[[field substringFromIndex:NSMaxRange(separator)] stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceCharacterSet];}}
+
         if([field.lowercaseString hasPrefix:@"host:"])host=[[[field substringFromIndex:5] stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceCharacterSet] lowercaseString];
         if([field.lowercaseString hasPrefix:@"x-screenlink-control:"] && [[[field substringFromIndex:21] stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceCharacterSet] isEqual:@"app"])localControl=YES;
         if([field.lowercaseString hasPrefix:@"content-length:"])bodyLength=(NSUInteger)MAX(0,[[field substringFromIndex:15] integerValue]);
@@ -478,7 +494,16 @@ static NSArray *txtStrings(const char *bytes,int length) {
     BOOL privacy=[parts.firstObject isEqual:@"POST"] && [url.path isEqual:@"/screen/privacy"];
     BOOL report=[parts.firstObject isEqual:@"POST"] && [url.path isEqual:@"/media/report"];
     BOOL current;@synchronized(self){current=_generation==generation;}
-    if(current && localViewerControl){
+    if(current && secureTransport && aliasClient && [url.path isEqual:@"/stream"]){
+        char accept[29];NSArray *connections=[[[(wsHeaders[@"connection"]?:@"") lowercaseString] stringByReplacingOccurrencesOfString:@" " withString:@""] componentsSeparatedByString:@","];
+        BOOL authorized=[_localViewer allowsToken:token peer:peerHost now:localNow];
+        BOOL upgrade=!duplicateWS&&bodyLength==0&&authorized&&[parts.firstObject isEqual:@"GET"]&&[origin isEqual:expectedOrigin]&&[[wsHeaders[@"upgrade"] lowercaseString] isEqual:@"websocket"]&&[connections containsObject:@"upgrade"]&&[wsHeaders[@"sec-websocket-version"] isEqual:@"13"]&&sl_ws_accept([wsHeaders[@"sec-websocket-key"] UTF8String],accept);
+        if(!upgrade){status=@"403 Forbidden";body=[@"Approved local HTTPS WebSocket required." dataUsingEncoding:NSUTF8StringEncoding];}
+        else if(dispatch_semaphore_wait(_streamSlots,DISPATCH_TIME_NOW)!=0){status=@"429 Too Many Requests";}
+        else{@try{NSString *header=[NSString stringWithFormat:@"HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: %s\r\n\r\n",accept];NSData *bytes=[header dataUsingEncoding:NSUTF8StringEncoding];if(send_all(client,bytes.bytes,bytes.length))[self screenSocket:client generation:generation token:token peer:peerHost];}@finally{dispatch_semaphore_signal(_streamSlots);}return;}
+    }
+    else if(current && secureTransport && aliasClient && [url.path isEqual:@"/local-viewer/disconnect"] && [parts.firstObject isEqual:@"POST"] && [origin isEqual:expectedOrigin] && [_localViewer allowsToken:token peer:peerHost now:localNow]){[_localViewer reset];[self setScreenHidden:YES];mime=@"application/json";body=[@"{}" dataUsingEncoding:NSUTF8StringEncoding];}
+    else if(current && localViewerControl){
         id object=[NSJSONSerialization JSONObjectWithData:[request subdataWithRange:NSMakeRange(bodyOffset,bodyLength)] options:0 error:nil];
         NSString *action=[object isKindOfClass:NSDictionary.class]?object[@"action"]:nil;BOOL changed=NO;
         if([action isEqual:@"disconnect"]){[_localViewer reset];[self setScreenHidden:YES];changed=YES;[self emit:@"LOCAL VIEWER DISCONNECTED: alias media authorization revoked; phone screen hidden."];}
@@ -489,6 +514,7 @@ static NSArray *txtStrings(const char *bytes,int length) {
         if(!aliasClient || ![parts.firstObject isEqual:@"POST"] || ![origin isEqual:expectedOrigin] || !viewerHeaderValid){status=@"403 Forbidden";[self emit:[NSString stringWithFormat:@"LOCAL APPROVAL REQUEST REJECTED: owned-alias/hotspot=%d, POST=%d, expected-origin=%d, request-header=%d. No media access granted.",aliasClient,[parts.firstObject isEqual:@"POST"],[origin isEqual:expectedOrigin],viewerHeaderValid]];}
         else{id object=[NSJSONSerialization JSONObjectWithData:[request subdataWithRange:NSMakeRange(bodyOffset,bodyLength)] options:0 error:nil];NSString *nonce=[object isKindOfClass:NSDictionary.class]?object[@"nonce"]:nil;NSDictionary *result=[_localViewer request:nonce peer:peerHost now:localNow];mime=@"application/json";body=[NSJSONSerialization dataWithJSONObject:result options:0 error:nil];}
     }
+    else if(current && secureTransport && aliasClient && [parts.firstObject isEqual:@"GET"] && ([@[@"/",@"/split",@"/map",@"/video",@"/sw.js"] containsObject:url.path]||[url.path hasPrefix:@"/app/"])){NSDictionary *assets=@{@"/":@"CanvasShell.html",@"/split":@"CanvasShell.html",@"/map":@"CanvasShell.html",@"/video":@"CanvasShell.html",@"/sw.js":@"CanvasServiceWorker.js",@"/app/pure.js":@"CanvasShell.js",@"/app/screen.js":@"CanvasScreen.js",@"/app/canvas.js":@"CanvasPlayer.js",@"/app/mp4box.js":@"MP4Demux.js",@"/app/mux.js":@"TSDemux.js"};NSString *file=assets[url.path];if(!file){status=@"404 Not Found";}else{mime=[file hasSuffix:@".js"]?@"application/javascript":@"text/html; charset=utf-8";NSString *path=[NSBundle.mainBundle pathForResource:file.stringByDeletingPathExtension ofType:file.pathExtension];body=path?[NSData dataWithContentsOfFile:path]:nil;if(!body){status=@"503 Service Unavailable";body=NSData.data;}if([url.path isEqual:@"/sw.js"])extra=@"Service-Worker-Allowed: /\r\n";}}
     else if(current && aliasClient && [parts.firstObject isEqual:@"GET"] && [url.path isEqual:@"/capabilities"]){mime=@"text/html; charset=utf-8";body=[NSData dataWithContentsOfFile:[NSBundle.mainBundle pathForResource:@"Capabilities" ofType:@"html"]]?:NSData.data;}
     else if(current && aliasClient && [parts.firstObject isEqual:@"GET"] && !token && [@[@"/",@"/split",@"/map",@"/video"] containsObject:url.path]){
         mime=@"text/html; charset=utf-8";NSString *path=[NSBundle.mainBundle pathForResource:@"LocalViewer" ofType:@"html"];body=path?[NSData dataWithContentsOfFile:path]:NSData.data;
@@ -570,6 +596,23 @@ static NSArray *txtStrings(const char *bytes,int length) {
     if(aliasClient && ([url.path isEqual:@"/media/state"] || [url.path hasPrefix:@"/media/resource/"]))body=SLRetokenLocalMediaData(body,mime,self.token,token);
     NSString *header=[NSString stringWithFormat:@"HTTP/1.1 %@\r\nContent-Type: %@\r\nContent-Length: %lu\r\nCache-Control: no-store\r\nConnection: close\r\nX-Content-Type-Options: nosniff\r\n%@\r\n",status,mime,(unsigned long)body.length,extra];
     NSData *h=[header dataUsingEncoding:NSUTF8StringEncoding];if(send_all(client,h.bytes,h.length))send_all(client,body.bytes,body.length);
+}
+- (void)screenSocket:(int)client generation:(NSUInteger)generation token:(NSString *)token peer:(NSString *)peer {
+    NSString *epoch=nil;uint64_t after=0;
+    while(YES){@autoreleasepool{
+        BOOL current;@synchronized(self){current=_running&&generation==_generation;}
+        if(!current||![_localViewer allowsToken:token peer:peer now:NSProcessInfo.processInfo.systemUptime])break;
+        NSDictionary *info=[self screenInfo];NSData *binary=nil;NSString *kind=@"state";
+        if(![info[@"hidden"] boolValue]&&[info[@"ready"] boolValue]){
+            if(![epoch isEqual:info[@"epoch"]]){NSDictionary *init=[_screenStream initialization];if([init[@"epoch"] isEqual:info[@"epoch"]]&&[init[@"data"] length]){epoch=info[@"epoch"];after=0;kind=@"init";binary=init[@"data"];}}
+            else{NSDictionary *part=[_screenStream readAfter:after epoch:epoch maxBytes:2*1024*1024 wait:0.15];if([part[@"reset"] boolValue]){epoch=nil;continue;}if([part[@"data"] length]){kind=@"data";binary=part[@"data"];after=[part[@"id"] unsignedLongLongValue];}}
+        }
+        NSDictionary *fresh=[self screenInfo];if(![fresh[@"epoch"] isEqual:info[@"epoch"]]||[fresh[@"privacyRevision"] unsignedIntegerValue]!=[info[@"privacyRevision"] unsignedIntegerValue]){epoch=nil;continue;}
+        NSMutableDictionary *message=[info mutableCopy];message[@"kind"]=kind;message[@"id"]=@(after);message[@"bytes"]=@(binary.length);
+        if(!wsSend(client,1,[NSJSONSerialization dataWithJSONObject:message options:0 error:nil]))break;
+        if(binary.length){NSDictionary *gate=[self screenInfo];if([gate[@"hidden"] boolValue]||![gate[@"epoch"] isEqual:info[@"epoch"]]||![_localViewer allowsToken:token peer:peer now:NSProcessInfo.processInfo.systemUptime])break;if(!wsSend(client,2,binary))break;}
+        if(!wsNext(client))break;
+    }}
 }
 - (void)streamClient:(int)client generation:(NSUInteger)generation {
     if(dispatch_semaphore_wait(_streamSlots,DISPATCH_TIME_NOW)!=0) {
