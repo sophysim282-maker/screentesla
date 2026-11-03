@@ -12,7 +12,7 @@
 @property(nonatomic,strong) NSTimer *timer;
 @property(nonatomic,strong) NSDictionary *snapshot;
 @property(nonatomic,strong) NSMutableArray *events;
-@property(nonatomic,copy) NSString *sessionId,*secret,*pairingCode,*pendingJoin,*phase,*failure,*lastTransportState;
+@property(nonatomic,copy) NSString *sessionId,*secret,*pendingJoin,*phase,*failure,*lastTransportState;
 @property(nonatomic) NSUInteger generation,revision,answerRevision,lastRestartRevision,restartCount;
 @property(nonatomic) BOOL busy,approved,approvalBusy,heartbeatBusy,negotiating,snapshotBusy,restartFailed;
 @property(nonatomic) NSTimeInterval lastHeartbeat,lastError;
@@ -25,7 +25,7 @@
 - (NSString *)path:(NSString *)suffix {return [NSString stringWithFormat:@"/sessions/%@/%@",self.sessionId,suffix];}
 - (void)failed:(NSError *)error code:(NSInteger)code {
     self.failure=error.localizedDescription?:@"Signaling unavailable";if(NSProcessInfo.processInfo.systemUptime-self.lastError>10){[self log:self.failure];self.lastError=NSProcessInfo.processInfo.systemUptime;}
-    if(code==410||code==401){self.sessionId=nil;self.secret=nil;self.pairingCode=nil;self.pendingJoin=nil;BOOL live=[self.snapshot[@"verified"] boolValue]&&self.peer.mediaOpen;self.phase=live?@"connected":@"failed";[self log:live?@"Signaling expired; verified local media channel retained.":@"Signaling expired without a verified local connection. Start a new pairing."];}
+    if(code==410||code==401){self.sessionId=nil;self.secret=nil;self.pendingJoin=nil;BOOL live=[self.snapshot[@"verified"] boolValue]&&self.peer.mediaOpen;self.phase=live?@"connected":@"failed";[self log:live?@"Signaling expired; verified local media channel retained.":@"Signaling expired without a verified local connection. Start a new pairing."];}
 }
 - (void)start {
     [self stop];NSUInteger generation=self.generation;self.revision=1;self.phase=@"gathering";self.failure=nil;self.lastHeartbeat=0;self.lastError=0;
@@ -37,8 +37,8 @@
     if(self.screenProvider){self.screenProvider(@"/screen/privacy",@{@"body":@{@"hidden":@YES,@"expectedRevision":@0}});[self.peer enableScreenChannel];self.screenBridge=[[SLMediaBridge alloc]initWithScreenProvider:self.screenProvider];self.screenBridge.send=^BOOL(NSData *data,BOOL binary){return [weak.peer sendScreen:data binary:binary];};self.screenBridge.bufferedAmount=^uint64_t{return weak.peer.screenBufferedAmount;};self.peer.screenMessage=^(NSData *data,BOOL binary){if(!binary)[weak.screenBridge receive:data];};self.peer.screenOpened=^{[weak.screenBridge open];[weak log:@"WEBRTC MAPS CHANNEL OPEN: phone screen starts hidden; use Show only after Google Maps is open."];};}
     [self.peer offerRestart:NO completion:^(NSString *sdp,NSString *gathering,NSError *error){if(generation!=self.generation)return;if(error){self.phase=@"failed";[self failed:error code:0];return;}self.phase=@"creating";
         [self.api call:@"POST" path:@"/sessions" authorization:nil body:@{@"sdpOffer":sdp,@"iceGathering":gathering} completion:^(NSInteger code,NSDictionary *body,NSError *failure){if(generation!=self.generation)return;if(failure){self.phase=@"failed";[self failed:failure code:code];return;}
-            if(code!=201||![SLSignaling validIdentifier:body[@"sessionId"]]||![SLSignaling validSecret:body[@"deviceSecret"]]||![SLSignaling validCode:body[@"pairingCode"]]||[body[@"negotiationRevision"] unsignedIntegerValue]!=1){self.phase=@"failed";self.failure=@"Signaling response did not match contract v2.";return;}
-            self.sessionId=body[@"sessionId"];self.secret=body[@"deviceSecret"];self.pairingCode=body[@"pairingCode"];self.phase=@"waiting_for_viewer";[self log:@"YouTube website pairing created. Approve the viewer on this phone before opening YouTube."];
+            if(code!=201||![SLSignaling validIdentifier:body[@"sessionId"]]||![SLSignaling validSecret:body[@"deviceSecret"]]||[body[@"negotiationRevision"] unsignedIntegerValue]!=1){self.phase=@"failed";self.failure=@"Signaling response did not match contract v2.";return;}
+            self.sessionId=body[@"sessionId"];self.secret=body[@"deviceSecret"];self.phase=@"waiting_for_viewer";[self log:@"Website session ready. Press Connect phone on the website, then approve the request here. No pairing number is used."];
             self.timer=[NSTimer timerWithTimeInterval:1 repeats:YES block:^(NSTimer *timer){[weak poll];}];[NSRunLoop.mainRunLoop addTimer:self.timer forMode:NSRunLoopCommonModes];[self poll];
         }];
     }];
@@ -61,7 +61,7 @@
 }
 - (void)decision:(BOOL)approve {
     if(!self.pendingJoin.length||self.approvalBusy)return;self.approvalBusy=YES;NSUInteger generation=self.generation;
-    [self.api call:@"POST" path:[self path:approve?@"approve":@"reject"] authorization:self.authorization body:@{@"joinId":self.pendingJoin} completion:^(NSInteger code,NSDictionary *body,NSError *error){if(generation!=self.generation)return;self.approvalBusy=NO;if(error){[self failed:error code:code];return;}self.approved=approve;self.pendingJoin=nil;if(approve){self.pairingCode=nil;self.phase=@"connecting";}else self.phase=@"waiting_for_viewer";[self log:approve?@"Viewer approved on phone. Open YouTube and select ScreenLink through AirPlay.":@"Viewer rejected on phone."];[self poll];}];
+    [self.api call:@"POST" path:[self path:approve?@"approve":@"reject"] authorization:self.authorization body:@{@"joinId":self.pendingJoin} completion:^(NSInteger code,NSDictionary *body,NSError *error){if(generation!=self.generation)return;self.approvalBusy=NO;if(error){[self failed:error code:code];return;}self.approved=approve;self.pendingJoin=nil;if(approve){self.phase=@"connecting";}else self.phase=@"waiting_for_viewer";[self log:approve?@"Viewer approved on phone. Open YouTube and select ScreenLink through AirPlay.":@"Viewer rejected on phone."];[self poll];}];
 }
 - (void)restart {
     if(self.negotiating||!self.sessionId.length||self.lastRestartRevision==self.revision||self.restartCount>=2)return;self.lastRestartRevision=self.revision;self.restartCount++;self.negotiating=YES;NSUInteger generation=self.generation,next=self.revision+1;
@@ -71,12 +71,12 @@
 }
 - (NSDictionary *)control:(NSString *)command {
     if([command isEqual:@"start"])[self start];else if([command isEqual:@"approve"])[self decision:YES];else if([command isEqual:@"reject"])[self decision:NO];else if([command isEqual:@"stop"])[self stop];
-    return @{@"phase":self.phase?:@"idle",@"pairingCode":self.pairingCode?:@"",@"approvalRequested":@(self.pendingJoin.length>0&&!self.approvalBusy),@"snapshot":self.snapshot?:@{},@"screenChannelOpen":@(self.peer.screenOpen),@"mediaChannelOpen":@(self.peer.mediaOpen),@"mediaActive":@(self.media.active),@"bytesForwarded":@(self.bridge.bytesForwarded),@"error":self.failure?:@"",@"events":self.events.copy};
+    return @{@"phase":self.phase?:@"idle",@"approvalRequested":@(self.pendingJoin.length>0&&!self.approvalBusy),@"snapshot":self.snapshot?:@{},@"screenChannelOpen":@(self.peer.screenOpen),@"mediaChannelOpen":@(self.peer.mediaOpen),@"mediaActive":@(self.media.active),@"bytesForwarded":@(self.bridge.bytesForwarded),@"error":self.failure?:@"",@"events":self.events.copy};
 }
 - (void)stop {
     if(self.screenProvider)self.screenProvider(@"/screen/privacy",@{@"body":@{@"hidden":@YES,@"expectedRevision":@0}});[self.screenBridge stop];self.screenBridge=nil;self.generation++;[self.timer invalidate];self.timer=nil;[self.bridge stop];self.bridge=nil;[self.peer close];self.peer=nil;SLSignaling *api=self.api;
     if(self.sessionId.length&&self.secret.length)[api call:@"DELETE" path:[@"/sessions/" stringByAppendingString:self.sessionId] authorization:self.authorization body:nil completion:^(NSInteger code,NSDictionary *body,NSError *error){[api close];}];else [api close];
-    self.api=nil;self.sessionId=nil;self.secret=nil;self.pairingCode=nil;self.pendingJoin=nil;self.snapshot=nil;self.lastTransportState=nil;self.approved=NO;self.busy=NO;self.approvalBusy=NO;self.heartbeatBusy=NO;self.negotiating=NO;self.snapshotBusy=NO;self.restartFailed=NO;self.lastRestartRevision=0;self.restartCount=0;self.answerRevision=0;self.phase=@"idle";
+    self.api=nil;self.sessionId=nil;self.secret=nil;self.pendingJoin=nil;self.snapshot=nil;self.lastTransportState=nil;self.approved=NO;self.busy=NO;self.approvalBusy=NO;self.heartbeatBusy=NO;self.negotiating=NO;self.snapshotBusy=NO;self.restartFailed=NO;self.lastRestartRevision=0;self.restartCount=0;self.answerRevision=0;self.phase=@"idle";
 }
 @end
 

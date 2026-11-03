@@ -30,6 +30,7 @@ jobs:
       - name: HLS range and error-propagation regression
         run: |
           node --require ./tools/test_browser_engine.cjs tools/test_rtc_ice_diagnostics.cjs
+          node --require ./tools/test_browser_engine.cjs tools/test_codefree.cjs
           node --require ./tools/test_browser_engine.cjs tools/test_youtube_loader.cjs
       - name: WebRTC ping viewer with approval and signaling expiry
         run: |

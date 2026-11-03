@@ -17,14 +17,14 @@ const fs=require('fs'),assert=require('assert'),path=require('path'),{chromium}=
    const until=performance.now()+3000;while(peer.iceGatheringState!=='complete'&&performance.now()<until)await new Promise(r=>setTimeout(r,30));
    return peer.localDescription.sdp;
   },codec);assert(offer.includes('a=candidate:'));
-  let approved=false,answerSubmitted=false,expired=false,deleted=false;const reports=[];
+  let approved=false,answerSubmitted=false,expired=false,deleted=false;const reports=[];let fixtureSecret='';
   const viewer=await browser.newPage();await viewer.addInitScript(()=>{const Native=window.RTCPeerConnection;window.RTCPeerConnection=class extends Native{constructor(...args){super(...args);window.testPeer=this;}};});const errors=[];viewer.on('pageerror',e=>errors.push(e.message));
   await viewer.route('https://viewer.screenlink.test/**',route=>route.fulfill({contentType:'text/html',body:fs.readFileSync(path.join(__dirname,'../docs/webrtc-ping-viewer.html'))}));
   await viewer.route('https://tesla4khmer.com/api/public/screenlink/**',async route=>{
    const request=route.request(),suffix=new URL(request.url()).pathname.replace('/api/public/screenlink','');
    const auth=request.headers().authorization;let status=200,body={};
-   if(suffix==='/join'){assert(!auth);assert.equal(request.postDataJSON().pairingCode,'123456');status=202;body={joinId:'fixture-join',viewerSecret:'b'.repeat(64),status:'pending_approval'};}
-   else {assert.equal(auth,'Viewer '+'b'.repeat(64));
+   if(suffix==='/auto-join'){assert(!auth);const b=request.postDataJSON();assert(/^[a-f0-9]{64}$/.test(b.viewerSecret));assert(!('pairingCode' in b));fixtureSecret=b.viewerSecret;status=202;body={joinId:'fixture-join',viewerSecret:fixtureSecret,status:'pending_approval'};}
+   else {assert.equal(auth,'Viewer '+fixtureSecret);
     if(request.method()==='DELETE'){deleted=true;body={status:'closed'};}
     else if(expired){status=410;body={error:'expired'};}
     else if(suffix.endsWith('/status'))body={status:approved?'approved':'pending_approval',negotiationRevision:approved?1:null};
@@ -34,7 +34,7 @@ const fs=require('fs'),assert=require('assert'),path=require('path'),{chromium}=
     else throw Error('Unexpected fixture endpoint');
    }await route.fulfill({status,contentType:'application/json',body:JSON.stringify(body)});
   });
-  await viewer.goto('https://viewer.screenlink.test/');await viewer.fill('#code','123456');await viewer.click('#join');
+  await viewer.goto('https://viewer.screenlink.test/');assert.equal(await viewer.locator('#code').count(),0);await viewer.click('#join');
   await viewer.waitForFunction(()=>document.getElementById('status').textContent.includes('Approve'));assert(!answerSubmitted);
   approved=true;await viewer.waitForFunction(()=>document.getElementById('status').textContent.includes('VIDEO ACTIVE'),null,{timeout:20000});
   await phone.waitForFunction(()=>pongs>0);assert(answerSubmitted);

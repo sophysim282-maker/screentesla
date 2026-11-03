@@ -5,7 +5,7 @@
 @property(nonatomic,strong) SLSignaling *api;
 @property(nonatomic,strong) SLPingPeer *peer;
 @property(nonatomic,strong) NSTimer *timer;
-@property(nonatomic,strong) UILabel *codeLabel,*stateLabel,*requestLabel;
+@property(nonatomic,strong) UILabel *stateLabel,*requestLabel;
 @property(nonatomic,strong) UITextView *logView;
 @property(nonatomic,strong) UIButton *startButton,*approveButton,*rejectButton;
 @property(nonatomic,copy) NSString *sessionId,*secret,*pendingJoin;
@@ -20,8 +20,7 @@
     UIStackView *stack=[UIStackView new];stack.axis=UILayoutConstraintAxisVertical;stack.spacing=10;stack.translatesAutoresizingMaskIntoConstraints=NO;[self.view addSubview:stack];
     [NSLayoutConstraint activateConstraints:@[[stack.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor constant:12],[stack.bottomAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.bottomAnchor constant:-12],[stack.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor constant:18],[stack.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor constant:-18]]];
     UILabel *title=[UILabel new];title.text=@"WebRTC video test · Milestone 2";title.font=[UIFont boldSystemFontOfSize:20];title.numberOfLines=0;[stack addArrangedSubview:title];
-    UILabel *help=[UILabel new];help.numberOfLines=0;help.font=[UIFont systemFontOfSize:14];help.text=@"Connect the viewer to this iPhone’s Personal Hotspot. Keep this test screen open. Start the test, enter its code in the website’s WebRTC pairing page, then approve the request here. The website will show moving test video. Keep this screen open. Maps and YouTube still use the existing local player.";[stack addArrangedSubview:help];
-    self.codeLabel=[UILabel new];self.codeLabel.text=@"— — — — — —";self.codeLabel.font=[UIFont monospacedDigitSystemFontOfSize:38 weight:UIFontWeightBold];self.codeLabel.textAlignment=NSTextAlignmentCenter;[stack addArrangedSubview:self.codeLabel];
+    UILabel *help=[UILabel new];help.numberOfLines=0;help.font=[UIFont systemFontOfSize:14];help.text=@"Connect the viewer to this iPhone’s Personal Hotspot. Keep this test screen open. Start the test, press Connect phone on the website, then approve the request here. No number to enter. The website will show moving test video. Keep this screen open. Maps and YouTube still use the existing local player.";[stack addArrangedSubview:help];
     self.stateLabel=[UILabel new];self.stateLabel.text=@"Ready · tesla4khmer.com";self.stateLabel.numberOfLines=0;[stack addArrangedSubview:self.stateLabel];
     self.requestLabel=[UILabel new];self.requestLabel.numberOfLines=0;self.requestLabel.font=[UIFont systemFontOfSize:13];self.requestLabel.text=@"No viewer approval requested.";[stack addArrangedSubview:self.requestLabel];
     UIStackView *approval=[UIStackView new];approval.axis=UILayoutConstraintAxisHorizontal;approval.distribution=UIStackViewDistributionFillEqually;
@@ -50,8 +49,8 @@
         self.stateLabel.text=@"Creating signaling session…";
         [self.api call:@"POST" path:@"/sessions" authorization:nil body:@{@"sdpOffer":sdp,@"iceGathering":gathering} completion:^(NSInteger code,NSDictionary *body,NSError *failure){
             if(generation!=self.generation)return;if(failure){[self error:failure];self.startButton.enabled=YES;return;}
-            if(code!=201||![SLSignaling validIdentifier:body[@"sessionId"]]||![SLSignaling validSecret:body[@"deviceSecret"]]||![SLSignaling validCode:body[@"pairingCode"]]||[body[@"negotiationRevision"] unsignedIntegerValue]!=1){[self error:[NSError errorWithDomain:@"ScreenLink.Signaling" code:1 userInfo:@{NSLocalizedDescriptionKey:@"Server session response did not match contract v2."}]];self.startButton.enabled=YES;return;}
-            self.sessionId=body[@"sessionId"];self.secret=body[@"deviceSecret"];self.codeLabel.text=body[@"pairingCode"];self.stateLabel.text=@"Waiting for viewer · code expires in 3 minutes";[self log:@"Pairing session created. Enter the displayed code in the HTTPS viewer. Approval is required here before the offer is released."];
+            if(code!=201||![SLSignaling validIdentifier:body[@"sessionId"]]||![SLSignaling validSecret:body[@"deviceSecret"]]||[body[@"negotiationRevision"] unsignedIntegerValue]!=1){[self error:[NSError errorWithDomain:@"ScreenLink.Signaling" code:1 userInfo:@{NSLocalizedDescriptionKey:@"Server session response did not match contract v2."}]];self.startButton.enabled=YES;return;}
+            self.sessionId=body[@"sessionId"];self.secret=body[@"deviceSecret"];self.stateLabel.text=@"Waiting for viewer · press Connect phone on the website";[self log:@"Session created. Press Connect phone in the HTTPS viewer. Approval is required here before the offer is released."];
             self.timer=[NSTimer scheduledTimerWithTimeInterval:1 repeats:YES block:^(NSTimer *timer){[weak poll];}];[self poll];
         }];
     }];
@@ -68,7 +67,7 @@
     [self.api call:@"GET" path:[self path:@"join-requests"] authorization:self.authorization body:nil completion:^(NSInteger code,NSDictionary *body,NSError *error){
         if(generation!=self.generation)return;self.busy=NO;if(error){[self error:error];if(code==410||code==401)[self signalingExpired];return;}
         if(!self.approved){NSArray *requests=[body[@"requests"] isKindOfClass:NSArray.class]?body[@"requests"]:@[];NSString *join=nil;for(id value in requests)if([value isKindOfClass:NSDictionary.class]&&[SLSignaling validIdentifier:value[@"joinId"]]){join=value[@"joinId"];break;}
-            self.pendingJoin=join;self.requestLabel.text=join?[NSString stringWithFormat:@"Viewer request %@. Approve only if you just entered this phone’s code.",[join substringToIndex:MIN(8,join.length)]]:@"No viewer approval requested.";[self updateApproval];
+            self.pendingJoin=join;self.requestLabel.text=join?@"Viewer requests a connection. Approve only if you just pressed Connect phone on your website.":@"No viewer approval requested.";[self updateApproval];
         }
         if(self.approved&&self.answerRevision!=self.revision)[self fetchAnswer:generation];
     }];
@@ -104,9 +103,9 @@
 - (void)stopTest {
     self.generation++;[self.timer invalidate];self.timer=nil;[self.peer close];self.peer=nil;SLSignaling *api=self.api;
     if(self.sessionId.length&&self.secret.length){[api call:@"DELETE" path:[@"/sessions/" stringByAppendingString:self.sessionId] authorization:self.authorization body:nil completion:^(NSInteger code,NSDictionary *body,NSError *error){[api close];}];}else [api close];
-    self.lastRestartRevision=0;self.restartCount=0;self.api=nil;self.sessionId=nil;self.secret=nil;self.pendingJoin=nil;self.approved=NO;self.busy=NO;self.heartbeatBusy=NO;self.approvalBusy=NO;self.negotiating=NO;self.verified=NO;self.lastSnapshot=nil;self.startButton.enabled=YES;self.codeLabel.text=@"— — — — — —";self.stateLabel.text=@"Video test stopped";self.requestLabel.text=@"No viewer approval requested.";[self updateApproval];
+    self.lastRestartRevision=0;self.restartCount=0;self.api=nil;self.sessionId=nil;self.secret=nil;self.pendingJoin=nil;self.approved=NO;self.busy=NO;self.heartbeatBusy=NO;self.approvalBusy=NO;self.negotiating=NO;self.verified=NO;self.lastSnapshot=nil;self.startButton.enabled=YES;self.stateLabel.text=@"Video test stopped";self.requestLabel.text=@"No viewer approval requested.";[self updateApproval];
 }
-- (void)copyDiagnostics {NSDictionary *data=@{@"version":@"0.17.1",@"milestone":@"h264-moving-test-video",@"snapshot":self.lastSnapshot?:@{},@"events":self.logView.text?:@""};NSData *json=[NSJSONSerialization dataWithJSONObject:data options:NSJSONWritingPrettyPrinted error:nil];UIPasteboard.generalPasteboard.string=[[NSString alloc]initWithData:json encoding:NSUTF8StringEncoding];[self log:@"Sanitized diagnostics copied; no SDP, pairing code, or role secrets included."];}
+- (void)copyDiagnostics {NSDictionary *data=@{@"version":@"0.18.0",@"milestone":@"h264-moving-test-video",@"snapshot":self.lastSnapshot?:@{},@"events":self.logView.text?:@""};NSData *json=[NSJSONSerialization dataWithJSONObject:data options:NSJSONWritingPrettyPrinted error:nil];UIPasteboard.generalPasteboard.string=[[NSString alloc]initWithData:json encoding:NSUTF8StringEncoding];[self log:@"Sanitized diagnostics copied; no SDP, pairing code, or role secrets included."];}
 - (void)done {[self stopTest];[self dismissViewControllerAnimated:YES completion:nil];}
 - (void)viewDidDisappear:(BOOL)animated {[super viewDidDisappear:animated];if(self.isBeingDismissed||self.navigationController.isBeingDismissed)[self stopTest];}
 @end
