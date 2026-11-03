@@ -4,7 +4,7 @@
 @end
 @implementation SLSignaling
 - (instancetype)initWithBaseURL:(NSURL *)baseURL {
-    if((self=[super init])){_baseURL=baseURL;NSURLSessionConfiguration *config=NSURLSessionConfiguration.ephemeralSessionConfiguration;config.URLCache=nil;config.HTTPCookieStorage=nil;config.HTTPShouldSetCookies=NO;config.timeoutIntervalForRequest=8;config.timeoutIntervalForResource=10;config.requestCachePolicy=NSURLRequestReloadIgnoringLocalCacheData;_session=[NSURLSession sessionWithConfiguration:config delegate:self delegateQueue:nil];}return self;
+    if((self=[super init])){_baseURL=baseURL;NSURLSessionConfiguration *config=NSURLSessionConfiguration.ephemeralSessionConfiguration;config.URLCache=nil;config.HTTPCookieStorage=nil;config.HTTPShouldSetCookies=NO;config.timeoutIntervalForRequest=15;config.timeoutIntervalForResource=20;config.requestCachePolicy=NSURLRequestReloadIgnoringLocalCacheData;_session=[NSURLSession sessionWithConfiguration:config delegate:self delegateQueue:nil];}return self;
 }
 + (BOOL)matches:(id)value pattern:(NSString *)pattern {return [value isKindOfClass:NSString.class]&&[value rangeOfString:pattern options:NSRegularExpressionSearch].location!=NSNotFound;}
 + (BOOL)validSecret:(id)value {return [self matches:value pattern:@"\\A[0-9a-fA-F]{64}\\z"];}
@@ -20,7 +20,7 @@
         NSInteger code=[response isKindOfClass:NSHTTPURLResponse.class]?((NSHTTPURLResponse *)response).statusCode:0;NSDictionary *object=@{};NSError *failure=nil;
         if(data.length>512*1024)failure=[NSError errorWithDomain:@"ScreenLink.Signaling" code:2 userInfo:@{NSLocalizedDescriptionKey:@"Signaling response exceeded its limit."}];
         else if(data.length){id json=[NSJSONSerialization JSONObjectWithData:data options:0 error:nil];if([json isKindOfClass:NSDictionary.class])object=json;else failure=[NSError errorWithDomain:@"ScreenLink.Signaling" code:3 userInfo:@{NSLocalizedDescriptionKey:@"Signaling server returned a non-JSON response."}];}
-        if(error){NSError *underlying=error.userInfo[NSUnderlyingErrorKey];NSString *message=[NSString stringWithFormat:@"Signaling transport failed (%ld; underlying %ld). Check Internet, device time and server TLS.",(long)error.code,(long)underlying.code];failure=[NSError errorWithDomain:@"ScreenLink.Signaling" code:error.code userInfo:@{NSLocalizedDescriptionKey:message}];}
+        if(error){NSError *underlying=error.userInfo[NSUnderlyingErrorKey];NSString *message=error.code==NSURLErrorTimedOut?@"Signaling request timed out. This is a connection-service timeout, not proof of a TLS, clock or video-decoder error.":[NSString stringWithFormat:@"Signaling transport failed (%ld; underlying %ld).",(long)error.code,(long)underlying.code];failure=[NSError errorWithDomain:@"ScreenLink.Signaling" code:error.code userInfo:@{NSLocalizedDescriptionKey:message}];}
         if(!failure && (code<200||code>=300)){NSString *message=[SLSignaling matches:object[@"error"] pattern:@"\\A[a-z_]{1,80}\\z"]?object[@"error"]:@"request_failed";failure=[NSError errorWithDomain:@"ScreenLink.Signaling" code:code userInfo:@{NSLocalizedDescriptionKey:[NSString stringWithFormat:@"Signaling HTTP %ld (%@).",(long)code,message]}];}
         dispatch_async(dispatch_get_main_queue(),^{completion(code,object,failure);});
     }] resume];

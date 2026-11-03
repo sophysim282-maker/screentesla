@@ -26,7 +26,7 @@ static void waitFor(BOOL (^condition)(void),double seconds){NSDate *deadline=[NS
 }
 - (void)report:(NSDictionary *)report {if([report[@"epoch"] isEqual:@"fixture"])self.reports++;}
 @end
-static NSDictionary *apiCall(SLSignaling *api,NSString *method,NSString *path,NSString *auth,NSDictionary *body,NSInteger expected){__block BOOL done=NO;__block NSDictionary *result;__block NSInteger code;[api call:method path:path authorization:auth body:body completion:^(NSInteger status,NSDictionary *data,NSError *error){code=status;result=data;done=YES;}];waitFor(^BOOL{return done;},12);check(code==expected,[NSString stringWithFormat:@"Media signaling HTTP %ld, expected %ld",(long)code,(long)expected]);return result;}
+static NSDictionary *apiCall(SLSignaling *api,NSString *method,NSString *path,NSString *auth,NSDictionary *body,NSInteger expected){__block BOOL done=NO;__block NSDictionary *result;__block NSInteger code;[api call:method path:path authorization:auth body:body completion:^(NSInteger status,NSDictionary *data,NSError *error){code=status;result=data;done=YES;}];waitFor(^BOOL{return done;},25);check(code==expected,[NSString stringWithFormat:@"Media signaling HTTP %ld, expected %ld",(long)code,(long)expected]);return result;}
 static NSString *makeAnswer(SLPingPeer *peer,NSString *offer,NSString **gathering){__block NSString *answer,*ice;__block BOOL done=NO;[peer answerOffer:offer completion:^(NSString *text,NSString *mode,NSError *error){answer=text;ice=mode;done=YES;}];waitFor(^BOOL{return done;},6);check(answer.length,@"Data-only answer failed");*gathering=ice;return answer;}
 int main(int argc,const char *argv[]){@autoreleasepool{
  BOOL live=argc>1&&!strcmp(argv[1],"--live");Fixture *fixture=[Fixture new];SLPingPeer *left=nil,*right=[[SLPingPeer alloc]initWithHotspotOnly:NO offerer:NO dataOnly:YES];SLMediaBridge *bridge=nil,*screenBridge=nil;SLMediaSession *host=nil;SLSignaling *api=nil;NSString *viewerPath,*viewerAuth;int exitCode=0;__block NSString *stage=@"setup";
@@ -61,3 +61,4 @@ int main(int argc,const char *argv[]){@autoreleasepool{
  @finally {[screenBridge stop];[bridge stop];[host stop];[left close];[right close];if(api&&viewerPath&&viewerAuth){__block BOOL done=NO;__block NSInteger code=0;[api call:@"DELETE" path:viewerPath authorization:viewerAuth body:nil completion:^(NSInteger status,NSDictionary *body,NSError *error){code=status;done=YES;}];@try{waitFor(^BOOL{return done;},12);check(code==200||code==410,@"Live media session cleanup failed");puts("Live media session cleanup confirmed.");}@catch(NSException *error){fprintf(stderr,"Live media cleanup did not complete; server expiry remains in effect.\n");exitCode=1;}}[api close];}
  return exitCode;
 }}
+

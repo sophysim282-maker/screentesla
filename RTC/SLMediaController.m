@@ -34,7 +34,7 @@
 - (void)approvePair {[self query:@"approve"];}
 - (void)rejectPair {[self query:@"reject"];}
 - (void)stopPair {[self query:@"stop"];}
-- (void)copyReport {NSMutableDictionary *safe=[self.last mutableCopy]?:[NSMutableDictionary dictionary];[safe removeObjectForKey:@"pairingCode"];safe[@"version"]=@"0.18.0";safe[@"mode"]=@"youtube-media-over-webrtc";NSData *data=[NSJSONSerialization dataWithJSONObject:safe options:NSJSONWritingPrettyPrinted error:nil];UIPasteboard.generalPasteboard.string=[[NSString alloc]initWithData:data encoding:NSUTF8StringEncoding];}
+- (void)copyReport {NSMutableDictionary *safe=[self.last mutableCopy]?:[NSMutableDictionary dictionary];[safe removeObjectForKey:@"pairingCode"];safe[@"version"]=@"0.18.1";safe[@"mode"]=@"youtube-media-over-webrtc";NSData *data=[NSJSONSerialization dataWithJSONObject:safe options:NSJSONWritingPrettyPrinted error:nil];UIPasteboard.generalPasteboard.string=[[NSString alloc]initWithData:data encoding:NSUTF8StringEncoding];}
 - (void)done {[self.timer invalidate];self.timer=nil;[self dismissViewControllerAnimated:YES completion:nil];}
 - (void)viewDidDisappear:(BOOL)animated {[super viewDidDisappear:animated];if(self.isBeingDismissed){[self.timer invalidate];self.timer=nil;}}
 @end
