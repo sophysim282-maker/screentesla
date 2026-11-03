@@ -8,6 +8,7 @@
 #import "HotspotLink.h"
 #import "RouteProbe.h"
 #import "LocalViewerApproval.h"
+#import "LocalViewerHeader.h"
 #import "LocalMediaToken.h"
 #import "MediaCast.h"
 #import "SLMediaSession.h"
@@ -434,12 +435,12 @@ static NSArray *txtStrings(const char *bytes,int length) {
     for(NSURLQueryItem *item in url.queryItems){if([item.name isEqual:@"epoch"])epoch=item.value;else if([item.name isEqual:@"token"])token=item.value;else if([item.name isEqual:@"after"]){after=strtoull(item.value.UTF8String,NULL,10);longPoll=YES;}}
     NSString *mime=@"text/plain; charset=utf-8",*status=@"200 OK",*extra=@"";NSData *body=[NSData data];
     NSRange headerEnd=[request rangeOfData:[@"\r\n\r\n" dataUsingEncoding:NSUTF8StringEncoding] options:0 range:NSMakeRange(0,request.length)];
-    NSUInteger bodyOffset=headerEnd.location==NSNotFound?request.length:NSMaxRange(headerEnd);NSUInteger bodyLength=0;NSString *byteRange=nil,*origin=nil,*viewerHeader=nil;BOOL localControl=NO;
+    NSUInteger bodyOffset=headerEnd.location==NSNotFound?request.length:NSMaxRange(headerEnd);NSUInteger bodyLength=0;NSString *byteRange=nil,*origin=nil;BOOL localControl=NO,viewerHeaderValid=NO;
     for(NSString *field in [line componentsSeparatedByString:@"\r\n"]){
         if([field.lowercaseString hasPrefix:@"x-screenlink-control:"] && [[[field substringFromIndex:21] stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceCharacterSet] isEqual:@"app"])localControl=YES;
         if([field.lowercaseString hasPrefix:@"content-length:"])bodyLength=(NSUInteger)MAX(0,[[field substringFromIndex:15] integerValue]);
         if([field.lowercaseString hasPrefix:@"origin:"])origin=[[field substringFromIndex:7] stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceCharacterSet];
-        if([field.lowercaseString hasPrefix:@"x-screenlink-viewer:"])viewerHeader=[[field substringFromIndex:19] stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceCharacterSet];
+        if([field.lowercaseString hasPrefix:@"x-screenlink-viewer:"])viewerHeaderValid=sl_local_viewer_request_header(field.UTF8String);
         if([field.lowercaseString hasPrefix:@"range:"])byteRange=[[field substringFromIndex:6] stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceCharacterSet];
     }
     if(bodyLength>8192)return;
@@ -465,7 +466,7 @@ static NSArray *txtStrings(const char *bytes,int length) {
         status=changed?@"200 OK":@"409 Conflict";mime=@"application/json";body=[@"{}" dataUsingEncoding:NSUTF8StringEncoding];
     }
     else if(current && [url.path isEqual:@"/local-viewer/request"]){
-        if(!aliasClient || ![parts.firstObject isEqual:@"POST"] || ![origin isEqual:@"http://240.3.3.3:8080"] || ![viewerHeader isEqual:@"request"]){status=@"403 Forbidden";}
+        if(!aliasClient || ![parts.firstObject isEqual:@"POST"] || ![origin isEqual:@"http://240.3.3.3:8080"] || !viewerHeaderValid){status=@"403 Forbidden";[self emit:[NSString stringWithFormat:@"LOCAL APPROVAL REQUEST REJECTED: owned-alias/hotspot=%d, POST=%d, expected-origin=%d, request-header=%d. No media access granted.",aliasClient,[parts.firstObject isEqual:@"POST"],[origin isEqual:@"http://240.3.3.3:8080"],viewerHeaderValid]];}
         else{id object=[NSJSONSerialization JSONObjectWithData:[request subdataWithRange:NSMakeRange(bodyOffset,bodyLength)] options:0 error:nil];NSString *nonce=[object isKindOfClass:NSDictionary.class]?object[@"nonce"]:nil;NSDictionary *result=[_localViewer request:nonce peer:peerHost now:localNow];mime=@"application/json";body=[NSJSONSerialization dataWithJSONObject:result options:0 error:nil];}
     }
     else if(current && aliasClient && [parts.firstObject isEqual:@"GET"] && !token && [@[@"/",@"/split",@"/map",@"/video"] containsObject:url.path]){

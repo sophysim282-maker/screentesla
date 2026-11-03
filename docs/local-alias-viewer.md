@@ -56,3 +56,23 @@ or Stop sharing revokes access. Local HTTP is not end-to-end TLS encryption.
   under this workspace's restrictions; no local browser pass is claimed.
 - Full Xcode/iPhoneOS SDK is absent here. iOS build, embedded extension packaging
   and physical Tesla playback must still be verified.
+
+## 0.19.3 / build 35: approval header correction
+
+The build 34 Mac test loaded the local viewer but Connect phone displayed
+"Local connection interrupted"; phone approval remained idle. The provided log
+contained expiration of the separate website signaling session, which is not the
+local HTTP approval path. Source inspection found a deterministic bug: the
+20-character header prefix `x-screenlink-viewer:` was extracted at offset 19,
+leaving `: request` instead of `request` and rejecting valid requests with 403.
+This explains a valid client's rejection; the user's generic message alone did
+not record its actual HTTP status.
+
+Build 35 derives the header boundary from the full name in a shared production
+parser, tested with exact browser-style headers and malformed variants. It keeps
+the existing origin, owned-alias/hotspot, phone approval, and token checks.
+Browser errors now display HTTP status or timeout; server rejections log only
+boolean boundary results, never tokens or nonce values. Native media/capture,
+VPN routes and website signaling are unchanged. Test local approval on the Mac
+at home before any additional car visit. This is an approval fix, not verified
+Tesla playback.

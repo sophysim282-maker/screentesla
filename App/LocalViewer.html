@@ -14,7 +14,7 @@ async function poll(){
  else if(state.phase==='rejected'){status.textContent='Rejected on iPhone. Use Disconnect local viewer on the phone before requesting again.';}
  else if(state.phase==='busy'){status.textContent='Another local viewer is pending or connected. Use Disconnect local viewer on the phone first.';}
  else status.textContent='Local approval unavailable. Return to ScreenLink on your iPhone.';
- }catch(error){status.textContent='Local connection interrupted. Keep the experimental VPN and system screen broadcast active, then retry.';}
+ }catch(error){const reason=error.name==='AbortError'?'Approval request timed out':(error.message||'Network request failed');status.textContent='Local approval failed: '+reason+'. Copy the iPhone test log before restarting. Keep the experimental VPN and system screen broadcast active.';}
  finally{clearTimeout(timeout);if(again)timer=setTimeout(poll,1500);else button.disabled=false;}
 }
 button.onclick=()=>{clearTimeout(timer);button.disabled=true;poll();};
