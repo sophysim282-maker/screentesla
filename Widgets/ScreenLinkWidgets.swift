@@ -58,14 +58,21 @@ private struct LauncherView: View {
     }
 }
 
-private struct LauncherWidget: Widget {
-    let mascot: Mascot
-    var body: some WidgetConfiguration {
-        StaticConfiguration(kind: "ScreenLink.Launch.\(mascot.rawValue)", provider: LauncherProvider()) { _ in LauncherView(mascot: mascot) }
-            .configurationDisplayName("ScreenLink · \(mascot.title)")
-            .description("Tap to open ScreenLink and start YouTube only. Personal Hotspot must already be enabled.")
-            .supportedFamilies([.systemSmall, .systemMedium])
-    }
+private func launcherConfiguration(_ mascot: Mascot) -> some WidgetConfiguration {
+    StaticConfiguration(kind: "ScreenLink.Launch.\(mascot.rawValue)", provider: LauncherProvider()) { _ in LauncherView(mascot: mascot) }
+        .configurationDisplayName("ScreenLink · \(mascot.title)")
+        .description("Tap to open ScreenLink and start YouTube only. Personal Hotspot must already be enabled.")
+        .supportedFamilies([.systemSmall, .systemMedium])
+}
+// WidgetKit constructs each widget with init(); use distinct zero-argument types.
+private struct DogLauncherWidget: Widget {
+    var body: some WidgetConfiguration { launcherConfiguration(.dog) }
+}
+private struct CatLauncherWidget: Widget {
+    var body: some WidgetConfiguration { launcherConfiguration(.cat) }
+}
+private struct RoadsterLauncherWidget: Widget {
+    var body: some WidgetConfiguration { launcherConfiguration(.roadster) }
 }
 
 private struct MotionBadge: View {
@@ -138,9 +145,9 @@ private struct ScreenLinkLiveActivity: Widget {
 @main
 struct ScreenLinkWidgetBundle: WidgetBundle {
     var body: some Widget {
-        LauncherWidget(mascot: .dog)
-        LauncherWidget(mascot: .cat)
-        LauncherWidget(mascot: .roadster)
+        DogLauncherWidget()
+        CatLauncherWidget()
+        RoadsterLauncherWidget()
         ScreenLinkLiveActivity()
     }
 }
