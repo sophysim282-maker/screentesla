@@ -124,8 +124,9 @@ static void SLActivityFinish(void) {
  else [self append:@"Widget diagnostic bridge missing from signed app."];
 }
 - (void)prepareYouTubePiP {
- if(!self.receiver.mediaOnly||!self.receiver.isRunning||UIApplication.sharedApplication.applicationState!=UIApplicationStateActive)return;
- NSDictionary *state=[self.receiver nativeMediaState];if(![state[@"active"] boolValue])return;
+ if(!self.receiver.mediaOnly||!self.receiver.isRunning)return;
+ NSDictionary *state=[self.receiver nativeMediaState];if(![state[@"active"] boolValue]){[self.youtubePiP updateState:state];return;}
+ if(!self.youtubePiP&&UIApplication.sharedApplication.applicationState!=UIApplicationStateActive)return;
  if(!self.youtubePiP){
   YouTubePiP *view=[[YouTubePiP alloc]initWithFrame:self.previewSlot.bounds];view.autoresizingMask=UIViewAutoresizingFlexibleWidth|UIViewAutoresizingFlexibleHeight;self.youtubePiP=view;[self.previewSlot addSubview:view];
   __weak Controller *weak=self;view.status=^(NSString *message){[weak append:message];};

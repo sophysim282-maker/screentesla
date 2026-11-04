@@ -1,4 +1,5 @@
 #import "YouTubePiP.h"
+#import <math.h>
 #import <AVKit/AVKit.h>
 #import <AVFoundation/AVFoundation.h>
 @interface YouTubePiP () <AVPictureInPictureControllerDelegate>
@@ -14,16 +15,16 @@
 - (BOOL)active {return self.pip.pictureInPictureActive;}
 - (void)report:(NSString *)text {if(self.status)self.status(text);}
 - (void)updateState:(NSDictionary *)state {
- if(![state[@"active"] boolValue])return;
+ if(![state[@"active"] boolValue]){BOOL wasActive=self.active;[self reset];if(wasActive&&self.activityChanged)self.activityChanged(NO);return;}
  NSString *epoch=state[@"epoch"],*path=state[@"url"];
  if(![epoch isKindOfClass:NSString.class]||![path hasPrefix:@"/media/resource/"])return;
  if(![self.epoch isEqual:epoch]){
-  [self reset];self.epoch=epoch;
+  self.epoch=epoch;
   NSURL *url=[NSURL URLWithString:[@"http://localhost:8080" stringByAppendingString:path]];
   AVPlayerItem *item=[AVPlayerItem playerItemWithURL:url];item.preferredMaximumResolution=CGSizeMake(1280,720);item.preferredPeakBitRate=6000000;
-  self.player=[AVPlayer playerWithPlayerItem:item];self.player.muted=YES;self.player.allowsExternalPlayback=NO;self.player.automaticallyWaitsToMinimizeStalling=YES;
+  if(self.player)[self.player replaceCurrentItemWithPlayerItem:item];else self.player=[AVPlayer playerWithPlayerItem:item];self.player.muted=YES;self.player.allowsExternalPlayback=NO;self.player.automaticallyWaitsToMinimizeStalling=YES;
   self.playerLayer.player=self.player;self.playerLayer.videoGravity=AVLayerVideoGravityResizeAspect;
-  self.pip=[[AVPictureInPictureController alloc]initWithPlayerLayer:self.playerLayer];self.pip.delegate=self;self.pip.canStartPictureInPictureAutomaticallyFromInline=YES;
+  if(!self.pip)self.pip=[[AVPictureInPictureController alloc]initWithPlayerLayer:self.playerLayer];self.pip.delegate=self;self.pip.canStartPictureInPictureAutomaticallyFromInline=YES;
  }
  if([state[@"paused"] boolValue])[self.player pause];else [self.player play];
  double position=[state[@"position"] doubleValue],current=CMTimeGetSeconds(self.player.currentTime);
