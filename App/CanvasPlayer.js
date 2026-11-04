@@ -255,7 +255,7 @@ class CanvasPlayer {
   while(this.audio.length&&this.audio[0].timestamp+this.audio[0].frames/this.audio[0].sampleRate<=now)this.audio.shift();
   if(this.muted||!this.audioContext||this.audioContext.state!=='running')return;
   const contextNow=this.audioContext.currentTime,base=this.anchor-this.position;
-  while(this.audio.length&&this.audio[0].timestamp<now+0.35){
+  while(this.audio.length&&this.audio[0].timestamp<now+0.6){
    const packet=this.audio.shift(),duration=packet.frames/packet.sampleRate;
    let start=base+packet.timestamp;
    // One absolute sample clock for all chunks. Snap small AAC boundary
