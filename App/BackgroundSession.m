@@ -52,7 +52,7 @@
     if(![BGTaskScheduler.sharedScheduler submitTaskRequest:(BGTaskRequest *)request error:&error]){
         _pending=NO;[self log:[NSString stringWithFormat:@"No-PiP background request rejected (%@). Keep ScreenLink visible or use floating preview.",error]];return;
     }
-    if(!self.active)[self log:@"30-minute background session requested. Wait for BACKGROUND SESSION ACTIVE before switching apps. This is a device test; iOS can end the session early."];
+    if(!self.active)[self log:@"Background session requested (up to 30 minutes; iOS can end it earlier). Wait for BACKGROUND SESSION ACTIVE before switching apps. This is a device test; iOS can end the session early."];
 }
 - (void)launched:(id<SLContinuedTask>)task {
     if(!self.allowWaitingForVideo && (!self.videoIsLive || !self.videoIsLive())){
