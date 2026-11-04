@@ -52,6 +52,7 @@ jobs:
           ffmpeg -v error -f lavfi -i testsrc2=size=640x360:rate=30 -f lavfi -i sine=frequency=440:sample_rate=48000 -t 10 -c:v libx264 -preset ultrafast -tune zerolatency -g 60 -c:a aac -hls_time 2 -hls_playlist_type vod -hls_segment_filename build/pure/part%02d.ts build/pure/master.m3u8
           ffmpeg -v error -f lavfi -i testsrc2=size=640x360:rate=30 -f lavfi -i sine=frequency=440:sample_rate=48000 -t 10 -c:v libx264 -preset ultrafast -g 60 -c:a aac -hls_time 2 -hls_segment_type fmp4 -hls_playlist_type vod -hls_segment_filename build/pure/fragment%02d.m4s build/pure/fragmented.m3u8
           python3 tools/create_packed_audio_fixture.py build/pure
+          node tools/test_canvas_audio.cjs App/CanvasPlayer.js
           node tools/test_canvas_demux.cjs App build/pure
           node --require ./tools/test_browser_engine.cjs tools/test_pure_canvas.cjs App build/pure build/live.mp4
       - name: Native media HLS video and audio player

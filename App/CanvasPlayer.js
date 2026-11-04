@@ -89,11 +89,13 @@ class CanvasPlayer {
  static supported(){return !!(self.isSecureContext&&self.VideoDecoder&&self.AudioDecoder&&self.EncodedVideoChunk&&self.EncodedAudioChunk);}
  constructor(canvas,{onerror=()=>{},quality='hd',audioContext=null}={}){
   this.canvas=canvas;this.ctx=canvas.getContext('2d',{alpha:false});if(!this.ctx)throw Error('Canvas rendering unavailable');
-  this.audioContext=audioContext;this.ownsAudioContext=!audioContext;
+  this.audioContext=audioContext;this.ownsAudioContext=!audioContext;this.audioTail=null;
   this.quality=quality;this.offeredHeights=[];this.selectedHeight=0;this.onerror=onerror;this.paused=true;this.muted=true;this.duration=0;this.readyState=0;this.ended=false;this.error=null;this.closed=false;
   this.frames=[];this.audio=[];this.nodes=new Set();this.position=0;this.videoEnd=0;this.anchor=0;this.running=false;this.serial=0;this.decoders=new Map();this.configs=new Map();this.initializers=new Map();
-  this.stats={drawn:0,dropped:0,decoded:0,audioDecoded:0,maxFrames:0,maxAudio:0};
+  this.stats={drawn:0,dropped:0,decoded:0,audioDecoded:0,maxFrames:0,maxAudio:0,audioScheduled:0,audioLate:0,audioJoined:0,audioRestored:0};
   this.animation=requestAnimationFrame(()=>this.paint());
+  // Audio look-ahead must not depend on Canvas animation callbacks.
+  this.audioTimer=setInterval(()=>{if(!this.closed&&!this.paused&&this.running){try{this.scheduleAudio(this.currentTime);}catch(error){this.fail(error);}}},20);
  }
  clock(){return this.audioContext?.state==='running'?this.audioContext.currentTime:performance.now()/1000;}
  get currentTime(){return this.running&&!this.paused?Math.min(this.duration,Math.max(this.position,this.videoEnd),this.position+this.clock()-this.anchor):this.position;}
@@ -188,21 +190,47 @@ class CanvasPlayer {
   this.finished=false;run().catch(error=>{if(serial===this.serial)this.fail(error);});
  }
  async play(){if(this.closed)return;this.paused=false;if(this.readyState>=2&&!this.running){this.anchor=this.clock();this.running=true;}}
- pause(){this.position=this.currentTime;this.paused=true;this.running=false;for(const node of this.nodes){try{node.stop();}catch{}}this.nodes.clear();}
+ pause(){this.position=this.currentTime;this.paused=true;this.running=false;this.stopAudio(true);}
+ stopAudio(restore=false){
+  for(const node of this.nodes){
+   const packet=node.screenlinkPacket;node.onended=null;
+   if(restore&&packet&&packet.timestamp+packet.frames/packet.sampleRate>this.position){this.audio.push(packet);this.stats.audioRestored++;}
+   try{node.stop();node.disconnect();}catch{}
+  }
+  this.nodes.clear();this.audioTail=null;
+  if(restore)this.audio.sort((a,b)=>a.timestamp-b.timestamp);
+ }
  async enableAudio(){
   const position=this.currentTime;
   if(!this.audioContext)this.audioContext=new AudioContext();
   if(!this.gain){this.gain=this.audioContext.createGain();this.low=this.audioContext.createBiquadFilter();this.low.type='lowshelf';this.low.frequency.value=180;this.high=this.audioContext.createBiquadFilter();this.high.type='highshelf';this.high.frequency.value=3500;this.gain.connect(this.low).connect(this.high).connect(this.audioContext.destination);}
+  this.position=position;this.stopAudio(true);
   await this.audioContext.resume();this.position=position;this.anchor=this.clock();this.muted=false;this.gain.gain.value=1;await this.play();
  }
  setEQ(mode){if(this.low){this.low.gain.value=mode==='music'?3:0;this.high.gain.value=mode==='music'?2:0;}}
  scheduleAudio(now){
-  while(this.audio.length&&this.audio[0].timestamp<now+0.25){
+  if(this.closed||this.paused||!this.running)return;
+  // Retain future decoded PCM while muted, so enabling sound does not lose
+  // the entire look-ahead window. Expired packets can still be discarded.
+  while(this.audio.length&&this.audio[0].timestamp+this.audio[0].frames/this.audio[0].sampleRate<=now)this.audio.shift();
+  if(this.muted||!this.audioContext||this.audioContext.state!=='running')return;
+  const contextNow=this.audioContext.currentTime,base=this.anchor-this.position;
+  while(this.audio.length&&this.audio[0].timestamp<now+0.35){
    const packet=this.audio.shift(),duration=packet.frames/packet.sampleRate;
-   if(this.muted||!this.audioContext||this.audioContext.state!=='running'||packet.timestamp+duration<=now)continue;
+   let start=base+packet.timestamp;
+   // One absolute sample clock for all chunks. Snap small AAC boundary
+   // rounding/normalization differences to the preceding PCM sample's end.
+   if(this.audioTail!==null&&Math.abs(start-this.audioTail)<=Math.min(0.04,duration*1.5)){
+    if(Math.abs(start-this.audioTail)>1/packet.sampleRate)this.stats.audioJoined++;
+    start=this.audioTail;
+   }
+   const offset=Math.max(0,contextNow+0.005-start);
+   if(offset>=duration){this.stats.audioLate++;continue;}
+   if(offset>0){start+=offset;this.stats.audioLate++;}
    const buffer=this.audioContext.createBuffer(packet.pcm.length,packet.frames,packet.sampleRate);packet.pcm.forEach((channel,i)=>buffer.copyToChannel(channel,i));
-   const node=this.audioContext.createBufferSource();node.buffer=buffer;node.connect(this.gain);this.nodes.add(node);node.onended=()=>{this.nodes.delete(node);node.disconnect();};
-   const offset=Math.max(0,now-packet.timestamp);if(offset<duration)node.start(this.audioContext.currentTime+Math.max(0,packet.timestamp-now),offset);
+   const node=this.audioContext.createBufferSource();node.buffer=buffer;node.connect(this.gain);node.screenlinkPacket=packet;this.nodes.add(node);
+   node.onended=()=>{this.nodes.delete(node);node.screenlinkPacket=null;node.disconnect();};
+   node.start(start,offset);this.audioTail=start+duration-offset;this.stats.audioScheduled++;
   }
  }
  paint(){
@@ -216,13 +244,15 @@ class CanvasPlayer {
    if(this.finished&&now>=this.duration-0.02){this.pause();this.position=this.duration;this.ended=true;}
   }
   this.animation=requestAnimationFrame(()=>this.paint());
+  // Audio look-ahead must not depend on Canvas animation callbacks.
+  this.audioTimer=setInterval(()=>{if(!this.closed&&!this.paused&&this.running){try{this.scheduleAudio(this.currentTime);}catch(error){this.fail(error);}}},20);
  }
  release(){
   for(const frame of this.frames)frame.close();this.frames=[];this.audio=[];
   for(const decoder of this.decoders.values())if(decoder.state!=='closed')decoder.close();this.decoders.clear();this.configs.clear();
-  for(const node of this.nodes){try{node.stop();node.disconnect();}catch{}}this.nodes.clear();
+  this.stopAudio();
  }
- destroy(){if(this.closed)return;this.closed=true;this.serial++;this.abort?.abort();cancelAnimationFrame(this.animation);this.release();this.initializers.clear();if(this.ownsAudioContext)this.audioContext?.close();else {this.gain?.disconnect();this.low?.disconnect();this.high?.disconnect();}}
+ destroy(){if(this.closed)return;this.closed=true;this.serial++;this.abort?.abort();cancelAnimationFrame(this.animation);clearInterval(this.audioTimer);this.release();this.initializers.clear();if(this.ownsAudioContext)this.audioContext?.close();else {this.gain?.disconnect();this.low?.disconnect();this.high?.disconnect();}}
 }
 self.ScreenLinkCanvas={CanvasPlayer,playlist,demux,chooseVariant};
 })();
