@@ -232,7 +232,7 @@ class CanvasPlayer {
    while((type==='video'&&this.frames.length>6)||(type==='audio'&&this.audio.length>128)){if(serial!==this.serial||this.closed)return;await sleep(10);}
    if(serial!==this.serial||this.closed)return;
    decoder.decode(new Chunk({type:type==='audio'||sample.is_sync?'key':'delta',timestamp,duration,data:sample.data}));
-   while(decoder.decodeQueueSize>4){if(serial!==this.serial||this.closed)return;await sleep(5);}
+   while(decoder.decodeQueueSize>12){if(serial!==this.serial||this.closed)return;await sleep(5);}
   }
   };
   await Promise.all([consume(samples.filter(s=>s.track.video)),consume(samples.filter(s=>s.track.audio))]);
