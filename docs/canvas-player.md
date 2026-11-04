@@ -61,3 +61,9 @@ phone-to-viewer media stays on the local hotspot.
 
 The private TLS identity is packaged after public CI as in build 36. No key is
 committed to source or public build artifacts. Renew the certificate before expiry.
+
+## Build 38 packed HLS audio repair
+
+The player previously classified every non-TS segment as MP4. A valid AAC/ADTS segment (with or without an HLS ID3 prefix) reproduced the exact `No decodable samples in media segment` error. Container sniffing now sends packed AAC to the existing mux.js demux pipeline, then WebCodecs AudioDecoder and Web Audio. ID3-prefixed TS is supported too. MP4 empty-sample failures report bounded box types, track count and byte count; unknown formats fail explicitly. No URLs, credentials or sample contents enter diagnostics.
+
+Regression fixtures cover packed AAC both directly and as an alternate HLS audio rendition alongside Canvas video. Existing TS/fMP4 and Maps tests remain required. This repair is not evidence that the user’s exact uncollected segment was AAC; physical playback remains to be confirmed.

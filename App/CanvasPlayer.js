@@ -50,14 +50,40 @@ function demuxMP4(bytes){
  file.onReady=info=>{for(const track of info.tracks){if(!track.video&&!track.audio)continue;const entry=file.getTrackById(track.id).mdia.minf.stbl.stsd.entries[0];tracks.set(track.id,{...track,description:description(entry)});file.setExtractionOptions(track.id,null,{nbSamples:1});}file.start();};
  file.onSamples=(id,_user,batch)=>{for(const sample of batch)samples.push({...sample,data:new Uint8Array(sample.data).slice(),track:tracks.get(id)});if(batch.length)file.releaseUsedSamples(id,batch[batch.length-1].number+1);};
  const data=bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength);data.fileStart=0;file.appendBuffer(data);file.flush();file.stop();
- if(failure)throw failure;if(!samples.length)throw Error('No decodable samples in media segment');
+ if(failure)throw failure;if(!samples.length)throw Error('MP4 segment has no extractable samples (tracks='+tracks.size+', boxes='+mp4Boxes(bytes).join(',')+', bytes='+bytes.length+'). Check initialization and byte ranges.');
  return samples;
 }
+// HLS packed AAC is not MP4. Recognize containers before choosing a parser;
+// never send arbitrary/HTML/error responses into MP4Box as if they were media.
+function mp4Boxes(bytes){
+ const names=[];const view=new DataView(bytes.buffer,bytes.byteOffset,bytes.byteLength);
+ for(let p=0;p+8<=bytes.length&&names.length<12;){
+  const name=String.fromCharCode(...bytes.subarray(p+4,p+8));if(!/^[a-zA-Z0-9 ]{4}$/.test(name))break;
+  let size=view.getUint32(p);if(size===1){if(p+16>bytes.length)break;size=view.getUint32(p+8)*4294967296+view.getUint32(p+12);}
+  names.push(name);if(size===0)break;if(size<8||!Number.isSafeInteger(size))break;p+=size;
+ }return names;
+}
+function mediaPayload(bytes){
+ let at=0;
+ while(at+3<=bytes.length&&bytes[at]===73&&bytes[at+1]===68&&bytes[at+2]===51){
+  if(at+10>bytes.length)throw Error('Truncated HLS ID3 header');
+  const size=bytes.subarray(at+6,at+10);if(size.some(n=>n&128))throw Error('Invalid HLS ID3 length');
+  const length=10+size.reduce((n,v)=>n*128+v,0)+((bytes[at+5]&16)?10:0);
+  if(at+length>bytes.length)throw Error('Truncated HLS ID3 metadata');at+=length;
+ }return bytes.subarray(at);
+}
 function demux(bytes,init){
- if(bytes[0]!==0x47)return demuxMP4(init?join([init,bytes]):bytes);
+ const payload=mediaPayload(bytes),boxes=mp4Boxes(payload);
+ if(boxes.length&&['ftyp','styp','moof','moov','sidx','emsg','free','skip','mdat','prft'].includes(boxes[0]))return demuxMP4(init?join([init,payload]):payload);
+ const ts=payload[0]===0x47&&(payload.length<189||payload[188]===0x47);
+ const aac=payload.length>=7&&payload[0]===0xff&&(payload[1]&0xf6)===0xf0;
+ if(!ts&&!aac)throw Error('Unsupported HLS segment format (bytes='+bytes.length+', init='+(init?.length||0)+'). Expected MPEG-TS, fragmented MP4 or AAC/ADTS.');
  const muxer=new muxjs.mp4.Transmuxer({keepOriginalTimestamps:true,remux:true}),parts=[];
- muxer.on('data',part=>parts.push(...demuxMP4(join([part.initSegment,part.data]))));muxer.push(bytes);muxer.flush();muxer.dispose();
- if(!parts.length)throw Error('Unsupported transport stream');return parts;
+ try{
+  muxer.on('data',part=>parts.push(...demuxMP4(join([part.initSegment,part.data]))));
+  muxer.push(payload);muxer.flush();
+ }finally{muxer.dispose();}
+ if(!parts.length)throw Error((aac?'AAC':'MPEG-TS')+' segment produced no samples (bytes='+payload.length+')');return parts;
 }
 class CanvasPlayer {
  static supported(){return !!(self.isSecureContext&&self.VideoDecoder&&self.AudioDecoder&&self.EncodedVideoChunk&&self.EncodedAudioChunk);}
@@ -126,7 +152,8 @@ class CanvasPlayer {
  async decodeSegment(segment,kind,serial){
   let init=null;if(segment.map){const key=JSON.stringify(segment.map);if(!this.initializers.has(key))this.initializers.set(key,await this.bytes(segment.map.url,segment.map.range));init=this.initializers.get(key);}
   const bytes=await this.bytes(segment.url,segment.range);if(serial!==this.serial||this.closed)return;
-  const samples=demux(bytes,init).filter(s=>s.track&&(kind==='all'||(kind==='audio'?!!s.track.audio:!!s.track.video))).sort((a,b)=>(a.dts??a.cts)/a.timescale-(b.dts??b.cts)/b.timescale);
+  let extracted;try{extracted=demux(bytes,init);}catch(error){throw Error('HLS '+kind+' segment at '+segment.start.toFixed(2)+'s: '+error.message);}
+  const samples=extracted.filter(s=>s.track&&(kind==='all'||(kind==='audio'?!!s.track.audio:!!s.track.video))).sort((a,b)=>(a.dts??a.cts)/a.timescale-(b.dts??b.cts)/b.timescale);
   if(!samples.length)throw Error('Selected HLS track has no samples');
   // Preserve inter-track offsets; normalize each fragment onto its playlist timeline.
   const origin=Math.min(...samples.map(s=>s.cts/s.timescale));
