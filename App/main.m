@@ -150,7 +150,7 @@
     self.localViewerApprove.enabled=NO;self.localViewerReject.enabled=NO;
     [[NSURLSession.sharedSession dataTaskWithRequest:request completionHandler:^(NSData *data,NSURLResponse *response,NSError *error){dispatch_async(dispatch_get_main_queue(),^{
         if(error||[(NSHTTPURLResponse *)response statusCode]!=200)[self append:@"Local viewer decision was not confirmed. Keep phone screen hidden and retry after status refresh."];
-        [self probeBroadcast];
+        if([action isEqual:@"automatic"]&&!error&&[(NSHTTPURLResponse *)response statusCode]==200)self.localViewerStatus.text=@"READY";else [self probeBroadcast];
     });}] resume];
 }
 - (void)stopBroadcast {
