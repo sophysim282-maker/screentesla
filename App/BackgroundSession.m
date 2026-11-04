@@ -64,7 +64,7 @@
     __weak BackgroundSession *weak=self;
     task.expirationHandler=^{dispatch_async(dispatch_get_main_queue(),^{
         BackgroundSession *owner=weak;if(!owner || owner->_task!=task)return;
-        [owner log:@"iOS ended the background session or you cancelled it in system controls. Receiver state is retained; iOS may suspend the app without floating preview."];
+        [owner log:[NSString stringWithFormat:@"BACKGROUND SESSION ENDED after %.0f seconds: iOS expiration/cancellation callback; thermal state %ld. The system does not provide the exact cause. Receiver state is retained; return to ScreenLink to resume. No recording or PiP starts automatically.",NSProcessInfo.processInfo.systemUptime-owner->_started,(long)NSProcessInfo.processInfo.thermalState]];
         [owner complete:NO notify:YES];
     });};
     _timer=[NSTimer scheduledTimerWithTimeInterval:1 repeats:YES block:^(NSTimer *timer){[weak tick];}];

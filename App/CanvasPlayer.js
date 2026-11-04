@@ -32,9 +32,10 @@ function playlist(text,url){
 // when the source's 720p/1080p variants use a higher bitrate.
 function chooseVariant(levels,quality='hd'){
  const height=level=>Number((level.RESOLUTION||'').split('x')[1])||0;
- let candidates=levels.slice(),wanted=Number(quality);
- if(wanted>0){candidates=candidates.filter(level=>[720,1080].includes(height(level)));if(!candidates.length)throw Error('YouTube offered no 720p or 1080p source. Lower resolutions require Developer mode.');const exact=candidates.filter(level=>height(level)===wanted);if(exact.length)candidates=exact;}
- else {const hd=candidates.filter(level=>height(level)>0&&height(level)<=1080);if(hd.length)candidates=hd;}
+ let candidates=levels.filter(level=>!height(level)||height(level)<=1080),wanted=Number(quality);
+ if(!candidates.length)throw Error('YouTube offered no source at or below 1080p.');
+ if(wanted>0){const preferred=candidates.filter(level=>height(level)>0&&height(level)<=Math.min(1080,wanted));if(preferred.length)candidates=preferred;}
+ const known=candidates.filter(level=>height(level)>0);if(known.length)candidates=known;
  return candidates.sort((a,b)=>height(b)-height(a)||(Number(b.BANDWIDTH)||0)-(Number(a.BANDWIDTH)||0))[0];
 }
 function description(entry){
@@ -193,7 +194,7 @@ class CanvasPlayer {
  }
  fail(error){if(this.closed||error?.name==='AbortError')return;this.error={code:3,message:error.message||String(error)};this.pause();this.onerror(error);}
  async configure(track,kind,serial){
-  if(kind==='video'&&Number(this.quality)>0&&!([720,1080].includes(Math.min(track.video.width,track.video.height))))throw Error('Source is not 720p/1080p. Lower resolutions require explicit Developer mode.');
+  if(kind==='video'&&Math.min(track.video.width,track.video.height)>1080)throw Error('Source exceeds the 1080p playback limit.');
   const config=kind==='video'?{codec:track.codec,codedWidth:track.video.width,codedHeight:track.video.height,description:track.description,hardwareAcceleration:'prefer-hardware'}:{codec:track.codec,sampleRate:track.audio.sample_rate,numberOfChannels:track.audio.channel_count,description:track.description};
   if(config.codec.toLowerCase()==='opus'){config.codec='opus';delete config.description;}
   const key=JSON.stringify({...config,description:config.description?Array.from(config.description):[]});

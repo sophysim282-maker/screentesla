@@ -40,7 +40,7 @@
 }
 - (void)connectMode:(BOOL)probe completion:(void (^)(BOOL))completion {
     if(self.connected){[self acceptConnectedMode:probe completion:completion];return;}
-    if(self.busy){[self report:@"VPN setup is already in progress. Wait for Connected before starting AirPlay."];return;}
+    if(self.busy){[self report:@"VPN setup is already in progress. Wait for Connected before starting AirPlay."];if(completion)completion(NO);return;}
     NSString *identifier=[self providerIdentifier];
     if(!identifier){[self report:@"VPN extension is missing from this installation. Re-sign the complete IPA with its embedded extension retained."];if(completion)completion(NO);return;}
     self.busy=YES;self.pending=completion;NSUInteger attempt=++self.attempt;

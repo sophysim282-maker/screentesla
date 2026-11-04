@@ -15,6 +15,10 @@ int main(void){@autoreleasepool{
  assert([gate decide:YES requestID:identifier now:4]);
  NSString *token=[gate request:nonce peer:peer now:5][@"token"];assert(token.length);
  assert([gate allowsToken:token peer:peer now:5]);assert(![gate allowsToken:token peer:@"172.20.10.3" now:5]);
+ assert([[gate request:nonce peer:@"172.20.10.3" previousToken:@"wrong" now:5][@"phase"] isEqual:@"busy"]);
+ assert([[gate request:@"ffffffffffffffffffffffffffffffff" peer:@"172.20.10.3" previousToken:token now:5][@"phase"] isEqual:@"busy"]);
+ NSString *rebound=[gate request:nonce peer:@"172.20.10.3" previousToken:token now:5][@"token"];assert(rebound.length && ![rebound isEqual:token]);
+ assert(![gate allowsToken:token peer:peer now:5]);assert([gate allowsToken:rebound peer:@"172.20.10.3" now:5]);
  assert(![gate decide:NO requestID:identifier now:6]);
  [gate reset];assert(![gate allowsToken:token peer:peer now:7]);
  [gate request:nonce peer:peer now:8];identifier=[gate statusAt:8][@"requestID"];assert([gate decide:NO requestID:identifier now:9]);assert(![gate request:nonce peer:peer now:10][@"token"]);assert([[gate request:nonce peer:peer now:10][@"phase"] isEqual:@"rejected"]);

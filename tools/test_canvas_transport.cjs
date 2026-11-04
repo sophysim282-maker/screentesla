@@ -22,7 +22,10 @@ const player=()=>Object.assign(Object.create(CanvasPlayer.prototype),{abort:new 
  p.abort.abort();await assert.rejects(()=>p.bytes('/cancelled'),e=>e.name==='AbortError');
  const variants=[144,720,1080,2160].map(h=>({RESOLUTION:`${h*16/9}x${h}`,BANDWIDTH:h}));
  assert.equal(chooseVariant(variants,'720').RESOLUTION,'1280x720');assert.equal(chooseVariant(variants,'1080').RESOLUTION,'1920x1080');
- assert.throws(()=>chooseVariant([variants[0],variants[3]],'1080'),/no 720p or 1080p/);
+ assert.equal(chooseVariant([variants[0],variants[3]],'auto').RESOLUTION,variants[0].RESOLUTION,'SD remains playable under the 1080p cap');
+ assert.equal(chooseVariant(variants,'auto').RESOLUTION,'1920x1080');
+ assert.throws(()=>chooseVariant([variants[3]],'auto'),/at or below 1080p/);
+ const unknown={BANDWIDTH:100};assert.equal(chooseVariant([unknown],'auto'),unknown);
  assert.equal(chooseVariant([variants[0]],'hd').RESOLUTION,variants[0].RESOLUTION,'Explicit developer source mode remains available');
- console.log('CANVAS_TRANSPORT_PASSED: 8 MB source via 1 MB ranges, transient 503 retried with decoder/PCM/frame identity preserved, exact partial range, auth/cancellation and HD-only normal selection.');
+ console.log('CANVAS_TRANSPORT_PASSED: 8 MB source via 1 MB ranges, transient 503 retried with decoder/PCM/frame identity preserved, exact partial range, auth/cancellation and automatic selection up to 1080p including SD.');
 })().catch(e=>{console.error(e);process.exit(1);});
