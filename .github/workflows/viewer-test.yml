@@ -55,6 +55,7 @@ jobs:
           node tools/test_canvas_prefetch.cjs App/CanvasPlayer.js
           node tools/test_canvas_lifecycle.cjs App/CanvasPlayer.js
           node tools/test_canvas_engine.cjs App/CanvasPlayer.js
+          node tools/test_canvas_horizon.cjs App/CanvasPlayer.js
           node tools/test_canvas_timeline.cjs App build/pure
           node tools/test_canvas_audio.cjs App/CanvasPlayer.js
           node tools/test_canvas_demux.cjs App build/pure

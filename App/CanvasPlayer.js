@@ -91,14 +91,16 @@ class CanvasPlayer {
   this.canvas=canvas;this.ctx=canvas.getContext('2d',{alpha:false});if(!this.ctx)throw Error('Canvas rendering unavailable');
   this.audioContext=audioContext;this.ownsAudioContext=!audioContext;this.audioTail=null;
   this.quality=quality;this.offeredHeights=[];this.selectedHeight=0;this.onerror=onerror;this.paused=true;this.muted=true;this.duration=0;this.readyState=0;this.ended=false;this.error=null;this.closed=false;
-  this.frames=[];this.audio=[];this.nodes=new Set();this.timelines=new Map();this.segmentDiagnostics=[];this.position=0;this.videoEnd=0;this.anchor=0;this.running=false;this.serial=0;this.decoders=new Map();this.configs=new Map();this.initializers=new Map();
-  this.stats={drawn:0,dropped:0,decoded:0,audioDecoded:0,maxFrames:0,maxAudio:0,audioScheduled:0,audioLate:0,audioJoined:0,audioRestored:0,bufferWaitMs:0,rebufferCount:0,timestampResets:0,directAudioCopies:0,audioGapMs:0};
+  this.frames=[];this.audio=[];this.nodes=new Set();this.timelines=new Map();this.segmentDiagnostics=[];this.segmentCache=new Map();this.playbackEvents=[];this.audioEnd=0;this.hasAudio=false;this.videoStarved=false;this.position=0;this.videoEnd=0;this.anchor=0;this.running=false;this.serial=0;this.decoders=new Map();this.configs=new Map();this.initializers=new Map();
+  this.stats={drawn:0,dropped:0,decoded:0,audioDecoded:0,maxFrames:0,maxAudio:0,audioScheduled:0,audioLate:0,audioJoined:0,audioRestored:0,bufferWaitMs:0,rebufferCount:0,timestampResets:0,directAudioCopies:0,audioGapMs:0,maxAudioNodes:0,videoHiccups:0,audioUnderruns:0,staleAudioDropped:0,maxSegmentCache:0};
   this.animation=requestAnimationFrame(()=>this.paint());
   // Audio look-ahead must not depend on Canvas animation callbacks.
   this.audioTimer=setInterval(()=>{if(!this.closed&&!this.paused&&this.running){try{this.scheduleAudio(this.currentTime);}catch(error){this.fail(error);}}},20);
  }
  clock(){return this.audioContext?.state==='running'?this.audioContext.currentTime:performance.now()/1000;}
- get currentTime(){return this.running&&!this.paused?Math.max(this.position,Math.min(this.duration,Math.max(this.position,this.videoEnd),this.position+this.clock()-this.anchor)):this.position;}
+ audible(){return !this.muted&&this.hasAudio&&this.audioContext?.state==='running';}
+ mediaEnd(){return this.audible()?this.audioEnd:this.videoEnd;}
+ get currentTime(){return this.running&&!this.paused?Math.max(this.position,Math.min(this.duration,Math.max(this.position,this.mediaEnd()),this.position+this.clock()-this.anchor)):this.position;}
  set currentTime(value){this.seek(value);}
  async bytes(url,range){
   const absolute=new URL(url,location.href);if(absolute.origin!==location.origin)throw Error('Media must use the ScreenLink proxy');
@@ -144,14 +146,17 @@ class CanvasPlayer {
    this.frames.push(data);this.frames.sort((a,b)=>a.timestamp-b.timestamp);this.stats.maxFrames=Math.max(this.stats.maxFrames,this.frames.length);
    if(this.frames.length>48){this.fail(Error('Video buffer exceeded its limit'));return;}
   }else{
-   this.stats.audioDecoded++;if(data.timestamp/1e6+data.duration/1e6<this.position){data.close();return;}
+   const mediaNow=this.currentTime;this.stats.audioDecoded++;
+   if(!this.hasAudio){if(this.running&&!this.muted&&this.audioContext?.state==='running'){this.position=mediaNow;this.running=false;this.stopAudio(true);}this.hasAudio=true;this.audioEnd=Math.max(this.audioEnd,this.position);}
+   const end=(data.timestamp+data.duration)/1e6;
+   if(end<this.position||end<mediaNow-.8){this.stats.staleAudioDropped++;data.close();return;}this.audioEnd=Math.max(this.audioEnd,end);
    // Copy decoded planes directly into the final Web Audio buffer.
    try{
     const buffer=new AudioBuffer({numberOfChannels:data.numberOfChannels,length:data.numberOfFrames,sampleRate:data.sampleRate});
     for(let channel=0;channel<data.numberOfChannels;channel++)data.copyTo(buffer.getChannelData(channel),{planeIndex:channel,format:'f32-planar'});
     this.audio.push({timestamp:data.timestamp/1e6,sampleRate:data.sampleRate,frames:data.numberOfFrames,buffer});this.stats.directAudioCopies++;
    }finally{data.close();}
-   this.stats.maxAudio=Math.max(this.stats.maxAudio,this.audio.length);if(this.audio.length>256)this.fail(Error('Audio buffer exceeded its limit'));
+   this.stats.maxAudio=Math.max(this.stats.maxAudio,this.audio.length);if(this.audio.length>512)this.fail(Error('Audio buffer exceeded its limit'));
   }
   if(kind==='video')this.readyState=2;
  }
@@ -160,13 +165,13 @@ class CanvasPlayer {
   if(serial!==this.serial||this.closed)throw new DOMException('Playback replaced','AbortError');
   const bytes=await this.bytes(segment.url,segment.range);return {init,bytes,fetchMs:performance.now()-fetchStart};
  }
- async decodeSegment(segment,kind,serial,prepared=null){
+ async decodeSegment(segment,kind,serial,prepared=null,allowEmpty=false){
   const {init,bytes,fetchMs=0}=prepared||await this.prepareSegment(segment,serial);if(serial!==this.serial||this.closed)return;
-  const demuxStart=performance.now();let extracted;try{extracted=demux(bytes,init);}catch(error){throw Error('HLS '+kind+' segment at '+segment.start.toFixed(2)+'s: '+error.message);}
+  const demuxStart=performance.now();let extracted;try{if(prepared?.samples)extracted=prepared.samples;else{extracted=demux(bytes,init);if(prepared)prepared.samples=extracted;}}catch(error){throw Error('HLS '+kind+' segment at '+segment.start.toFixed(2)+'s: '+error.message);}
   const samples=extracted.filter(s=>s.track&&(kind==='all'||(kind==='audio'?!!s.track.audio:!!s.track.video))).sort((a,b)=>(a.dts??a.cts)/a.timescale-(b.dts??b.cts)/b.timescale);
-  if(!samples.length)throw Error('Selected HLS track has no samples');
+  if(!samples.length){if(allowEmpty)return;throw Error('Selected HLS track has no samples');}
   // Preserve inter-track offsets; normalize each fragment onto its playlist timeline.
-  const origin=Math.min(...samples.map(s=>s.cts/s.timescale));
+  const origin=Math.min(...extracted.map(s=>s.cts/s.timescale));
   let timeline=this.timelines.get(kind);
   const reset=timeline&&(origin<timeline.lastOrigin-.1||(segment.start>timeline.lastSegmentStart&&origin<=timeline.lastOrigin+.001));
   if(!timeline||segment.discontinuity||reset){timeline={offset:segment.start-origin,lastOrigin:origin,lastSegmentStart:segment.start};this.timelines.set(kind,timeline);if(reset)this.stats.timestampResets++;}
@@ -194,35 +199,41 @@ class CanvasPlayer {
   if(serial!==this.serial||this.closed)return;
   for(const type of new Set(samples.map(s=>s.track.video?'video':'audio'))){const decoder=this.decoders.get(type);if(decoder?.state==='configured')await decoder.flush();}
  }
+ async preparedSegment(segment,serial,owners){
+  while(serial===this.serial&&!this.closed&&!this.segmentCache.has(segment)&&this.segmentCache.size>=6)await sleep(10);
+  if(serial!==this.serial||this.closed)throw new DOMException('Playback replaced','AbortError');
+  let entry=this.segmentCache.get(segment);
+  if(!entry){entry={remaining:new Set(owners),promise:this.prepareSegment(segment,serial).then(data=>({data}),error=>({error}))};this.segmentCache.set(segment,entry);this.stats.maxSegmentCache=Math.max(this.stats.maxSegmentCache,this.segmentCache.size);}
+  return {entry,result:await entry.promise};
+ }
+ releaseSegment(segment,entry,kind){entry.remaining.delete(kind);if(!entry.remaining.size&&this.segmentCache.get(segment)===entry)this.segmentCache.delete(segment);}
  async seek(value){
   if(!this.videoList||this.closed)return;this.serial++;const serial=this.serial;
-  this.abort?.abort();this.abort=new AbortController();this.position=Math.max(0,Math.min(Number(value)||0,Math.max(0,this.duration-0.01)));this.videoEnd=this.position;this.anchor=this.clock();this.running=false;this.ended=false;this.readyState=0;this.release();this.timelines.clear();
+  this.abort?.abort();this.abort=new AbortController();this.position=Math.max(0,Math.min(Number(value)||0,Math.max(0,this.duration-0.01)));this.videoEnd=this.position;this.anchor=this.clock();this.running=false;this.ended=false;this.readyState=0;this.release();this.timelines.clear();this.audioEnd=this.position;this.hasAudio=false;this.videoStarved=false;
   const run=async()=>{
    // Interleave muxed samples by decode time; independently pace alternate tracks.
    // Otherwise a bounded video queue can starve audio while waiting for drawing.
-   const consume=async(list,kind)=>{
+   const consume=async(list,kind,owners,allowEmpty=false)=>{
     const segments=list.segments.filter(s=>s.start+s.duration>this.position);
-    // One encoded segment ahead per rendition. Fetch while decoding/playing
-    // the current segment, not only after its bounded decoded queue drains.
-    const fetchAt=index=>this.prepareSegment(segments[index],serial).then(data=>({data}),error=>({error}));
+    const fetchAt=index=>this.preparedSegment(segments[index],serial,owners).then(value=>value,error=>({result:{error}}));
     let pending=segments.length?fetchAt(0):null;
     for(let index=0;index<segments.length;index++){
      const segment=segments[index];
-     while(serial===this.serial&&!this.closed&&segment.start>this.currentTime+2)await sleep(30);
+     while(serial===this.serial&&!this.closed&&segment.start>this.currentTime+(kind==='audio'?4:2))await sleep(30);
      if(serial!==this.serial||this.closed)return;
-     const result=await pending;if(serial!==this.serial||this.closed)return;if(result.error)throw result.error;
+     const {entry,result}=await pending;if(serial!==this.serial||this.closed)return;if(result.error)throw result.error;
      pending=index+1<segments.length?fetchAt(index+1):null;
-     await this.decodeSegment(segment,kind,serial,result.data);
+     try{await this.decodeSegment(segment,kind,serial,result.data,allowEmpty);}finally{this.releaseSegment(segment,entry,kind);}
     }
    };
-   if(this.audioList)await Promise.all([consume(this.videoList,'video'),consume(this.audioList,'audio')]);
-   else await consume(this.videoList,'all');
+   if(this.audioList)await Promise.all([consume(this.videoList,'video',['video']),consume(this.audioList,'audio',['audio'])]);
+   else await Promise.all([consume(this.videoList,'video',['video','audio'],true),consume(this.videoList,'audio',['video','audio'],true)]);
    if(serial===this.serial)this.finished=true;
   };
   this.finished=false;run().catch(error=>{if(serial===this.serial)this.fail(error);});
  }
  startClock(){this.anchor=this.clock()+.04;this.running=true;}
- canStart(){return this.readyState>=2&&(this.videoEnd-this.position>=.12||this.finished);}
+ canStart(){const video=this.readyState>=2&&(this.videoEnd-this.position>=.12||this.finished);return video&&(!this.audible()||this.audioEnd-this.position>=.6||this.finished);}
  async play(){if(this.closed)return;this.paused=false;if(this.canStart()&&!this.running)this.startClock();}
  pause(){this.position=this.currentTime;this.paused=true;this.running=false;this.stopAudio(true);}
  stopAudio(restore=false){
@@ -237,7 +248,7 @@ class CanvasPlayer {
    }catch{}
   }
   this.nodes.clear();this.audioTail=null;
-  if(restore)this.audio.sort((a,b)=>a.timestamp-b.timestamp);
+  if(restore){this.audio.sort((a,b)=>a.timestamp-b.timestamp);this.stats.maxAudio=Math.max(this.stats.maxAudio,this.audio.length);}
  }
  async enableAudio(sharedContext=null){
   const position=this.currentTime;
@@ -255,7 +266,7 @@ class CanvasPlayer {
   while(this.audio.length&&this.audio[0].timestamp+this.audio[0].frames/this.audio[0].sampleRate<=now)this.audio.shift();
   if(this.muted||!this.audioContext||this.audioContext.state!=='running')return;
   const contextNow=this.audioContext.currentTime,base=this.anchor-this.position;
-  while(this.audio.length&&this.audio[0].timestamp<now+0.6){
+  while(this.audio.length&&this.audio[0].timestamp<now+4&&this.nodes.size<256){
    const packet=this.audio.shift(),duration=packet.frames/packet.sampleRate;
    let start=base+packet.timestamp;
    // One absolute sample clock for all chunks. Snap small AAC boundary
@@ -270,14 +281,18 @@ class CanvasPlayer {
    if(offset>0){start+=offset;this.stats.audioLate++;}
    const node=this.audioContext.createBufferSource(),fade=this.audioContext.createGain();fade.gain.value=1;node.buffer=packet.buffer;node.connect(fade);fade.connect(this.gain);node.fadeGain=fade;node.screenlinkPacket=packet;this.nodes.add(node);
    node.onended=()=>{this.nodes.delete(node);node.screenlinkPacket=null;node.disconnect();fade.disconnect();};
-   node.start(start,offset);this.audioTail=start+duration-offset;this.stats.audioScheduled++;
+   node.start(start,offset);this.audioTail=start+duration-offset;this.stats.audioScheduled++;this.stats.maxAudioNodes=Math.max(this.stats.maxAudioNodes,this.nodes.size);
   }
  }
+ recordPlayback(type,position){this.playbackEvents.push({type,position,audioLead:this.audioContext&&this.audioTail!==null?Math.max(0,this.audioTail-this.audioContext.currentTime):0,videoLead:Math.max(0,this.videoEnd-position)});if(this.playbackEvents.length>12)this.playbackEvents.shift();}
  paint(){
   if(this.closed)return;
   if(!this.paused){
    if(this.canStart()&&!this.running)this.startClock();
-   const now=this.currentTime;if(this.running&&!this.finished&&this.position+this.clock()-this.anchor>this.videoEnd){this.stats.bufferWaitMs+=Math.max(0,(this.position+this.clock()-this.anchor-this.videoEnd)*1000);this.position=now;this.running=false;this.stats.rebufferCount++;this.stopAudio(true);}let frame=null;
+   const now=this.currentTime,raw=this.position+this.clock()-this.anchor,end=this.mediaEnd();
+   if(this.running&&!this.finished&&raw>end+.005){this.stats.bufferWaitMs+=Math.max(0,(raw-end)*1000);this.position=now;this.running=false;this.stats.rebufferCount++;if(this.audible())this.stats.audioUnderruns++;this.recordPlayback('buffer-empty',now);this.stopAudio(true);}
+   const held=this.running&&this.audible()&&raw>this.videoEnd+.05;
+   if(held&&!this.videoStarved){this.stats.videoHiccups++;this.recordPlayback('video-hold-audio-continues',now);}this.videoStarved=held;let frame=null;
    while(this.frames.length&&this.frames[0].timestamp/1e6<=now+0.015){if(frame){frame.close();this.stats.dropped++;}frame=this.frames.shift();}
    if(frame){try{if(this.canvas.width!==frame.displayWidth||this.canvas.height!==frame.displayHeight){this.canvas.width=frame.displayWidth;this.canvas.height=frame.displayHeight;}this.ctx.drawImage(frame,0,0,this.canvas.width,this.canvas.height);this.stats.drawn++;}catch(error){this.fail(error);}finally{frame.close();}}
    this.scheduleAudio(now);
@@ -288,7 +303,7 @@ class CanvasPlayer {
  release(){
   for(const frame of this.frames)frame.close();this.frames=[];this.audio=[];
   for(const decoder of this.decoders.values())if(decoder.state!=='closed')decoder.close();this.decoders.clear();this.configs.clear();
-  this.stopAudio();
+  this.stopAudio();this.segmentCache.clear();
  }
  destroy(){if(this.closed)return;this.closed=true;this.serial++;this.abort?.abort();cancelAnimationFrame(this.animation);clearInterval(this.audioTimer);this.release();this.initializers.clear();const cleanup=()=>{if(this.ownsAudioContext)this.audioContext?.close();else{this.gain?.disconnect();this.low?.disconnect();this.high?.disconnect();}};if(this.gain&&this.audioContext?.state==='running')setTimeout(cleanup,12);else cleanup();}
 }
