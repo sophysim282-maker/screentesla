@@ -175,7 +175,10 @@ class CanvasPlayer {
   const diagnostic={fetchMs,demuxMs:performance.now()-demuxStart,kind,start:segment.start,duration:segment.duration,sourceStart:origin,mappedStart:origin+mapping,reset:!!reset,video:0,audio:0};
   for(const sample of samples)diagnostic[sample.track.video?'video':'audio']++;
   this.segmentDiagnostics.push(diagnostic);if(this.segmentDiagnostics.length>8)this.segmentDiagnostics.shift();
-  for(const sample of samples){
+  // Audio must keep filling its look-ahead while video waits for Canvas space.
+  // Each lane retains source decode order and the shared mapped timeline.
+  const consume=async lane=>{
+   for(const sample of lane){
    if(serial!==this.serial||this.closed)return;
    const type=sample.track.video?'video':'audio',decoder=await this.configure(sample.track,type,serial);
    const timestamp=Math.round((mapping+sample.cts/sample.timescale)*1e6),duration=Math.max(1,Math.round(sample.duration/sample.timescale*1e6));
@@ -186,6 +189,9 @@ class CanvasPlayer {
    decoder.decode(new Chunk({type:type==='audio'||sample.is_sync?'key':'delta',timestamp,duration,data:sample.data}));
    while(decoder.decodeQueueSize>12){if(serial!==this.serial||this.closed)return;await sleep(5);}
   }
+  };
+  await Promise.all([consume(samples.filter(s=>s.track.video)),consume(samples.filter(s=>s.track.audio))]);
+  if(serial!==this.serial||this.closed)return;
   for(const type of new Set(samples.map(s=>s.track.video?'video':'audio'))){const decoder=this.decoders.get(type);if(decoder?.state==='configured')await decoder.flush();}
  }
  async seek(value){
