@@ -124,7 +124,7 @@ class CanvasPlayer {
   this.canvas=canvas;this.ctx=canvas.getContext('2d',{alpha:false});if(!this.ctx)throw Error('Canvas rendering unavailable');
   this.audioContext=audioContext;this.ownsAudioContext=!audioContext;this.audioTail=null;
   this.quality=quality;this.offeredHeights=[];this.selectedHeight=0;this.onerror=onerror;this.paused=true;this.muted=true;this.duration=0;this.readyState=0;this.ended=false;this.error=null;this.closed=false;
-  this.frames=[];this.audio=[];this.nodes=new Set();this.timelines=new Map();this.segmentDiagnostics=[];this.segmentCache=new Map();this.playbackEvents=[];this.audioEnd=0;this.hasAudio=false;this.videoStarved=false;this.position=0;this.videoEnd=0;this.anchor=0;this.running=false;this.serial=0;this.decoders=new Map();this.configs=new Map();this.initializers=new Map();
+  this.frames=[];this.audio=[];this.nodes=new Set();this.timelines=new Map();this.segmentDiagnostics=[];this.segmentCache=new Map();this.playbackEvents=[];this.audioEnd=0;this.lastAudioSampleRate=0;this.hasAudio=false;this.videoStarved=false;this.position=0;this.videoEnd=0;this.anchor=0;this.running=false;this.serial=0;this.decoders=new Map();this.configs=new Map();this.initializers=new Map();
   this.stats={drawn:0,dropped:0,decoded:0,audioDecoded:0,maxFrames:0,maxAudio:0,audioScheduled:0,audioLate:0,audioJoined:0,audioRestored:0,bufferWaitMs:0,rebufferCount:0,timestampResets:0,directAudioCopies:0,audioGapMs:0,maxAudioNodes:0,videoHiccups:0,audioUnderruns:0,staleAudioDropped:0,maxSegmentCache:0};
   this.animation=requestAnimationFrame(()=>this.paint());
   // Audio look-ahead must not depend on Canvas animation callbacks.
@@ -187,7 +187,7 @@ class CanvasPlayer {
    try{
     const buffer=new AudioBuffer({numberOfChannels:data.numberOfChannels,length:data.numberOfFrames,sampleRate:data.sampleRate});
     for(let channel=0;channel<data.numberOfChannels;channel++)data.copyTo(buffer.getChannelData(channel),{planeIndex:channel,format:'f32-planar'});
-    this.audio.push({timestamp:data.timestamp/1e6,sampleRate:data.sampleRate,frames:data.numberOfFrames,buffer});this.stats.directAudioCopies++;
+    this.lastAudioSampleRate=data.sampleRate;this.audio.push({timestamp:data.timestamp/1e6,sampleRate:data.sampleRate,frames:data.numberOfFrames,buffer});this.stats.directAudioCopies++;
    }finally{data.close();}
    this.stats.maxAudio=Math.max(this.stats.maxAudio,this.audio.length);if(this.audio.length>512)this.fail(Error('Audio buffer exceeded its limit'));
   }
