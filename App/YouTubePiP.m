@@ -7,6 +7,7 @@
 @property(nonatomic,strong) AVPictureInPictureController *pip;
 @property(nonatomic,copy) NSString *epoch;
 @property(nonatomic) BOOL requested;
+@property(nonatomic) BOOL sourcePaused;
 @property(nonatomic) NSUInteger generation;
 @end
 @implementation YouTubePiP
@@ -18,7 +19,8 @@
  if(![state[@"active"] boolValue]){BOOL wasActive=self.active;[self reset];if(wasActive&&self.activityChanged)self.activityChanged(NO);return;}
  NSString *epoch=state[@"epoch"],*path=state[@"url"];
  if(![epoch isKindOfClass:NSString.class]||![path hasPrefix:@"/media/resource/"])return;
- if(![self.epoch isEqual:epoch]){
+ BOOL replaced=![self.epoch isEqual:epoch];
+ if(replaced){
   self.epoch=epoch;
   NSURL *url=[NSURL URLWithString:[@"http://localhost:8080" stringByAppendingString:path]];
   AVPlayerItem *item=[AVPlayerItem playerItemWithURL:url];item.preferredMaximumResolution=CGSizeMake(1280,720);item.preferredPeakBitRate=6000000;
@@ -26,7 +28,8 @@
   self.playerLayer.player=self.player;self.playerLayer.videoGravity=AVLayerVideoGravityResizeAspect;
   if(!self.pip)self.pip=[[AVPictureInPictureController alloc]initWithPlayerLayer:self.playerLayer];self.pip.delegate=self;self.pip.canStartPictureInPictureAutomaticallyFromInline=YES;
  }
- if([state[@"paused"] boolValue])[self.player pause];else [self.player play];
+ BOOL paused=[state[@"paused"] boolValue];
+ if(replaced||paused!=self.sourcePaused){if(paused)[self.player pause];else [self.player play];}self.sourcePaused=paused;
  double position=[state[@"position"] doubleValue],current=CMTimeGetSeconds(self.player.currentTime);
  if(isfinite(current)&&fabs(current-position)>5)[self.player seekToTime:CMTimeMakeWithSeconds(position,600) toleranceBefore:CMTimeMakeWithSeconds(.5,600) toleranceAfter:CMTimeMakeWithSeconds(.5,600)];
 }
