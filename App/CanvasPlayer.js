@@ -268,11 +268,11 @@ class CanvasPlayer {
    else await Promise.all([consume(this.videoList,'video',['video','audio'],true),consume(this.videoList,'audio',['video','audio'],true)]);
    if(serial===this.serial)this.finished=true;
   };
-  this.bufferReadyAt=this.clock()+this.bufferSeconds;this.preparedVideoEnd=this.position;
+  this.bufferReadyAt=performance.now()/1000+this.bufferSeconds;this.preparedVideoEnd=this.position;
   this.finished=false;run().catch(error=>{if(serial===this.serial)this.fail(error);});
  }
  startClock(){this.anchor=this.clock()+.04;this.running=true;}
- canStart(){if(this.clock()<this.bufferReadyAt)return false;const reserve=Math.min(this.bufferSeconds,Math.max(0,this.duration-this.position));if(this.bufferSeconds&&this.preparedVideoEnd-this.position+1e-5<reserve&&!this.finished)return false;const video=this.readyState>=2&&(this.videoEnd-this.position>=.12||this.finished);return video&&(!this.audible()||this.audioEnd-this.position>=Math.max(.6,reserve)||this.finished);}
+ canStart(){if(performance.now()/1000<this.bufferReadyAt)return false;const reserve=Math.min(this.bufferSeconds,Math.max(0,this.duration-this.position));if(this.bufferSeconds&&this.preparedVideoEnd-this.position+1e-5<reserve&&!this.finished)return false;const video=this.readyState>=2&&(this.videoEnd-this.position>=.12||this.finished);return video&&(!this.audible()||this.audioEnd-this.position>=Math.max(.6,reserve)||this.finished);}
  async play(){if(this.closed)return;this.paused=false;if(this.canStart()&&!this.running)this.startClock();}
  pause(){this.position=this.currentTime;this.paused=true;this.running=false;this.stopAudio(true);}
  stopAudio(restore=false){
