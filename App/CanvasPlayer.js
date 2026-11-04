@@ -245,8 +245,6 @@ class CanvasPlayer {
    if(this.finished&&now>=this.duration-0.02){this.pause();this.position=this.duration;this.ended=true;}
   }
   this.animation=requestAnimationFrame(()=>this.paint());
-  // Audio look-ahead must not depend on Canvas animation callbacks.
-  this.audioTimer=setInterval(()=>{if(!this.closed&&!this.paused&&this.running){try{this.scheduleAudio(this.currentTime);}catch(error){this.fail(error);}}},20);
  }
  release(){
   for(const frame of this.frames)frame.close();this.frames=[];this.audio=[];
