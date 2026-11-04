@@ -8,13 +8,13 @@ function screenState(meta){if((Number(meta.privacyRevision)||0)<minRevision)retu
 function hideLocal(message){screen.hide();mapCover.hidden=false;mapCover.textContent=message;$('privacyState').textContent=message;}
 function screenError(error){screenFault=true;hideLocal('Screen decoder stopped: '+error.message);$('mapDetail').textContent=error.message;ws?.close();}
 async function raw(path,options={}){const control=new AbortController(),timeout=setTimeout(()=>control.abort(),7000);try{const response=await fetch(path,{...options,cache:'no-store',signal:control.signal});if(!response.ok){const e=Error('HTTP '+response.status+' from '+path.split('?')[0]);e.status=response.status;throw e;}return response;}finally{clearTimeout(timeout);}}
-async function api(path,options={}){if(!token)throw Error('Connect and approve the viewer first.');try{const response=await raw(path+'?token='+encodeURIComponent(token),options);return await response.json();}catch(error){if(error.status===403)connectionLost('Viewer session expired. Reconnecting automatically.');throw error;}}
+async function api(path,options={}){if(!token)throw Error('Waiting for the phone connection.');try{const response=await raw(path+'?token='+encodeURIComponent(token),options);return await response.json();}catch(error){if(error.status===403)connectionLost('Viewer session expired. Reconnecting automatically.');throw error;}}
 function mediaClear(){mediaGeneration++;player?.destroy();player=null;mediaEpoch='';command=-1;mediaCover.hidden=false;mediaCover.textContent='Waiting for YouTube AirPlay.';}
 function connectionLost(message){if(player)resumeConnection={epoch:mediaEpoch,position:player.currentTime};connected=false;token='';ws?.close();ws=null;clearTimeout(wsTimer);mediaClear();hideLocal('Connection lost. Hide is NOT confirmed on the phone.');status.textContent=message;}
 async function connect(){if(joining||connected)return;joining=true;stopped=false;try{
  if(!isSecureContext||typeof VideoDecoder!=='function')throw Error('This player needs HTTPS and browser WebCodecs support. Keep the HTTP fallback available.');
  try{nonce=sessionStorage.getItem('screenlink-local-nonce')||'';}catch{}if(!/^[0-9a-f]{32}$/.test(nonce)){nonce=Array.from(crypto.getRandomValues(new Uint8Array(16)),x=>x.toString(16).padStart(2,'0')).join('');try{sessionStorage.setItem('screenlink-local-nonce',nonce);}catch{}}
- status.textContent='Requesting local viewer approval. Approve on your iPhone.';
+ status.textContent='Waiting for ScreenLink on your phone…';
  const deadline=Date.now()+120000;
  while(!stopped&&Date.now()<deadline){const r=await raw('/local-viewer/request',{method:'POST',headers:{'Content-Type':'application/json','X-ScreenLink-Viewer':'request'},body:JSON.stringify({nonce})}),next=await r.json();
   if(next.phase==='approved'&&typeof next.token==='string'){token=next.token;connected=true;wsAttempt=0;mediaFailed=false;status.textContent='Approved · local HTTPS · Canvas + WebCodecs';if(youtubeOnly)await privacy(true);else openSocket();tick();return;}
