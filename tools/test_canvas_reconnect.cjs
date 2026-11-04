@@ -4,7 +4,7 @@ let now=100000,offline=false,epoch=1,requests=[],screenInstances=0,privacyRevisi
 const listeners={};
 const elements=new Map();function el(id){if(elements.has(id))return elements.get(id);const e={value:id==='quality'?'auto':id==='viewMode'?'youtube':'normal',options:[],dataset:{},style:{setProperty(){}},classList:{toggle(){}},setAttribute(){},after(){},appendChild(){},getAttribute(){return ''},disabled:false,hidden:false,width:640,height:360};elements.set(id,e);return e;}
 class Screen {constructor(){screenInstances++;this.framesDrawn=0;this.minRevision=0;this.hold=true;}hide(){this.hold=true;}destroy(){this.closed=true;}privacy(meta){this.minRevision=meta.privacyRevision;}state(){}}
-const timers=[];const context={console,Date:class extends Date{static now(){return now}},URLSearchParams,Uint8Array,DOMException,AbortController,VideoDecoder:function(){},isSecureContext:true,location:{origin:'https://car.test',pathname:'/video',search:''},sessionStorage:{getItem(){return '0123456789abcdef0123456789abcdef'},setItem(){}},localStorage:{getItem(){return null},setItem(){}},history:{replaceState(){}},crypto:require('crypto').webcrypto,ScreenLinkScreen:{CanvasScreen:Screen},ScreenLinkCanvas:{},MutationObserver:class{observe(){}},document:{getElementById:el,createElement:()=>el(Symbol()),body:el('body')},matchMedia:()=>({matches:false}),navigator:{},setTimeout:(fn,ms)=>{timers.push({fn,ms});return timers.length},clearTimeout(){},window:{addEventListener(name,fn){listeners[name]=fn;}},WebSocket:class{static OPEN=1},fetch:async(path,opts)=>{
+const timers=[];const context={console,Date:class extends Date{static now(){return now}},URLSearchParams,Uint8Array,DOMException,AbortController,VideoDecoder:function(){},isSecureContext:true,location:{origin:'https://car.test',pathname:'/video',search:''},sessionStorage:{getItem(){return '0123456789abcdef0123456789abcdef'},setItem(){}},localStorage:{getItem(){return null},setItem(){}},history:{replaceState(){}},crypto:require('crypto').webcrypto,ScreenLinkScreen:{CanvasScreen:Screen},ScreenLinkCanvas:{},MutationObserver:class{observe(){}},document:{getElementById:el,createElement:()=>el(Symbol()),body:el('body')},matchMedia:()=>({matches:false}),navigator:{},setTimeout:(fn,ms)=>{timers.push({fn,ms});return timers.length},clearTimeout(id){if(timers[id-1])timers[id-1].cleared=true;},window:{addEventListener(name,fn){listeners[name]=fn;}},WebSocket:class{static OPEN=1},fetch:async(path,opts)=>{
  if(offline)throw new TypeError('Failed to fetch');
  if(path==='/local-viewer/request'){if(delayedApproval)await delayedApproval;const body=JSON.parse(opts.body);requests.push(body);return {ok:true,json:async()=>({phase:'approved',token:'credential-'+epoch})};}
  if(path.startsWith('/screen/privacy')){privacyRevision=epoch===1?9:1;return {ok:true,json:async()=>({hidden:true,privacyRevision})};}
@@ -12,7 +12,7 @@ const timers=[];const context={console,Date:class extends Date{static now(){retu
  throw Error('Unexpected '+path);
 }};context.self=context;vm.createContext(context);
 const source=fs.readFileSync('App/CanvasShell.js','utf8').replace("if(isSecureContext&&typeof VideoDecoder==='function')autoConnect();",'');
-vm.runInContext(source.replace(/\}\)\(\);\s*$/, 'self.test={connect,tick,connectionLost,privacy,setPlayer:p=>{player=p;}};})();'),context);
+vm.runInContext(source.replace(/\}\)\(\);\s*$/, 'self.test={raw,connect,tick,connectionLost,privacy,setPlayer:p=>{player=p;}};})();'),context);
 const flush=async()=>{for(let i=0;i<20;i++)await Promise.resolve();};
 (async()=>{
  await context.test.connect();await flush();assert(context.ScreenLinkCanvasStatus().connected);assert.equal(requests.length,1);
@@ -35,5 +35,16 @@ const flush=async()=>{for(let i=0;i<20;i++)await Promise.resolve();};
  const late=context.test.connect();await flush();listeners.pagehide();release();await late;await flush();
  assert(!context.ScreenLinkCanvasStatus().connected,'Late approval must not revive an abandoned page');
  delayedApproval=null;listeners.pageshow({persisted:true});await flush();assert(context.ScreenLinkCanvasStatus().connected);
+ // Headers arrive, but the body never finishes. Keep the deadline through JSON.
+ const normalFetch=context.fetch;
+ for(const path of ['/local-viewer/request','/media/state?token=private']){
+  let bodyStarted=false,finished=false;
+  context.fetch=async(_path,opts)=>({ok:true,json:()=>{bodyStarted=true;return new Promise((resolve,reject)=>opts.signal.addEventListener('abort',()=>reject(new DOMException('Body timed out','AbortError')),{once:true}));}});
+  const firstTimer=timers.length;const pending=context.test.raw(path).then(()=>{finished=true;throw Error('Expected body timeout')},e=>{assert.equal(e.name,'AbortError');finished=true;});
+  await flush();assert(bodyStarted);assert(!finished);
+  const timer=timers.slice(firstTimer).find(t=>t.ms===7000);assert(timer);assert(!timer.cleared,'Partial response must retain its timeout');timer.fn();await pending;assert(timer.cleared);
+ }
+ context.fetch=normalFetch;
+ console.log('PARTIAL_BODY_TIMEOUT_PASSED: discovery/state deadlines include response JSON; interrupted bodies cannot hang discovery or health polling.');
  console.log('CANVAS_RECONNECT_PASSED: sustained outage reauth, previous credential, fresh privacy generation, healthy buffered playback retained, back/forward restoration and abandoned approval cancellation.');
 })().catch(e=>{console.error(e);process.exit(1)});
