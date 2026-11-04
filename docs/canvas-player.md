@@ -147,3 +147,9 @@ Phone Start ScreenLink configures alias VPN, presents the system broadcast picke
 ### YouTube without ReplayKit
 
 Start YouTube · no recording stops the previous receiver/broadcast, waits for the server port to be free, starts the app-owned media-only HTTPS receiver, arms the first local viewer and requests the existing bounded iOS continued-processing session. No ReplayKit picker, capture or ScreenEncoder is created on this path. The empty screen-stream object exists only for HTTP authorization/privacy compatibility and rejects Show. Wait for READY before leaving the app. This mode is not unlimited: iOS may reject/end the task, and the existing session ends at 30 minutes. Maps requires the separate broadcast mode. CPU/thermal improvement is not measured.
+
+## Build 49: foreground return resumes YouTube-only sessions
+
+Starting no-recording mode opts into resume on app return. Expiration or system cancellation does not disarm that preference. A foreground activation requests a new timed session, reusing a healthy media-only receiver and its token; a missing receiver is rebuilt through the existing alias VPN setup. Stop sharing explicitly disarms resume and invalidates delayed startup callbacks, including callbacks pending while VPN setup or old-broadcast shutdown completes. There is no background renewal loop. Maps capture is not started. iOS may reject the request, and selecting the AirPlay route in the separate YouTube app remains outside ScreenLink control. Physical resumption after expiry/cancellation still needs testing.
+
+The HTTPS viewer no longer renders Connect phone or Disconnect buttons. Connection is requested automatically on page load and recovered automatically. Starting/stopping and granting the first local viewer remain phone actions. The sound-unlock button remains separate; no claim is made to override browser autoplay policy.
