@@ -7,7 +7,7 @@
 - (void)reset { @synchronized(self){self.nonce=nil;self.peer=nil;self.requestID=nil;self.token=nil;self.phase=nil;self.deadline=0;self.automaticUntil=0;} }
 - (void)armAutomaticAt:(NSTimeInterval)now { @synchronized(self){[self reset];self.automaticUntil=now+300;} }
 - (void)expireAt:(NSTimeInterval)now {if(self.deadline && now>=self.deadline)[self reset];}
-- (NSDictionary *)statusAt:(NSTimeInterval)now { @synchronized(self){[self expireAt:now];return @{ @"phase":self.phase?:@"idle",@"requestID":self.requestID?:@"",@"peer":self.peer?:@"" };} }
+- (NSDictionary *)statusAt:(NSTimeInterval)now { @synchronized(self){[self expireAt:now];return @{ @"phase":self.phase?:@"idle",@"requestID":self.requestID?:@"",@"peer":self.peer?:@"",@"automatic":@(self.automaticUntil>now) };} }
 - (NSDictionary *)request:(NSString *)nonce peer:(NSString *)peer now:(NSTimeInterval)now { @synchronized(self){
     [self expireAt:now];
     if(![nonce isKindOfClass:NSString.class] || nonce.length!=32 || [nonce rangeOfCharacterFromSet:[[NSCharacterSet characterSetWithCharactersInString:@"0123456789abcdef"] invertedSet]].location!=NSNotFound || !peer.length)return @{@"phase":@"invalid"};
