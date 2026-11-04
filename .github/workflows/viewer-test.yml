@@ -59,6 +59,8 @@ jobs:
           node tools/test_canvas_timeline.cjs App build/pure
           node tools/test_canvas_audio.cjs App/CanvasPlayer.js
           node tools/test_canvas_demux.cjs App build/pure
+          ffmpeg -v error -f lavfi -i sine=frequency=440:sample_rate=44100 -t 6.1 -c:a aac -f adts build/pure/complete.aac
+          node tools/test_packed_aac.cjs App build/pure/complete.aac
           git fetch --depth=1 origin 4da653434dd0debdc331fd2113cdc77fa91691ce
           git show 4da653434dd0debdc331fd2113cdc77fa91691ce:App/CanvasPlayer.js > build/baseline-canvas.js
           SCREENLINK_TEST_PLAYER_OVERRIDE="$PWD/build/baseline-canvas.js" SCREENLINK_EXPECT_SEGMENT_STALL=1 node --require ./tools/test_browser_engine.cjs tools/test_pure_canvas.cjs App build/pure build/live.mp4

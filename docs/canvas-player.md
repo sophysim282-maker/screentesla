@@ -115,3 +115,13 @@ New regressions verify a full native lead above 2.5 seconds, survival of a 250 m
 Copy playback diagnostics now also reports native lead, audio sample rate, bounded playback events, video hiccups, audio underruns, stale drops, maximum live nodes and segment-cache use. It contains no media URLs, tokens, nonce, private SDP, PCM or screen content.
 
 The legacy muted-video starvation fixture now gates the third segment until the test explicitly releases it. A fixed four-second response delay no longer guarantees starvation because the new audio lane requests that segment earlier. The fixture still requires muted video to hold its playhead at the last decoded frame, then resume after release; audible video-only shortage is tested separately and must preserve native audio.
+
+## Build 44 device-diagnostic-driven packed AAC repair
+
+The physical Mac diagnostic shows native audio lead of approximately four seconds, no audio underruns or rebuffering, but positive scheduled audio gaps and repeated zero-based audio source timestamps. Increasing buffering cannot repair these already-scheduled gaps. Video is independently 1080p/60 with a substantial rendered-frame drop count; this patch does not silently reduce source quality or claim to resolve every visual stutter.
+
+A 6.1-second 44.1kHz ADTS fixture reproduces a separate concrete conversion defect: the previous AAC -> mux.js fMP4 -> MP4Box path returns 263 samples from 264 complete ADTS frames. Direct ADTS extraction preserves all complete frames, strips only the ADTS header/CRC, supplies AudioSpecificConfig, rejects malformed/truncated payloads, and retains the first sample's 33-bit MPEG timestamp from ID3 PRIV. ID3 v2.3/v2.4 frame sizes are handled. Timing tags no longer vanish before audio demux.
+
+When packed timestamps are genuinely absent or nonadvancing/reset, audio uses exact sample-count continuation across segment boundaries instead of reintroducing rounded EXTINF gaps. The diagnostic labels that fallback explicitly. Valid advancing ID3 timestamps remain authoritative and explicit discontinuities still reset the mapping; the player does not blindly flatten genuine timestamp gaps.
+
+Regressions count all ADTS frames including the final frame, exercise ID3 timestamp variants and 33-bit values, reject truncation, verify sample-count fallback and play continuous 44.1kHz packed AAC across multiple boundaries in the native browser audio graph. Existing four-second cushion, waveform, video-only hold isolation, true network starvation, frame/queue/cache bounds, Maps and privacy checks remain required. Actual Mac/Tesla playback still needs confirmation.

@@ -72,11 +72,44 @@ function mediaPayload(bytes){
   if(at+length>bytes.length)throw Error('Truncated HLS ID3 metadata');at+=length;
  }return bytes.subarray(at);
 }
+// Packed HLS audio carries its first PTS in ID3 PRIV, not in ADTS.
+function packedTimestamp(bytes){
+ const u32=p=>((bytes[p]*16777216)+(bytes[p+1]<<16)+(bytes[p+2]<<8)+bytes[p+3]);
+ const sync=p=>{if(p+4>bytes.length||[0,1,2,3].some(i=>bytes[p+i]&128))return NaN;return bytes[p]*2097152+bytes[p+1]*16384+bytes[p+2]*128+bytes[p+3];};
+ for(let at=0;at+10<=bytes.length&&bytes[at]===73&&bytes[at+1]===68&&bytes[at+2]===51;){
+  const version=bytes[at+3],size=sync(at+6),end=at+10+size;if(!Number.isFinite(size)||end>bytes.length)return null;
+  if((version===3||version===4)&&!(bytes[at+5]&128)){
+   let pos=at+10;if(bytes[at+5]&64){const n=version===4?sync(pos):u32(pos)+4;if(!Number.isFinite(n)||n<4||pos+n>end)return null;pos+=n;}
+   while(pos+10<=end){const n=version===4?sync(pos+4):u32(pos+4);if(!Number.isFinite(n)||n<=0||pos+10+n>end)break;
+    if(bytes[pos]===80&&bytes[pos+1]===82&&bytes[pos+2]===73&&bytes[pos+3]===86&&!bytes[pos+8]&&!bytes[pos+9]){
+     const owner='com.apple.streaming.transportStreamTimestamp';let q=pos+10,match=true;for(let i=0;i<owner.length;i++)if(bytes[q+i]!==owner.charCodeAt(i))match=false;q+=owner.length;
+     if(match&&bytes[q]===0&&q+9<=pos+10+n){q++;if(!bytes[q]&&!bytes[q+1]&&!bytes[q+2]&&!(bytes[q+3]&254))return ((bytes[q+3]&1)*4294967296+u32(q+4))/90000;}
+    }pos+=10+n;
+   }
+  }at=end+((version===4&&(bytes[at+5]&16))?10:0);
+ }return null;
+}
+function demuxADTS(bytes,timestamp){
+ const rates=[96000,88200,64000,48000,44100,32000,24000,22050,16000,12000,11025,8000,7350],samples=[];let at=0,clock=0,track=null;
+ while(at<bytes.length){
+  if(bytes[at]===73&&bytes[at+1]===68&&bytes[at+2]===51){const rest=mediaPayload(bytes.subarray(at));at=bytes.length-rest.length;continue;}
+  if(bytes.length-at<7||bytes[at]!==255||(bytes[at+1]&246)!==240){if(bytes.subarray(at).every(v=>v===0))break;throw Error('Malformed AAC/ADTS frame at byte '+at);}
+  const rateIndex=(bytes[at+2]>>2)&15,rate=rates[rateIndex],profile=(bytes[at+2]>>6)+1,channels=((bytes[at+2]&1)<<2)|(bytes[at+3]>>6),header=(bytes[at+1]&1)?7:9;
+  const length=((bytes[at+3]&3)<<11)|(bytes[at+4]<<3)|(bytes[at+5]>>5);
+  if(!rate||!channels||(bytes[at+6]&3))throw Error('Unsupported AAC/ADTS configuration');
+  if(length<=header||at+length>bytes.length)throw Error('Truncated AAC/ADTS frame');
+  if(!track)track={codec:'mp4a.40.'+profile,audio:{sample_rate:rate,channel_count:channels===7?8:channels},description:new Uint8Array([(profile<<3)|(rateIndex>>1),((rateIndex&1)<<7)|(channels<<3)])};
+  if(track.audio.sample_rate!==rate||track.codec!=='mp4a.40.'+profile||track.audio.channel_count!==(channels===7?8:channels))throw Error('AAC configuration changed inside a segment');
+  const pts=(timestamp===null?0:timestamp*rate)+clock;samples.push({cts:pts,dts:pts,timescale:rate,duration:1024,is_sync:true,data:bytes.subarray(at+header,at+length),track});clock+=1024;at+=length;
+ }
+ if(!samples.length)throw Error('AAC segment has no complete frames');samples.packedAudio=true;samples.packedTimestamp=timestamp;return samples;
+}
 function demux(bytes,init){
  const payload=mediaPayload(bytes),boxes=mp4Boxes(payload);
  if(boxes.length&&['ftyp','styp','moof','moov','sidx','emsg','free','skip','mdat','prft'].includes(boxes[0]))return demuxMP4(init?join([init,payload]):payload);
  const ts=payload[0]===0x47&&(payload.length<189||payload[188]===0x47);
  const aac=payload.length>=7&&payload[0]===0xff&&(payload[1]&0xf6)===0xf0;
+ if(aac)return demuxADTS(payload,packedTimestamp(bytes));
  if(!ts&&!aac)throw Error('Unsupported HLS segment format (bytes='+bytes.length+', init='+(init?.length||0)+'). Expected MPEG-TS, fragmented MP4 or AAC/ADTS.');
  const muxer=new muxjs.mp4.Transmuxer({keepOriginalTimestamps:true,remux:true}),parts=[];
  try{
@@ -174,10 +207,13 @@ class CanvasPlayer {
   const origin=Math.min(...extracted.map(s=>s.cts/s.timescale));
   let timeline=this.timelines.get(kind);
   const reset=timeline&&(origin<timeline.lastOrigin-.1||(segment.start>timeline.lastSegmentStart&&origin<=timeline.lastOrigin+.001));
-  if(!timeline||segment.discontinuity||reset){timeline={offset:segment.start-origin,lastOrigin:origin,lastSegmentStart:segment.start};this.timelines.set(kind,timeline);if(reset)this.stats.timestampResets++;}
+  const packedFallback=extracted.packedAudio&&(extracted.packedTimestamp===null||reset);
+  if(timeline&&packedFallback&&!segment.discontinuity){timeline.offset=timeline.end-origin;this.stats.timestampResets++;}
+  else if(!timeline||segment.discontinuity||reset){timeline={offset:segment.start-origin,lastOrigin:origin,lastSegmentStart:segment.start};this.timelines.set(kind,timeline);if(reset)this.stats.timestampResets++;}
+  timeline.end=Math.max(...samples.map(s=>(s.cts+s.duration)/s.timescale))+timeline.offset;
   timeline.lastOrigin=origin;timeline.lastSegmentStart=segment.start;
   const mapping=timeline.offset;
-  const diagnostic={fetchMs,demuxMs:performance.now()-demuxStart,kind,start:segment.start,duration:segment.duration,sourceStart:origin,mappedStart:origin+mapping,reset:!!reset,video:0,audio:0};
+  const diagnostic={audioTiming:extracted.packedAudio?(packedFallback?'sample-count':'id3-pts'):'container-pts',mappedEnd:timeline.end,fetchMs,demuxMs:performance.now()-demuxStart,kind,start:segment.start,duration:segment.duration,sourceStart:origin,mappedStart:origin+mapping,reset:!!reset,video:0,audio:0};
   for(const sample of samples)diagnostic[sample.track.video?'video':'audio']++;
   this.segmentDiagnostics.push(diagnostic);if(this.segmentDiagnostics.length>8)this.segmentDiagnostics.shift();
   // Audio must keep filling its look-ahead while video waits for Canvas space.
