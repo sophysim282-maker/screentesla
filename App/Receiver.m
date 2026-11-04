@@ -536,7 +536,7 @@ static NSArray *txtStrings(const char *bytes,int length) {
             body=[message dataUsingEncoding:NSUTF8StringEncoding];[self emit:message];
         }
     }
-    else if(current && localOwner){mime=@"application/json";NSDictionary *owner;@synchronized(self){owner=@{@"broadcast":@(_screenStream!=nil),@"running":@(_running),@"frames":@(_screenFrames),@"token":self.token,@"logs":_broadcastLog.copy?:@[],@"localViewer":[_localViewer statusAt:localNow]};}body=[NSJSONSerialization dataWithJSONObject:owner options:0 error:NULL];}
+    else if(current && localOwner){mime=@"application/json";NSDictionary *owner;@synchronized(self){owner=@{@"broadcast":@(_screenStream!=nil&&!self.mediaOnly),@"mediaOnly":@(self.mediaOnly),@"running":@(_running),@"frames":@(_screenFrames),@"token":self.token,@"logs":_broadcastLog.copy?:@[],@"localViewer":[_localViewer statusAt:localNow]};}body=[NSJSONSerialization dataWithJSONObject:owner options:0 error:NULL];}
     else if(current&&localRTC){__block NSDictionary *result;NSString *command=[url.path substringFromIndex:11];BOOL allowed=([parts.firstObject isEqual:@"GET"]&&[command isEqual:@"status"])||([parts.firstObject isEqual:@"POST"]&&[@[@"start",@"approve",@"reject",@"stop"] containsObject:command]);if(!allowed){status=@"405 Method Not Allowed";}else{dispatch_sync(dispatch_get_main_queue(),^{if(!self->_rtcMedia&&[command isEqual:@"start"]){self->_rtcMedia=[[SLMediaSession alloc]initWithMedia:self->_media];__weak Receiver *weak=self;self->_rtcMedia.status=^(NSString *message){[weak emit:message];};self->_rtcMedia.screenProvider=^NSDictionary *(NSString *path,NSDictionary *request){return [weak rtcScreenRequest:path request:request]?:@{@"code":@503};};}result=self->_rtcMedia?[self->_rtcMedia control:command]:@{@"phase":@"idle",@"approvalRequested":@NO,@"events":@[]};});mime=@"application/json";body=[NSJSONSerialization dataWithJSONObject:result options:0 error:nil];}}
     else if(current && localStop && _screenStream){mime=@"application/json";body=[@"{}" dataUsingEncoding:NSUTF8StringEncoding];dispatch_after(dispatch_time(DISPATCH_TIME_NOW,NSEC_PER_MSEC*250),dispatch_get_main_queue(),^{if(self.broadcastStop)self.broadcastStop();});}
     else if(!current || (![parts.firstObject isEqual:@"GET"] && !report && !privacy) || !(aliasDestination?(aliasClient && [_localViewer allowsToken:token peer:peerHost now:localNow]):[token isEqual:self.token])){status=@"403 Forbidden";body=[(aliasDestination?@"Open http://240.3.3.3:8080/ and request approval on the iPhone.":@"On the iPhone hotspot, open http://172.20.10.1:8080/ . On other Wi-Fi, use the complete viewer link from ScreenLink.") dataUsingEncoding:NSUTF8StringEncoding];}
@@ -653,7 +653,11 @@ static NSArray *txtStrings(const char *bytes,int length) {
 }
 - (void)stop {
     void (^closeRTC)(void)=^{[self->_rtcMedia stop];self->_rtcMedia=nil;};if(NSThread.isMainThread)closeRTC();else dispatch_sync(dispatch_get_main_queue(),closeRTC);
-    [_localViewer reset];[_screenStream reset];[_media stop];[_vpnDiscovery stop];_vpnDiscovery=nil;[_h264 reset];
+    [_localViewer reset];[_screenStream reset];
+#if !SL_BROADCAST_EXTENSION
+    if(self.mediaOnly){self.mediaOnly=NO;_screenStream=nil;}
+#endif
+    [_media stop];[_vpnDiscovery stop];_vpnDiscovery=nil;[_h264 reset];
     @synchronized(self){_running=NO;_generation++;_mirrorTransportOpen=NO;_sessionFrames=0;_controlClients=0;}
     [_frameReady lock];[_frameReady broadcast];[_frameReady unlock];
     if(_httpsSocket>=0){shutdown(_httpsSocket,SHUT_RDWR);close(_httpsSocket);_httpsSocket=-1;}
