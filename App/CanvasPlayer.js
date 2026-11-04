@@ -243,7 +243,7 @@ class CanvasPlayer {
   while(serial===this.serial&&!this.closed&&!this.segmentCache.has(segment)&&this.segmentCache.size>=6)await sleep(10);
   if(serial!==this.serial||this.closed)throw new DOMException('Playback replaced','AbortError');
   let entry=this.segmentCache.get(segment);
-  if(!entry){entry={remaining:new Set(owners),promise:this.prepareSegment(segment,serial).then(data=>({data}),error=>({error}))};this.segmentCache.set(segment,entry);this.stats.maxSegmentCache=Math.max(this.stats.maxSegmentCache,this.segmentCache.size);}
+  if(!entry){entry={remaining:new Set(owners),promise:this.prepareSegment(segment,serial).then(data=>{if(serial===this.serial&&!this.closed&&owners.includes('video'))this.preparedVideoEnd=Math.max(this.preparedVideoEnd,segment.start+segment.duration);return {data};},error=>({error}))};this.segmentCache.set(segment,entry);this.stats.maxSegmentCache=Math.max(this.stats.maxSegmentCache,this.segmentCache.size);}
   return {entry,result:await entry.promise};
  }
  releaseSegment(segment,entry,kind){entry.remaining.delete(kind);if(!entry.remaining.size&&this.segmentCache.get(segment)===entry)this.segmentCache.delete(segment);}
