@@ -6,4 +6,5 @@
 - (BOOL)decide:(BOOL)approve requestID:(NSString *)requestID now:(NSTimeInterval)now;
 - (BOOL)allowsToken:(NSString *)token peer:(NSString *)peer now:(NSTimeInterval)now;
 - (void)reset;
+- (void)armAutomaticAt:(NSTimeInterval)now;
 @end

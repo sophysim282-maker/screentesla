@@ -506,7 +506,8 @@ static NSArray *txtStrings(const char *bytes,int length) {
     else if(current && localViewerControl){
         id object=[NSJSONSerialization JSONObjectWithData:[request subdataWithRange:NSMakeRange(bodyOffset,bodyLength)] options:0 error:nil];
         NSString *action=[object isKindOfClass:NSDictionary.class]?object[@"action"]:nil;BOOL changed=NO;
-        if([action isEqual:@"disconnect"]){[_localViewer reset];[self setScreenHidden:YES];changed=YES;[self emit:@"LOCAL VIEWER DISCONNECTED: alias media authorization revoked; phone screen hidden."];}
+        if([action isEqual:@"automatic"]){[_localViewer armAutomaticAt:localNow];[self setScreenHidden:YES];changed=YES;}
+        else if([action isEqual:@"disconnect"]){[_localViewer reset];[self setScreenHidden:YES];changed=YES;[self emit:@"LOCAL VIEWER DISCONNECTED: alias media authorization revoked; phone screen hidden."];}
         else if([action isEqual:@"approve"]||[action isEqual:@"reject"]){changed=[_localViewer decide:[action isEqual:@"approve"] requestID:object[@"requestID"] now:localNow];if(changed){[self setScreenHidden:YES];[self emit:[action isEqual:@"approve"]?@"LOCAL VIEWER APPROVED: experimental HTTP media enabled for this hotspot client; phone screen starts hidden. Tesla playback is not yet verified.":@"LOCAL VIEWER REJECTED: no alias media access granted."];}}
         status=changed?@"200 OK":@"409 Conflict";mime=@"application/json";body=[@"{}" dataUsingEncoding:NSUTF8StringEncoding];
     }

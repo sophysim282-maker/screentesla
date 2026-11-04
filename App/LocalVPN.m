@@ -31,9 +31,10 @@
 }
 - (void)connect:(void (^)(BOOL))completion { [self connectMode:NO completion:completion]; }
 - (void)connectRouteProbe:(void (^)(BOOL))completion { [self connectMode:YES completion:completion]; }
+- (void)waitForAliasDisconnect:(void (^)(BOOL))completion attempts:(NSUInteger)attempts {if(self.manager.connection.status==NEVPNStatusDisconnected||self.manager.connection.status==NEVPNStatusInvalid){[self connectMode:YES completion:completion];return;}if(!attempts){if(completion)completion(NO);return;}dispatch_after(dispatch_time(DISPATCH_TIME_NOW,(int64_t)(0.5*NSEC_PER_SEC)),dispatch_get_main_queue(),^{[self waitForAliasDisconnect:completion attempts:attempts-1];});}
 - (BOOL)acceptConnectedMode:(BOOL)probe completion:(void (^)(BOOL))completion {
     BOOL activeProbe=[((NETunnelProviderProtocol *)self.manager.protocolConfiguration).providerConfiguration[@"routeProbe"] boolValue];
-    if(probe && !activeProbe){[self report:@"Disconnect VPN first, wait for Disconnected, then tap Experimental virtual-IP probe. The running VPN has not been changed."];if(completion)completion(NO);return NO;}
+    if(probe && !activeProbe){[self.manager.connection stopVPNTunnel];[self waitForAliasDisconnect:completion attempts:20];return YES;}
     [self report:activeProbe?@"EXPERIMENTAL virtual-IP probe VPN is active. This is not a verified Tesla connection.":@"Built-in VPN is connected."];
     if(completion)completion(YES);return YES;
 }

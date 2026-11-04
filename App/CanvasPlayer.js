@@ -229,10 +229,10 @@ class CanvasPlayer {
    const timestamp=Math.round((mapping+sample.cts/sample.timescale)*1e6),duration=Math.max(1,Math.round(sample.duration/sample.timescale*1e6));
    const Chunk=type==='video'?EncodedVideoChunk:EncodedAudioChunk;
    if(serial!==this.serial||this.closed)return;
-   while((type==='video'&&this.frames.length>18)||(type==='audio'&&this.audio.length>128)){if(serial!==this.serial||this.closed)return;await sleep(10);}
+   while((type==='video'&&this.frames.length>6)||(type==='audio'&&this.audio.length>128)){if(serial!==this.serial||this.closed)return;await sleep(10);}
    if(serial!==this.serial||this.closed)return;
    decoder.decode(new Chunk({type:type==='audio'||sample.is_sync?'key':'delta',timestamp,duration,data:sample.data}));
-   while(decoder.decodeQueueSize>12){if(serial!==this.serial||this.closed)return;await sleep(5);}
+   while(decoder.decodeQueueSize>4){if(serial!==this.serial||this.closed)return;await sleep(5);}
   }
   };
   await Promise.all([consume(samples.filter(s=>s.track.video)),consume(samples.filter(s=>s.track.audio))]);
