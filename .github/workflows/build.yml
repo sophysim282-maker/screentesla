@@ -8,7 +8,7 @@ permissions:
   contents: read
 jobs:
   build:
-    runs-on: macos-15
+    runs-on: macos-15-intel
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
@@ -20,9 +20,11 @@ jobs:
       - name: Native-to-Chromium local TCP fallback (UDP excluded)
         run: |
           npm install --no-save playwright@1.55.0
-          curl --fail --location --retry 3 https://storage.googleapis.com/chrome-for-testing-public/140.0.7339.207/mac-arm64/chrome-mac-arm64.zip -o build/chrome140.zip
+          chrome_platform=mac-arm64
+          if [[ "$(uname -m)" == x86_64 ]]; then chrome_platform=mac-x64; fi
+          curl --fail --location --retry 3 "https://storage.googleapis.com/chrome-for-testing-public/140.0.7339.207/$chrome_platform/chrome-$chrome_platform.zip" -o build/chrome140.zip
           unzip -q build/chrome140.zip -d build/chrome140
-          export SCREENLINK_CHROME_BIN="$PWD/build/chrome140/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing"
+          export SCREENLINK_CHROME_BIN="$PWD/build/chrome140/chrome-$chrome_platform/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing"
           export NODE_OPTIONS="--require=$PWD/tools/test_browser_engine.cjs"
           rtc_mac="$PWD/Vendor/WebRTC.xcframework/macos-x86_64_arm64"
           xcrun --sdk macosx clang -fobjc-arc -fblocks -IRTC -F"$rtc_mac" tools/test_rtc_tcp_browser.m RTC/SLPingPeer.m RTC/SLTestVideo.m build/local-stun.o -framework CoreVideo -framework Foundation -framework WebRTC -Wl,-rpath,"$rtc_mac" -o build/test-rtc-tcp-browser
