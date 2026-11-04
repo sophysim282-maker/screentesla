@@ -126,7 +126,7 @@ class CanvasPlayer {
   this.bufferSeconds=Math.max(0,Math.min(2,Number(bufferSeconds)||0));this.bufferReadyAt=0;this.preparedVideoEnd=0;
   this.quality=quality;this.offeredHeights=[];this.selectedHeight=0;this.onerror=onerror;this.paused=true;this.muted=true;this.duration=0;this.readyState=0;this.ended=false;this.error=null;this.closed=false;
   this.frames=[];this.audio=[];this.nodes=new Set();this.timelines=new Map();this.segmentDiagnostics=[];this.segmentCache=new Map();this.playbackEvents=[];this.audioEnd=0;this.lastAudioSampleRate=0;this.hasAudio=false;this.videoStarved=false;this.position=0;this.videoEnd=0;this.anchor=0;this.running=false;this.serial=0;this.decoders=new Map();this.configs=new Map();this.initializers=new Map();
-  this.stats={drawn:0,dropped:0,decoded:0,audioDecoded:0,maxFrames:0,maxAudio:0,audioScheduled:0,audioLate:0,audioJoined:0,audioRestored:0,bufferWaitMs:0,rebufferCount:0,timestampResets:0,directAudioCopies:0,audioGapMs:0,maxAudioNodes:0,videoHiccups:0,audioUnderruns:0,staleAudioDropped:0,maxSegmentCache:0};
+  this.stats={drawn:0,dropped:0,decoded:0,audioDecoded:0,maxFrames:0,maxAudio:0,audioScheduled:0,audioLate:0,audioJoined:0,audioRestored:0,bufferWaitMs:0,rebufferCount:0,timestampResets:0,directAudioCopies:0,audioGapMs:0,maxAudioNodes:0,videoHiccups:0,audioUnderruns:0,staleAudioDropped:0,maxSegmentCache:0,audioDecoderFlushes:0};
   this.animation=requestAnimationFrame(()=>this.paint());
   // Audio look-ahead must not depend on Canvas animation callbacks.
   this.audioTimer=setInterval(()=>{if(!this.closed&&!this.paused&&this.running){try{this.scheduleAudio(this.currentTime);}catch(error){this.fail(error);}}},20);
@@ -170,7 +170,7 @@ class CanvasPlayer {
   let supported=await Type.isConfigSupported(config);if(!supported.supported&&kind==='video'){delete config.hardwareAcceleration;supported=await Type.isConfigSupported(config);}
   if(serial!==this.serial||this.closed)throw new DOMException('Playback replaced','AbortError');
   if(!supported.supported)throw Error('Unsupported '+kind+' codec '+track.codec);
-  const old=this.decoders.get(kind);if(old){await old.flush();old.close();}
+  const old=this.decoders.get(kind);if(old){await old.flush();if(kind==='audio')this.stats.audioDecoderFlushes++;old.close();}
   const decoder=new Type({output:frame=>this.output(kind,frame),error:error=>this.fail(error)});decoder.configure(config);this.decoders.set(kind,decoder);this.configs.set(kind,key);return decoder;
  }
  output(kind,data){
@@ -213,6 +213,9 @@ class CanvasPlayer {
   else if(!timeline||segment.discontinuity||reset){timeline={offset:segment.start-origin,lastOrigin:origin,lastSegmentStart:segment.start};this.timelines.set(kind,timeline);if(reset)this.stats.timestampResets++;}
   timeline.end=Math.max(...samples.map(s=>(s.cts+s.duration)/s.timescale))+timeline.offset;
   timeline.lastOrigin=origin;timeline.lastSegmentStart=segment.start;
+  // A real discontinuity may start a new AAC coding history. Continuous
+  // HLS segments must keep the same decoder overlap/filter-bank state.
+  if(segment.discontinuity&&(kind==='audio'||kind==='all'))this.configs.delete('audio');
   const mapping=timeline.offset;
   const diagnostic={audioTiming:extracted.packedAudio?(packedFallback?'sample-count':'id3-pts'):'container-pts',mappedEnd:timeline.end,fetchMs,demuxMs:performance.now()-demuxStart,kind,start:segment.start,duration:segment.duration,sourceStart:origin,mappedStart:origin+mapping,reset:!!reset,video:0,audio:0};
   for(const sample of samples)diagnostic[sample.track.video?'video':'audio']++;
@@ -234,7 +237,7 @@ class CanvasPlayer {
   };
   await Promise.all([consume(samples.filter(s=>s.track.video)),consume(samples.filter(s=>s.track.audio))]);
   if(serial!==this.serial||this.closed)return;
-  for(const type of new Set(samples.map(s=>s.track.video?'video':'audio'))){const decoder=this.decoders.get(type);if(decoder?.state==='configured')await decoder.flush();}
+  for(const type of new Set(samples.map(s=>s.track.video?'video':'audio'))){const decoder=this.decoders.get(type);if(type==='video'&&decoder?.state==='configured')await decoder.flush();}
  }
  async preparedSegment(segment,serial,owners){
   while(serial===this.serial&&!this.closed&&!this.segmentCache.has(segment)&&this.segmentCache.size>=6)await sleep(10);
@@ -263,6 +266,8 @@ class CanvasPlayer {
      pending=index+1<segments.length?fetchAt(index+1):null;
      try{await this.decodeSegment(segment,kind,serial,result.data,allowEmpty);}finally{this.releaseSegment(segment,entry,kind);}
     }
+    // Flush audio only at the end of its rendition, never at ordinary HLS boundaries.
+    if(kind==='audio'&&serial===this.serial&&!this.closed){const decoder=this.decoders.get('audio');if(decoder?.state==='configured'){await decoder.flush();this.stats.audioDecoderFlushes++;}}
    };
    if(this.audioList)await Promise.all([consume(this.videoList,'video',['video']),consume(this.audioList,'audio',['audio'])]);
    else await Promise.all([consume(this.videoList,'video',['video','audio'],true),consume(this.videoList,'audio',['video','audio'],true)]);
@@ -293,7 +298,7 @@ class CanvasPlayer {
   const position=this.currentTime;
   this.position=position;this.stopAudio(true);
   if(sharedContext&&!this.audioContext){this.audioContext=sharedContext;this.ownsAudioContext=false;}
-  if(!this.audioContext)this.audioContext=new AudioContext();
+  if(!this.audioContext)this.audioContext=new AudioContext({sampleRate:this.lastAudioSampleRate||44100});
   if(!this.gain){this.gain=this.audioContext.createGain();this.low=this.audioContext.createBiquadFilter();this.low.type='lowshelf';this.low.frequency.value=180;this.high=this.audioContext.createBiquadFilter();this.high.type='highshelf';this.high.frequency.value=3500;this.gain.connect(this.low).connect(this.high).connect(this.audioContext.destination);}
   await this.audioContext.resume();this.position=position;this.anchor=this.clock()+.04;this.muted=false;this.gain.gain.value=1;await this.play();
  }
