@@ -29,6 +29,8 @@ jobs:
           echo "SCREENLINK_CHROME_BIN=/tmp/screenlink-chrome140/chrome-linux64/chrome" >> "$GITHUB_ENV"
       - name: Compare packet resampling against continuous audio
         run: node --require ./tools/test_browser_engine.cjs tools/test_audio_resampling.cjs
+      - name: In-place transport retry and bounded HD ranges
+        run: node tools/test_canvas_transport.cjs
       - name: HLS range and error-propagation regression
         run: |
           node --require ./tools/test_browser_engine.cjs tools/test_rtc_ice_diagnostics.cjs

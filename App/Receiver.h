@@ -28,6 +28,7 @@ typedef NS_ENUM(NSInteger, SLVideoProfile) { SLVideoFast=0, SLVideoBalanced=1, S
 - (void)screenFrameWithOrientation:(NSInteger)orientation;
 - (void)broadcastMessage:(NSString *)message;
 @property(nonatomic) BOOL mediaOnly;
+- (NSDictionary *)nativeMediaState;
 - (void)prepareMediaOnly;
 - (void)authorizeNextLocalViewer;
 - (BOOL)start;

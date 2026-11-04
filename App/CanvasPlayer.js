@@ -33,7 +33,7 @@ function playlist(text,url){
 function chooseVariant(levels,quality='hd'){
  const height=level=>Number((level.RESOLUTION||'').split('x')[1])||0;
  let candidates=levels.slice(),wanted=Number(quality);
- if(wanted>0){const exact=candidates.filter(level=>height(level)===wanted);if(exact.length)candidates=exact;else return chooseVariant(levels,'hd');}
+ if(wanted>0){candidates=candidates.filter(level=>[720,1080].includes(height(level)));if(!candidates.length)throw Error('YouTube offered no 720p or 1080p source. Lower resolutions require Developer mode.');const exact=candidates.filter(level=>height(level)===wanted);if(exact.length)candidates=exact;}
  else {const hd=candidates.filter(level=>height(level)>0&&height(level)<=1080);if(hd.length)candidates=hd;}
  return candidates.sort((a,b)=>height(b)-height(a)||(Number(b.BANDWIDTH)||0)-(Number(a.BANDWIDTH)||0))[0];
 }
@@ -136,14 +136,46 @@ class CanvasPlayer {
  mediaEnd(){return this.audible()?this.audioEnd:this.videoEnd;}
  get currentTime(){return this.running&&!this.paused?Math.max(this.position,Math.min(this.duration,Math.max(this.position,this.mediaEnd()),this.position+this.clock()-this.anchor)):this.position;}
  set currentTime(value){this.seek(value);}
- async bytes(url,range){
+ async requestBytes(url,range,allowFull=false){
   const absolute=new URL(url,location.href);if(absolute.origin!==location.origin)throw Error('Media must use the ScreenLink proxy');
-  const outer=this.abort.signal,control=new AbortController(),cancel=()=>control.abort();if(outer.aborted)cancel();else outer.addEventListener('abort',cancel,{once:true});const timer=setTimeout(()=>control.abort(Error('Media request timed out')),20000);
-  try{const response=await fetch(absolute,{signal:control.signal,cache:'no-store',headers:range?{Range:`bytes=${range.start}-${range.end}`}:{}});
-   if(!response.ok)throw Error('Media HTTP '+response.status);
-   if(range&&response.status!==206)throw Error('Media server did not honor byte range');
-   return new Uint8Array(await response.arrayBuffer());
-  }finally{clearTimeout(timer);outer.removeEventListener('abort',cancel);}
+  const outer=this.abort.signal;
+  for(let attempt=0;;attempt++){
+   if(outer.aborted)throw new DOMException('Playback replaced','AbortError');
+   const control=new AbortController(),cancel=()=>control.abort();outer.addEventListener('abort',cancel,{once:true});const timer=setTimeout(()=>control.abort(),15000);
+   try{const response=await fetch(absolute,{signal:control.signal,cache:'no-store',headers:range?{Range:`bytes=${range.start}-${range.end}`}:{}});
+    if(!response.ok){const e=Error('Media HTTP '+response.status);e.status=response.status;throw e;}
+    if(range&&response.status!==206&&!(allowFull&&response.status===200))throw Error('Media server did not honor byte range');
+    const bytes=new Uint8Array(await response.arrayBuffer());bytes.httpStatus=response.status;bytes.contentRange=response.headers.get('Content-Range');this.lastTransportError=null;return bytes;
+   }catch(error){
+    if(outer.aborted)throw new DOMException('Playback replaced','AbortError');
+    const transient=error.name==='AbortError'||error instanceof TypeError||[408,429,500,502,503,504].includes(error.status);
+    if(!transient)throw error;
+    this.stats.fetchRetries=(this.stats.fetchRetries||0)+1;this.lastTransportError={message:error.message,time:Date.now(),attempt:attempt+1};
+    // Retry the same bytes. Keep decoders, PCM, frames and the playback clock.
+    // The normal buffer scheduler pauses only when usable media actually runs out.
+    if(attempt>=5){const e=Error('Phone/media transport unavailable after retries: '+error.message);e.kind='transport';throw e;}
+   }finally{clearTimeout(timer);outer.removeEventListener('abort',cancel);}
+   await sleep(Math.min(2000,250*Math.pow(2,attempt)));
+  }
+ }
+
+ // Keep each phone-side response below the broadcast extension's 6 MB budget.
+ async bytes(url,range,segment=false){
+  if(!segment)return this.requestBytes(url,range);
+  const size=1024*1024,start=range?.start||0;
+  let part=await this.requestBytes(url,{start,end:Math.min(range?.end??(start+size-1),start+size-1)},!range);
+  const parse=bytes=>/^bytes (\d+)-(\d+)\/(\d+)$/.exec(bytes.contentRange||'');
+  let match=parse(part);
+  if(!match){if(!range&&part.httpStatus===200)return part;throw Error('Media byte range missing or invalid');}
+  const last=range?.end??(Number(match[3])-1),length=last-start+1;
+  if(length<=0||length>32*1024*1024)throw Error('Media segment exceeds 32 MB client limit');
+  const result=new Uint8Array(length);let at=start;
+  for(;;){
+   if(!match||Number(match[1])!==at||Number(match[2])-at+1!==part.length||Number(match[2])>last)throw Error('Media byte range is inconsistent');
+   result.set(part,at-start);at+=part.length;if(at>last)break;
+   part=await this.requestBytes(url,{start:at,end:Math.min(last,at+size-1)});match=parse(part);
+  }
+  return result;
  }
  async load(url,start=0){
   this.abort=new AbortController();let manifestURL=new URL(url,location.href).href,manifest;
@@ -161,6 +193,7 @@ class CanvasPlayer {
  }
  fail(error){if(this.closed||error?.name==='AbortError')return;this.error={code:3,message:error.message||String(error)};this.pause();this.onerror(error);}
  async configure(track,kind,serial){
+  if(kind==='video'&&Number(this.quality)>0&&!([720,1080].includes(Math.min(track.video.width,track.video.height))))throw Error('Source is not 720p/1080p. Lower resolutions require explicit Developer mode.');
   const config=kind==='video'?{codec:track.codec,codedWidth:track.video.width,codedHeight:track.video.height,description:track.description,hardwareAcceleration:'prefer-hardware'}:{codec:track.codec,sampleRate:track.audio.sample_rate,numberOfChannels:track.audio.channel_count,description:track.description};
   if(config.codec.toLowerCase()==='opus'){config.codec='opus';delete config.description;}
   const key=JSON.stringify({...config,description:config.description?Array.from(config.description):[]});
@@ -197,7 +230,7 @@ class CanvasPlayer {
  async prepareSegment(segment,serial=this.serial){
   const fetchStart=performance.now();let init=null;if(segment.map){const key=JSON.stringify(segment.map);if(!this.initializers.has(key))this.initializers.set(key,await this.bytes(segment.map.url,segment.map.range));init=this.initializers.get(key);}
   if(serial!==this.serial||this.closed)throw new DOMException('Playback replaced','AbortError');
-  const bytes=await this.bytes(segment.url,segment.range);return {init,bytes,fetchMs:performance.now()-fetchStart};
+  const bytes=await this.bytes(segment.url,segment.range,true);return {init,bytes,fetchMs:performance.now()-fetchStart};
  }
  async decodeSegment(segment,kind,serial,prepared=null,allowEmpty=false){
   const {init,bytes,fetchMs=0}=prepared||await this.prepareSegment(segment,serial);if(serial!==this.serial||this.closed)return;

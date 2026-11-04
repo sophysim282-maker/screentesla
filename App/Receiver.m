@@ -186,6 +186,7 @@ _decodeQueue=dispatch_queue_create("ScreenLink.decode",DISPATCH_QUEUE_SERIAL);_j
             if(current){[owner resetVideo];[owner emit:@"Video processing overloaded. Compressed history and decoder reset; waiting for a fresh keyframe. The network thread was not blocked."];}
         }];
     } return self; }
+- (NSDictionary *)nativeMediaState {return [_media state];}
 - (void)prepareMediaOnly {if(_running)return;self.mediaOnly=YES;_screenStream=[[H264Stream alloc]initWithMaxBytes:3*1024*1024 packets:120];_compressedOnlyInBackground=YES;[self setScreenHidden:YES];}
 - (void)authorizeNextLocalViewer {[_localViewer armAutomaticAt:NSProcessInfo.processInfo.systemUptime];[self setScreenHidden:YES];}
 - (H264Stream *)screenStream {return _screenStream;}

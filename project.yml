@@ -75,8 +75,8 @@ targets:
       path: App/Info.plist
       properties:
         CFBundleDisplayName: ScreenLink Lab
-        CFBundleShortVersionString: 0.20.13
-        CFBundleVersion: '50'
+        CFBundleShortVersionString: 0.20.14
+        CFBundleVersion: '51'
         UILaunchScreen: {}
         NSSupportsLiveActivities: true
         CFBundleURLTypes:
@@ -126,8 +126,8 @@ targets:
       path: Tunnel/Info.plist
       properties:
         CFBundleDisplayName: ScreenLink Local VPN
-        CFBundleShortVersionString: 0.20.13
-        CFBundleVersion: '50'
+        CFBundleShortVersionString: 0.20.14
+        CFBundleVersion: '51'
         NSExtension:
           NSExtensionPointIdentifier: com.apple.networkextension.packet-tunnel
           NSExtensionPrincipalClass: PacketTunnelProvider
@@ -152,6 +152,8 @@ targets:
       - BackgroundSession.m
       - FloatingPreview.h
       - FloatingPreview.m
+      - YouTubePiP.h
+      - YouTubePiP.m
       - Info.plist
       - '*.entitlements'
     - path: Vendor/RPiPlay/lib
@@ -190,8 +192,8 @@ targets:
       path: Broadcast/Info.plist
       properties:
         CFBundleDisplayName: ScreenLink Screen
-        CFBundleShortVersionString: 0.20.13
-        CFBundleVersion: '50'
+        CFBundleShortVersionString: 0.20.14
+        CFBundleVersion: '51'
         NSLocalNetworkUsageDescription: Share the live iPhone screen and AirPlay media with your hotspot viewer during a screen broadcast.
         NSBonjourServices:
         - _airplay._tcp
@@ -225,8 +227,8 @@ targets:
       path: Widgets/Info.plist
       properties:
         CFBundleDisplayName: ScreenLink
-        CFBundleShortVersionString: 0.20.13
-        CFBundleVersion: '50'
+        CFBundleShortVersionString: 0.20.14
+        CFBundleVersion: '51'
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
 schemes:
