@@ -120,9 +120,10 @@ function demux(bytes,init){
 }
 class CanvasPlayer {
  static supported(){return !!(self.isSecureContext&&self.VideoDecoder&&self.AudioDecoder&&self.EncodedVideoChunk&&self.EncodedAudioChunk);}
- constructor(canvas,{onerror=()=>{},quality='hd',audioContext=null}={}){
+ constructor(canvas,{onerror=()=>{},quality='hd',audioContext=null,bufferSeconds=0}={}){
   this.canvas=canvas;this.ctx=canvas.getContext('2d',{alpha:false});if(!this.ctx)throw Error('Canvas rendering unavailable');
   this.audioContext=audioContext;this.ownsAudioContext=!audioContext;this.audioTail=null;
+  this.bufferSeconds=Math.max(0,Math.min(2,Number(bufferSeconds)||0));this.bufferReadyAt=0;this.preparedVideoEnd=0;
   this.quality=quality;this.offeredHeights=[];this.selectedHeight=0;this.onerror=onerror;this.paused=true;this.muted=true;this.duration=0;this.readyState=0;this.ended=false;this.error=null;this.closed=false;
   this.frames=[];this.audio=[];this.nodes=new Set();this.timelines=new Map();this.segmentDiagnostics=[];this.segmentCache=new Map();this.playbackEvents=[];this.audioEnd=0;this.lastAudioSampleRate=0;this.hasAudio=false;this.videoStarved=false;this.position=0;this.videoEnd=0;this.anchor=0;this.running=false;this.serial=0;this.decoders=new Map();this.configs=new Map();this.initializers=new Map();
   this.stats={drawn:0,dropped:0,decoded:0,audioDecoded:0,maxFrames:0,maxAudio:0,audioScheduled:0,audioLate:0,audioJoined:0,audioRestored:0,bufferWaitMs:0,rebufferCount:0,timestampResets:0,directAudioCopies:0,audioGapMs:0,maxAudioNodes:0,videoHiccups:0,audioUnderruns:0,staleAudioDropped:0,maxSegmentCache:0};
@@ -258,6 +259,7 @@ class CanvasPlayer {
      while(serial===this.serial&&!this.closed&&segment.start>this.currentTime+(kind==='audio'?4:2))await sleep(30);
      if(serial!==this.serial||this.closed)return;
      const {entry,result}=await pending;if(serial!==this.serial||this.closed)return;if(result.error)throw result.error;
+     if(kind==='video')this.preparedVideoEnd=Math.max(this.preparedVideoEnd,segment.start+segment.duration);
      pending=index+1<segments.length?fetchAt(index+1):null;
      try{await this.decodeSegment(segment,kind,serial,result.data,allowEmpty);}finally{this.releaseSegment(segment,entry,kind);}
     }
@@ -266,10 +268,11 @@ class CanvasPlayer {
    else await Promise.all([consume(this.videoList,'video',['video','audio'],true),consume(this.videoList,'audio',['video','audio'],true)]);
    if(serial===this.serial)this.finished=true;
   };
+  this.bufferReadyAt=this.clock()+this.bufferSeconds;this.preparedVideoEnd=this.position;
   this.finished=false;run().catch(error=>{if(serial===this.serial)this.fail(error);});
  }
  startClock(){this.anchor=this.clock()+.04;this.running=true;}
- canStart(){const video=this.readyState>=2&&(this.videoEnd-this.position>=.12||this.finished);return video&&(!this.audible()||this.audioEnd-this.position>=.6||this.finished);}
+ canStart(){if(this.clock()<this.bufferReadyAt)return false;const reserve=Math.min(this.bufferSeconds,Math.max(0,this.duration-this.position));if(this.bufferSeconds&&this.preparedVideoEnd-this.position+1e-5<reserve&&!this.finished)return false;const video=this.readyState>=2&&(this.videoEnd-this.position>=.12||this.finished);return video&&(!this.audible()||this.audioEnd-this.position>=Math.max(.6,reserve)||this.finished);}
  async play(){if(this.closed)return;this.paused=false;if(this.canStart()&&!this.running)this.startClock();}
  pause(){this.position=this.currentTime;this.paused=true;this.running=false;this.stopAudio(true);}
  stopAudio(restore=false){

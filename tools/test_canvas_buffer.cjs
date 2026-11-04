@@ -1,0 +1,10 @@
+const fs=require('fs'),vm=require('vm'),assert=require('assert');
+global.self=global;global.requestAnimationFrame=()=>1;global.cancelAnimationFrame=()=>{};global.setInterval=()=>1;global.clearInterval=()=>{};
+vm.runInThisContext(fs.readFileSync('App/CanvasPlayer.js','utf8'));
+(async()=>{
+ let clock=10;const p=new ScreenLinkCanvas.CanvasPlayer({getContext:()=>({})},{bufferSeconds:1});p.clock=()=>clock;p.duration=20;p.readyState=2;p.position=0;p.videoEnd=.3;p.preparedVideoEnd=6;p.audioEnd=4;p.hasAudio=true;p.muted=false;p.audioContext={close(){},state:'running',get currentTime(){return clock;}};p.bufferReadyAt=11;
+ assert(!p.canStart(),'Both tracks wait one second before startup');clock=11;p.audioEnd=.99;assert(!p.canStart(),'Decoded audio needs one second reserve');p.audioEnd=1;p.preparedVideoEnd=.99;assert(!p.canStart(),'Downloaded video needs one second reserve');p.preparedVideoEnd=6;assert(p.canStart(),'Compressed video reserve avoids increasing decoded frame memory');await p.play();assert(Math.abs(p.anchor-11.04)<1e-8);assert.equal(p.currentTime,0);clock=11.54;assert(Math.abs(p.currentTime-.5)<1e-8,'Shared media clock preserves audio/video synchronization');
+ p.pause();p.position=19.7;p.audioEnd=20;p.videoEnd=20;p.preparedVideoEnd=20;p.finished=true;assert(p.canStart(),'Short final tail does not deadlock');p.destroy();
+ const q=new ScreenLinkCanvas.CanvasPlayer({getContext:()=>({})},{bufferSeconds:1});q.clock=()=>clock;q.duration=10;q.videoList={segments:[{start:0,duration:5},{start:5,duration:5}]};q.prepareSegment=async()=>({});q.decodeSegment=async()=>{};await q.seek(2);assert.equal(q.bufferReadyAt,clock+1,'Seek starts a fresh one-second wait');assert.equal(q.preparedVideoEnd,2,'Seek discards old coverage');q.destroy();
+ assert(fs.readFileSync('App/CanvasShell.js','utf8').includes('bufferSeconds:1'));console.log('YOUTUBE_BUFFER_PASSED: 1s wait, audio/video reserve, shared clock, bounded decoded video, short tails and seek reset.');
+})().catch(e=>{console.error(e);process.exitCode=1;});
