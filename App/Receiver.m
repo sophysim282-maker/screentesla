@@ -186,9 +186,11 @@ _decodeQueue=dispatch_queue_create("ScreenLink.decode",DISPATCH_QUEUE_SERIAL);_j
             if(current){[owner resetVideo];[owner emit:@"Video processing overloaded. Compressed history and decoder reset; waiting for a fresh keyframe. The network thread was not blocked."];}
         }];
     } return self; }
+- (void)prepareMediaOnly {if(_running)return;self.mediaOnly=YES;_screenStream=[[H264Stream alloc]initWithMaxBytes:3*1024*1024 packets:120];_compressedOnlyInBackground=YES;[self setScreenHidden:YES];}
+- (void)authorizeNextLocalViewer {[_localViewer armAutomaticAt:NSProcessInfo.processInfo.systemUptime];[self setScreenHidden:YES];}
 - (H264Stream *)screenStream {return _screenStream;}
 - (BOOL)screenHidden {return !_screenStream || _screenStream.privacyHidden;}
-- (BOOL)changeScreenHidden:(BOOL)hidden expectedRevision:(NSUInteger)revision {if(!_screenStream)return NO;CMTime time=CMClockGetTime(CMClockGetHostTimeClock());BOOL changed=[_screenStream changePrivacyHidden:hidden notBefore:(uint64_t)(CMTimeGetSeconds(time)*1000000) expectedRevision:revision];if(changed)[self emit:hidden?@"PHONE SCREEN HIDDEN: new screen frames are blocked and cached screen history cleared. YouTube media continues.":@"PHONE SCREEN ENABLED: only show after Google Maps is open. Waiting for a fresh capture keyframe."];return changed;}
+- (BOOL)changeScreenHidden:(BOOL)hidden expectedRevision:(NSUInteger)revision {if(!_screenStream||(!hidden&&self.mediaOnly))return NO;CMTime time=CMClockGetTime(CMClockGetHostTimeClock());BOOL changed=[_screenStream changePrivacyHidden:hidden notBefore:(uint64_t)(CMTimeGetSeconds(time)*1000000) expectedRevision:revision];if(changed)[self emit:hidden?@"PHONE SCREEN HIDDEN: new screen frames are blocked and cached screen history cleared. YouTube media continues.":@"PHONE SCREEN ENABLED: only show after Google Maps is open. Waiting for a fresh capture keyframe."];return changed;}
 - (void)setScreenHidden:(BOOL)hidden {[self changeScreenHidden:hidden expectedRevision:[[_screenStream info][@"privacyRevision"] unsignedIntegerValue]];}
 - (void)screenFrameWithOrientation:(NSInteger)orientation {@synchronized(self){_screenFrames++;_screenOrientation=orientation;_screenTime=CACurrentMediaTime();}}
 - (void)broadcastMessage:(NSString *)message {[self emit:message];}

@@ -27,6 +27,9 @@ typedef NS_ENUM(NSInteger, SLVideoProfile) { SLVideoFast=0, SLVideoBalanced=1, S
 - (void)setScreenHidden:(BOOL)hidden;
 - (void)screenFrameWithOrientation:(NSInteger)orientation;
 - (void)broadcastMessage:(NSString *)message;
+@property(nonatomic) BOOL mediaOnly;
+- (void)prepareMediaOnly;
+- (void)authorizeNextLocalViewer;
 - (BOOL)start;
 - (void)refreshDiscovery;
 - (void)stop;

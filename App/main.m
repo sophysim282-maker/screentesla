@@ -56,8 +56,8 @@
     NSLayoutConstraint *previewHeight=[self.previewSlot.heightAnchor constraintEqualToConstant:100];previewHeight.priority=750;previewHeight.active=YES;
     [stack addArrangedSubview:self.previewSlot];
     self.broadcastPicker=[[RPSystemBroadcastPickerView alloc]initWithFrame:CGRectMake(0,0,50,50)];self.broadcastPicker.showsMicrophoneButton=NO;self.broadcastPicker.hidden=YES;[self.broadcastPicker.heightAnchor constraintEqualToConstant:50].active=YES;[stack addArrangedSubview:self.broadcastPicker];
-    NSArray *labels=@[@"Start ScreenLink",@"YouTube only · website",@"Maps + YouTube · website",@"WebRTC moving-video test",@"Maps + YouTube · prepare screen broadcast",@"Start YouTube video-only",@"Start receiver",@"Copy viewer link",@"Start 30-minute background test",@"Start floating preview",@"Show browser links",@"Copy test log",@"Refresh discovery",@"Stop sharing"];
-    NSArray *actions=@[NSStringFromSelector(@selector(quickStart)),NSStringFromSelector(@selector(youtubeOnlyWebsite)),NSStringFromSelector(@selector(youtubeWebsite)),NSStringFromSelector(@selector(rtcPrototype)),NSStringFromSelector(@selector(prepareBroadcast)),NSStringFromSelector(@selector(startMedia)),NSStringFromSelector(@selector(start)),NSStringFromSelector(@selector(copyViewer)),NSStringFromSelector(@selector(startSession)),NSStringFromSelector(@selector(startFloating)),NSStringFromSelector(@selector(links)),NSStringFromSelector(@selector(copyLog)),NSStringFromSelector(@selector(refreshDiscovery)),NSStringFromSelector(@selector(stop))];
+    NSArray *labels=@[@"Start YouTube · no recording",@"Start Maps + YouTube",@"YouTube only · website",@"Maps + YouTube · website",@"WebRTC moving-video test",@"Maps + YouTube · prepare screen broadcast",@"Start YouTube video-only",@"Start receiver",@"Copy viewer link",@"Start 30-minute background test",@"Start floating preview",@"Show browser links",@"Copy test log",@"Refresh discovery",@"Stop sharing"];
+    NSArray *actions=@[NSStringFromSelector(@selector(startYouTubeNoRecording)),NSStringFromSelector(@selector(quickStart)),NSStringFromSelector(@selector(youtubeOnlyWebsite)),NSStringFromSelector(@selector(youtubeWebsite)),NSStringFromSelector(@selector(rtcPrototype)),NSStringFromSelector(@selector(prepareBroadcast)),NSStringFromSelector(@selector(startMedia)),NSStringFromSelector(@selector(start)),NSStringFromSelector(@selector(copyViewer)),NSStringFromSelector(@selector(startSession)),NSStringFromSelector(@selector(startFloating)),NSStringFromSelector(@selector(links)),NSStringFromSelector(@selector(copyLog)),NSStringFromSelector(@selector(refreshDiscovery)),NSStringFromSelector(@selector(stop))];
     for(NSUInteger i=0;i<labels.count;i++) {
         UIButton *button=[UIButton buttonWithType:UIButtonTypeSystem];[button setTitle:labels[i] forState:UIControlStateNormal];[button.heightAnchor constraintEqualToConstant:34].active=YES;
         [button addTarget:self action:NSSelectorFromString(actions[i]) forControlEvents:UIControlEventTouchUpInside];[stack addArrangedSubview:button];
@@ -78,7 +78,7 @@
     self.session=[BackgroundSession new];
     self.session.status=^(NSString *message){[weak append:message];};
     self.session.videoIsLive=^BOOL{return weak.receiver.videoIsLive;};
-    self.session.activityChanged=^(BOOL active){Controller *owner=weak;if(!owner)return;owner.receiver.compressedOnlyInBackground=!owner.preview.active;if(active)[owner endGrace];};
+    self.session.activityChanged=^(BOOL active){Controller *owner=weak;if(!owner)return;if(owner.receiver.mediaOnly)owner.localViewerStatus.text=active?@"READY":@"Background session ended. Return to ScreenLink.";owner.receiver.compressedOnlyInBackground=!owner.preview.active;if(active)[owner endGrace];};
     self.session.ended=^{
         Controller *owner=weak;if(!owner || !owner.receiver.isRunning)return;
         [owner append:@"BACKGROUND RUNTIME ENDED: receiver, viewer link and media session retained. iOS may suspend this app without PiP. Returning to ScreenLink resumes the existing receiver; Start is not required to rebuild it."];
@@ -100,6 +100,14 @@
     [self append:[NSString stringWithFormat:@"LOCAL NETWORK PREFLIGHT FAILED: %@. Check iPhone Settings → Privacy & Security → Local Network → ScreenLink. No permission grant is inferred.",error]];
 }
 - (void)append:(NSString *)s { self.text.text=[self.text.text stringByAppendingFormat:@"\n%@ %@\n",[NSDate date],s];if(self.text.text.length>24000)self.text.text=[self.text.text substringFromIndex:self.text.text.length-18000];[self.text scrollRangeToVisible:NSMakeRange(self.text.text.length,0)]; }
+- (void)startYouTubeNoRecording {[self requestLocalNetwork];self.quickStartPending=NO;[self.vpn connectRouteProbe:^(BOOL ok){if(!ok)return;[self stop];self.discoveryMode.selectedSegmentIndex=0;[self startMediaOnlyWhenFree:20];}];}
+- (void)startMediaOnlyWhenFree:(NSUInteger)attempts {
+ NSMutableURLRequest *request=[NSMutableURLRequest requestWithURL:[NSURL URLWithString:@"http://127.0.0.1:8080/local/owner"]];[request setValue:@"app" forHTTPHeaderField:@"X-ScreenLink-Control"];request.timeoutInterval=1;
+ [[NSURLSession.sharedSession dataTaskWithRequest:request completionHandler:^(NSData *data,NSURLResponse *response,NSError *error){dispatch_async(dispatch_get_main_queue(),^{
+ if(!error&&[(NSHTTPURLResponse *)response statusCode]==200){if(attempts)dispatch_after(dispatch_time(DISPATCH_TIME_NOW,(int64_t)(0.5*NSEC_PER_SEC)),dispatch_get_main_queue(),^{[self startMediaOnlyWhenFree:attempts-1];});else self.localViewerStatus.text=@"Stop the previous broadcast and retry.";return;}
+ [self.receiver prepareMediaOnly];[self startReceiver];if(!self.receiver.isRunning){self.localViewerStatus.text=@"Receiver could not start.";return;}[self.receiver authorizeNextLocalViewer];self.session.allowWaitingForVideo=YES;[self.session start];self.localViewerStatus.text=self.session.active?@"READY":@"Wait for BACKGROUND SESSION ACTIVE before opening YouTube.";UIPasteboard.generalPasteboard.string=@"https://car.tesla4khmer.com/video";[self append:@"YOUTUBE ONLY: no ReplayKit recording, no screen encoder. Open https://car.tesla4khmer.com/video. Website connects automatically. This uses a bounded background session; if iOS rejects or ends it, keep ScreenLink open or use Maps + YouTube broadcast mode."];
+ });}] resume];
+}
 - (void)quickStart {self.quickStartPending=YES;[self requestLocalNetwork];[self.vpn connectRouteProbe:^(BOOL ok){if(!ok){self.quickStartPending=NO;return;}[self prepareBroadcast];for(UIView *view in self.broadcastPicker.subviews)if([view isKindOfClass:UIButton.class])[(UIButton *)view sendActionsForControlEvents:UIControlEventTouchUpInside];}];}
 - (void)youtubeOnlyWebsite {[self presentWebsite:YES];}
 - (void)youtubeWebsite {[self presentWebsite:NO];}

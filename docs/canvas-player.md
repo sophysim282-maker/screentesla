@@ -143,3 +143,7 @@ A second probe compares a continuous PCM source with separate 1,024-frame source
 ## Build 48: recovery and quick start
 
 Phone Start ScreenLink configures alias VPN, presents the system broadcast picker, then arms a five-minute first-local-viewer authorization window through loopback control. Existing source/origin checks and per-peer tokens remain. User must still confirm iOS dialogs and may need a browser gesture for sound. Website automatically requests connection; explicit Disconnect stops retries. Playback retries at the last position up to three times, retains the exact sanitized error in diagnostics and uses smaller decoded-video queues at the same resolution. This targets resource pressure but does not establish the cause of the Tesla failure. Physical 30-minute behavior remains unverified.
+
+### YouTube without ReplayKit
+
+Start YouTube · no recording stops the previous receiver/broadcast, waits for the server port to be free, starts the app-owned media-only HTTPS receiver, arms the first local viewer and requests the existing bounded iOS continued-processing session. No ReplayKit picker, capture or ScreenEncoder is created on this path. The empty screen-stream object exists only for HTTP authorization/privacy compatibility and rejects Show. Wait for READY before leaving the app. This mode is not unlimited: iOS may reject/end the task, and the existing session ends at 30 minutes. Maps requires the separate broadcast mode. CPU/thermal improvement is not measured.
