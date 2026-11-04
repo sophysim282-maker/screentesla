@@ -91,14 +91,14 @@ class CanvasPlayer {
   this.canvas=canvas;this.ctx=canvas.getContext('2d',{alpha:false});if(!this.ctx)throw Error('Canvas rendering unavailable');
   this.audioContext=audioContext;this.ownsAudioContext=!audioContext;this.audioTail=null;
   this.quality=quality;this.offeredHeights=[];this.selectedHeight=0;this.onerror=onerror;this.paused=true;this.muted=true;this.duration=0;this.readyState=0;this.ended=false;this.error=null;this.closed=false;
-  this.frames=[];this.audio=[];this.nodes=new Set();this.position=0;this.videoEnd=0;this.anchor=0;this.running=false;this.serial=0;this.decoders=new Map();this.configs=new Map();this.initializers=new Map();
-  this.stats={drawn:0,dropped:0,decoded:0,audioDecoded:0,maxFrames:0,maxAudio:0,audioScheduled:0,audioLate:0,audioJoined:0,audioRestored:0,bufferWaitMs:0};
+  this.frames=[];this.audio=[];this.nodes=new Set();this.timelines=new Map();this.segmentDiagnostics=[];this.position=0;this.videoEnd=0;this.anchor=0;this.running=false;this.serial=0;this.decoders=new Map();this.configs=new Map();this.initializers=new Map();
+  this.stats={drawn:0,dropped:0,decoded:0,audioDecoded:0,maxFrames:0,maxAudio:0,audioScheduled:0,audioLate:0,audioJoined:0,audioRestored:0,bufferWaitMs:0,rebufferCount:0,timestampResets:0,directAudioCopies:0,audioGapMs:0};
   this.animation=requestAnimationFrame(()=>this.paint());
   // Audio look-ahead must not depend on Canvas animation callbacks.
   this.audioTimer=setInterval(()=>{if(!this.closed&&!this.paused&&this.running){try{this.scheduleAudio(this.currentTime);}catch(error){this.fail(error);}}},20);
  }
  clock(){return this.audioContext?.state==='running'?this.audioContext.currentTime:performance.now()/1000;}
- get currentTime(){return this.running&&!this.paused?Math.min(this.duration,Math.max(this.position,this.videoEnd),this.position+this.clock()-this.anchor):this.position;}
+ get currentTime(){return this.running&&!this.paused?Math.max(this.position,Math.min(this.duration,Math.max(this.position,this.videoEnd),this.position+this.clock()-this.anchor)):this.position;}
  set currentTime(value){this.seek(value);}
  async bytes(url,range){
   const absolute=new URL(url,location.href);if(absolute.origin!==location.origin)throw Error('Media must use the ScreenLink proxy');
@@ -145,28 +145,40 @@ class CanvasPlayer {
    if(this.frames.length>48){this.fail(Error('Video buffer exceeded its limit'));return;}
   }else{
    this.stats.audioDecoded++;if(data.timestamp/1e6+data.duration/1e6<this.position){data.close();return;}
-   const pcm=Array.from({length:data.numberOfChannels},(_,planeIndex)=>{const plane=new Float32Array(data.numberOfFrames);data.copyTo(plane,{planeIndex,format:'f32-planar'});return plane;});
-   this.audio.push({timestamp:data.timestamp/1e6,sampleRate:data.sampleRate,frames:data.numberOfFrames,pcm});data.close();
+   // Copy decoded planes directly into the final Web Audio buffer.
+   try{
+    const buffer=new AudioBuffer({numberOfChannels:data.numberOfChannels,length:data.numberOfFrames,sampleRate:data.sampleRate});
+    for(let channel=0;channel<data.numberOfChannels;channel++)data.copyTo(buffer.getChannelData(channel),{planeIndex:channel,format:'f32-planar'});
+    this.audio.push({timestamp:data.timestamp/1e6,sampleRate:data.sampleRate,frames:data.numberOfFrames,buffer});this.stats.directAudioCopies++;
+   }finally{data.close();}
    this.stats.maxAudio=Math.max(this.stats.maxAudio,this.audio.length);if(this.audio.length>256)this.fail(Error('Audio buffer exceeded its limit'));
   }
   if(kind==='video')this.readyState=2;
  }
  async prepareSegment(segment,serial=this.serial){
-  let init=null;if(segment.map){const key=JSON.stringify(segment.map);if(!this.initializers.has(key))this.initializers.set(key,await this.bytes(segment.map.url,segment.map.range));init=this.initializers.get(key);}
+  const fetchStart=performance.now();let init=null;if(segment.map){const key=JSON.stringify(segment.map);if(!this.initializers.has(key))this.initializers.set(key,await this.bytes(segment.map.url,segment.map.range));init=this.initializers.get(key);}
   if(serial!==this.serial||this.closed)throw new DOMException('Playback replaced','AbortError');
-  const bytes=await this.bytes(segment.url,segment.range);return {init,bytes};
+  const bytes=await this.bytes(segment.url,segment.range);return {init,bytes,fetchMs:performance.now()-fetchStart};
  }
  async decodeSegment(segment,kind,serial,prepared=null){
-  const {init,bytes}=prepared||await this.prepareSegment(segment,serial);if(serial!==this.serial||this.closed)return;
-  let extracted;try{extracted=demux(bytes,init);}catch(error){throw Error('HLS '+kind+' segment at '+segment.start.toFixed(2)+'s: '+error.message);}
+  const {init,bytes,fetchMs=0}=prepared||await this.prepareSegment(segment,serial);if(serial!==this.serial||this.closed)return;
+  const demuxStart=performance.now();let extracted;try{extracted=demux(bytes,init);}catch(error){throw Error('HLS '+kind+' segment at '+segment.start.toFixed(2)+'s: '+error.message);}
   const samples=extracted.filter(s=>s.track&&(kind==='all'||(kind==='audio'?!!s.track.audio:!!s.track.video))).sort((a,b)=>(a.dts??a.cts)/a.timescale-(b.dts??b.cts)/b.timescale);
   if(!samples.length)throw Error('Selected HLS track has no samples');
   // Preserve inter-track offsets; normalize each fragment onto its playlist timeline.
   const origin=Math.min(...samples.map(s=>s.cts/s.timescale));
+  let timeline=this.timelines.get(kind);
+  const reset=timeline&&(origin<timeline.lastOrigin-.1||(segment.start>timeline.lastSegmentStart&&origin<=timeline.lastOrigin+.001));
+  if(!timeline||segment.discontinuity||reset){timeline={offset:segment.start-origin,lastOrigin:origin,lastSegmentStart:segment.start};this.timelines.set(kind,timeline);if(reset)this.stats.timestampResets++;}
+  timeline.lastOrigin=origin;timeline.lastSegmentStart=segment.start;
+  const mapping=timeline.offset;
+  const diagnostic={fetchMs,demuxMs:performance.now()-demuxStart,kind,start:segment.start,duration:segment.duration,sourceStart:origin,mappedStart:origin+mapping,reset:!!reset,video:0,audio:0};
+  for(const sample of samples)diagnostic[sample.track.video?'video':'audio']++;
+  this.segmentDiagnostics.push(diagnostic);if(this.segmentDiagnostics.length>8)this.segmentDiagnostics.shift();
   for(const sample of samples){
    if(serial!==this.serial||this.closed)return;
    const type=sample.track.video?'video':'audio',decoder=await this.configure(sample.track,type,serial);
-   const timestamp=Math.round((segment.start+sample.cts/sample.timescale-origin)*1e6),duration=Math.max(1,Math.round(sample.duration/sample.timescale*1e6));
+   const timestamp=Math.round((mapping+sample.cts/sample.timescale)*1e6),duration=Math.max(1,Math.round(sample.duration/sample.timescale*1e6));
    const Chunk=type==='video'?EncodedVideoChunk:EncodedAudioChunk;
    if(serial!==this.serial||this.closed)return;
    while((type==='video'&&this.frames.length>18)||(type==='audio'&&this.audio.length>128)){if(serial!==this.serial||this.closed)return;await sleep(10);}
@@ -178,7 +190,7 @@ class CanvasPlayer {
  }
  async seek(value){
   if(!this.videoList||this.closed)return;this.serial++;const serial=this.serial;
-  this.abort?.abort();this.abort=new AbortController();this.position=Math.max(0,Math.min(Number(value)||0,Math.max(0,this.duration-0.01)));this.videoEnd=this.position;this.anchor=this.clock();this.running=false;this.ended=false;this.readyState=0;this.release();
+  this.abort?.abort();this.abort=new AbortController();this.position=Math.max(0,Math.min(Number(value)||0,Math.max(0,this.duration-0.01)));this.videoEnd=this.position;this.anchor=this.clock();this.running=false;this.ended=false;this.readyState=0;this.release();this.timelines.clear();
   const run=async()=>{
    // Interleave muxed samples by decode time; independently pace alternate tracks.
    // Otherwise a bounded video queue can starve audio while waiting for drawing.
@@ -203,13 +215,20 @@ class CanvasPlayer {
   };
   this.finished=false;run().catch(error=>{if(serial===this.serial)this.fail(error);});
  }
- async play(){if(this.closed)return;this.paused=false;if(this.readyState>=2&&!this.running){this.anchor=this.clock();this.running=true;}}
+ startClock(){this.anchor=this.clock()+.04;this.running=true;}
+ canStart(){return this.readyState>=2&&(this.videoEnd-this.position>=.12||this.finished);}
+ async play(){if(this.closed)return;this.paused=false;if(this.canStart()&&!this.running)this.startClock();}
  pause(){this.position=this.currentTime;this.paused=true;this.running=false;this.stopAudio(true);}
  stopAudio(restore=false){
+  const now=this.audioContext?.currentTime||0;
   for(const node of this.nodes){
-   const packet=node.screenlinkPacket;node.onended=null;
+   const packet=node.screenlinkPacket;
    if(restore&&packet&&packet.timestamp+packet.frames/packet.sampleRate>this.position){this.audio.push(packet);this.stats.audioRestored++;}
-   try{node.stop();node.disconnect();}catch{}
+   node.onended=()=>{node.screenlinkPacket=null;try{node.disconnect();node.fadeGain?.disconnect();}catch{}};
+   try{
+    if(this.audioContext?.state==='running'&&node.fadeGain){const gain=node.fadeGain.gain;gain.cancelScheduledValues(now);gain.setValueAtTime(gain.value,now);gain.linearRampToValueAtTime(0,now+.008);node.stop(now+.01);}
+    else{node.stop();node.disconnect();node.fadeGain?.disconnect();}
+   }catch{}
   }
   this.nodes.clear();this.audioTail=null;
   if(restore)this.audio.sort((a,b)=>a.timestamp-b.timestamp);
@@ -220,7 +239,7 @@ class CanvasPlayer {
   if(sharedContext&&!this.audioContext){this.audioContext=sharedContext;this.ownsAudioContext=false;}
   if(!this.audioContext)this.audioContext=new AudioContext();
   if(!this.gain){this.gain=this.audioContext.createGain();this.low=this.audioContext.createBiquadFilter();this.low.type='lowshelf';this.low.frequency.value=180;this.high=this.audioContext.createBiquadFilter();this.high.type='highshelf';this.high.frequency.value=3500;this.gain.connect(this.low).connect(this.high).connect(this.audioContext.destination);}
-  await this.audioContext.resume();this.position=position;this.anchor=this.clock();this.muted=false;this.gain.gain.value=1;await this.play();
+  await this.audioContext.resume();this.position=position;this.anchor=this.clock()+.04;this.muted=false;this.gain.gain.value=1;await this.play();
  }
  setEQ(mode){if(this.low){this.low.gain.value=mode==='music'?3:0;this.high.gain.value=mode==='music'?2:0;}}
  scheduleAudio(now){
@@ -239,20 +258,20 @@ class CanvasPlayer {
     if(Math.abs(start-this.audioTail)>1/packet.sampleRate)this.stats.audioJoined++;
     start=this.audioTail;
    }
-   const offset=Math.max(0,contextNow+0.005-start);
+   if(this.audioTail!==null&&start-this.audioTail>.001)this.stats.audioGapMs+=(start-this.audioTail)*1000;
+   const offset=Math.max(0,contextNow+0.02-start);
    if(offset>=duration){this.stats.audioLate++;continue;}
    if(offset>0){start+=offset;this.stats.audioLate++;}
-   const buffer=this.audioContext.createBuffer(packet.pcm.length,packet.frames,packet.sampleRate);packet.pcm.forEach((channel,i)=>buffer.copyToChannel(channel,i));
-   const node=this.audioContext.createBufferSource();node.buffer=buffer;node.connect(this.gain);node.screenlinkPacket=packet;this.nodes.add(node);
-   node.onended=()=>{this.nodes.delete(node);node.screenlinkPacket=null;node.disconnect();};
+   const node=this.audioContext.createBufferSource(),fade=this.audioContext.createGain();fade.gain.value=1;node.buffer=packet.buffer;node.connect(fade);fade.connect(this.gain);node.fadeGain=fade;node.screenlinkPacket=packet;this.nodes.add(node);
+   node.onended=()=>{this.nodes.delete(node);node.screenlinkPacket=null;node.disconnect();fade.disconnect();};
    node.start(start,offset);this.audioTail=start+duration-offset;this.stats.audioScheduled++;
   }
  }
  paint(){
   if(this.closed)return;
   if(!this.paused){
-   if(this.readyState>=2&&!this.running){this.anchor=this.clock();this.running=true;}
-   const now=this.currentTime;if(this.running&&!this.finished&&this.position+this.clock()-this.anchor>this.videoEnd){this.stats.bufferWaitMs+=Math.max(0,(this.position+this.clock()-this.anchor-this.videoEnd)*1000);this.position=now;this.anchor=this.clock();}let frame=null;
+   if(this.canStart()&&!this.running)this.startClock();
+   const now=this.currentTime;if(this.running&&!this.finished&&this.position+this.clock()-this.anchor>this.videoEnd){this.stats.bufferWaitMs+=Math.max(0,(this.position+this.clock()-this.anchor-this.videoEnd)*1000);this.position=now;this.running=false;this.stats.rebufferCount++;this.stopAudio(true);}let frame=null;
    while(this.frames.length&&this.frames[0].timestamp/1e6<=now+0.015){if(frame){frame.close();this.stats.dropped++;}frame=this.frames.shift();}
    if(frame){try{if(this.canvas.width!==frame.displayWidth||this.canvas.height!==frame.displayHeight){this.canvas.width=frame.displayWidth;this.canvas.height=frame.displayHeight;}this.ctx.drawImage(frame,0,0,this.canvas.width,this.canvas.height);this.stats.drawn++;}catch(error){this.fail(error);}finally{frame.close();}}
    this.scheduleAudio(now);
@@ -265,7 +284,7 @@ class CanvasPlayer {
   for(const decoder of this.decoders.values())if(decoder.state!=='closed')decoder.close();this.decoders.clear();this.configs.clear();
   this.stopAudio();
  }
- destroy(){if(this.closed)return;this.closed=true;this.serial++;this.abort?.abort();cancelAnimationFrame(this.animation);clearInterval(this.audioTimer);this.release();this.initializers.clear();if(this.ownsAudioContext)this.audioContext?.close();else {this.gain?.disconnect();this.low?.disconnect();this.high?.disconnect();}}
+ destroy(){if(this.closed)return;this.closed=true;this.serial++;this.abort?.abort();cancelAnimationFrame(this.animation);clearInterval(this.audioTimer);this.release();this.initializers.clear();const cleanup=()=>{if(this.ownsAudioContext)this.audioContext?.close();else{this.gain?.disconnect();this.low?.disconnect();this.high?.disconnect();}};if(this.gain&&this.audioContext?.state==='running')setTimeout(cleanup,12);else cleanup();}
 }
 self.ScreenLinkCanvas={CanvasPlayer,playlist,demux,chooseVariant};
 })();

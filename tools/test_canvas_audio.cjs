@@ -7,10 +7,11 @@ function fixture(){
  let clock=0,reads=0;const starts=[];
  const context={state:'running',get currentTime(){return clock+(reads++%3)*0.0029;},
  createBuffer(channels,frames,sampleRate){const data=Array.from({length:channels},()=>new Float32Array(frames));return {data,frames,sampleRate,copyToChannel(a,i){data[i].set(a);}};},
+ createGain(){return {gain:{value:1,cancelScheduledValues(){},setValueAtTime(){},linearRampToValueAtTime(){}},connect(){},disconnect(){}};},
  createBufferSource(){return {connect(){},disconnect(){},stop(){this.stopped=true;},start(at,offset=0){starts.push({at,offset,node:this,buffer:this.buffer});}};}};
  const player=new ScreenLinkCanvas.CanvasPlayer({getContext:()=>({})},{audioContext:context});
  player.paused=false;player.running=true;player.muted=false;player.duration=100;player.videoEnd=100;player.position=0;player.anchor=0.05;player.gain={};
- function packet(i,jitter=0){return {timestamp:i*duration+jitter,frames:size,sampleRate:rate,pcm:[Float32Array.from({length:size},(_,n)=>0.5*Math.sin(2*Math.PI*440*(i*size+n)/rate))]};}
+ function packet(i,jitter=0){const buffer=context.createBuffer(1,size,rate);buffer.copyToChannel(Float32Array.from({length:size},(_,n)=>0.5*Math.sin(2*Math.PI*440*(i*size+n)/rate)),0);return {timestamp:i*duration+jitter,frames:size,sampleRate:rate,buffer};}
  return {player,context,starts,packet,setClock(t){clock=t;}};
 }
 const f=fixture();for(let i=0;i<90;i++)f.player.audio.push(f.packet(i,i===30?0.008:0));

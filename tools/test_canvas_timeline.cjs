@@ -1,0 +1,9 @@
+const fs=require('fs'),vm=require('vm'),path=require('path'),assert=require('assert');global.self=global;global.requestAnimationFrame=()=>1;global.cancelAnimationFrame=()=>{};global.setInterval=()=>1;global.clearInterval=()=>{};
+const [app,fixtures]=process.argv.slice(2);for(const name of ['MP4Demux.js','TSDemux.js','CanvasPlayer.js'])vm.runInThisContext(fs.readFileSync(path.join(app,name),'utf8'));
+global.EncodedVideoChunk=class{constructor(o){Object.assign(this,o);}};global.EncodedAudioChunk=global.EncodedVideoChunk;
+(async()=>{const p=new ScreenLinkCanvas.CanvasPlayer({getContext:()=>({})});p.serial=1;const chunks={video:[],audio:[]};p.configure=async(track,kind)=>({decode:o=>chunks[kind].push(o),decodeQueueSize:0});
+const payload=i=>({init:null,bytes:new Uint8Array(fs.readFileSync(path.join(fixtures,'part0'+i+'.ts')))});
+await p.decodeSegment({start:0,duration:2.1},'all',1,payload(0));const n={video:chunks.video.length,audio:chunks.audio.length};await p.decodeSegment({start:2.1,duration:2.1},'all',1,payload(1));
+for(const kind of ['video','audio']){const a=chunks[kind][n[kind]-1],b=chunks[kind][n[kind]];assert(Math.abs(b.timestamp-a.timestamp-a.duration)<2,'Continuous source PTS must survive playlist rounding for '+kind);}
+await p.decodeSegment({start:4.2,duration:2.1},'all',1,payload(0));assert(p.segmentDiagnostics.at(-1).reset);assert(Math.abs(p.segmentDiagnostics.at(-1).mappedStart-4.2)<1e-8);p.destroy();console.log('CANVAS_TIMELINE_PASSED: continuous audio/video PTS across rounded EXTINF boundaries, explicit recovery from reset source timestamps.');
+})().catch(error=>{console.error(error);process.exitCode=1;});
