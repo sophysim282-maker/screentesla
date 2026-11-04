@@ -28,6 +28,8 @@ typedef NS_ENUM(NSInteger, SLVideoProfile) { SLVideoFast=0, SLVideoBalanced=1, S
 - (void)screenFrameWithOrientation:(NSInteger)orientation;
 - (void)broadcastMessage:(NSString *)message;
 @property(nonatomic) BOOL mediaOnly;
+/// A phone-selected YouTube broadcast locks screen delivery independently of runtime ownership.
+@property(atomic) BOOL screenCaptureLocked;
 - (NSDictionary *)nativeMediaState;
 - (void)prepareMediaOnly;
 - (void)authorizeNextLocalViewer;

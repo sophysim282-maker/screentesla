@@ -18,7 +18,7 @@ with zipfile.ZipFile(source) as src:
  for name in src.namelist():
   if name.endswith('/Info.plist') and (name.count('/')==2 or '.appex/Info.plist' in name):
    info=plistlib.loads(src.read(name))
-   if info.get('CFBundleVersion')!='51':raise SystemExit('Expected build 51 app and extensions.')
+   if info.get('CFBundleVersion')!='52':raise SystemExit('Expected build 52 app and extensions.')
    if name.count('/')==2 or info.get('NSExtension',{}).get('NSExtensionPointIdentifier')=='com.apple.broadcast-services-upload':roots.append(name[:-len('Info.plist')])
  if len(roots)!=2:raise SystemExit('App and broadcast bundles not found.')
  if any('/PrivateTLS/' in n for n in src.namelist()):raise SystemExit('Input already contains an identity.')
