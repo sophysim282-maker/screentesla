@@ -108,6 +108,7 @@ cp -R build/DerivedData/Build/Products/Release-iphoneos/ScreenLinkAirPlayLab.app
 codesign --force --sign - --generate-entitlement-der --entitlements Tunnel/LocalTunnel.entitlements build/Payload/ScreenLinkAirPlayLab.app/PlugIns/ScreenLinkLocalTunnel.appex
 codesign --force --sign - --generate-entitlement-der --entitlements Broadcast/Broadcast.entitlements build/Payload/ScreenLinkAirPlayLab.app/PlugIns/ScreenLinkBroadcast.appex
 codesign --force --sign - build/Payload/ScreenLinkAirPlayLab.app/Frameworks/WebRTC.framework
+codesign --force --sign - build/Payload/ScreenLinkAirPlayLab.app/PlugIns/ScreenLinkWidgets.appex
 codesign --force --sign - --generate-entitlement-der --entitlements App/ScreenLink.entitlements build/Payload/ScreenLinkAirPlayLab.app
 python3 - <<'VERIFY_VPN'
 import plistlib, subprocess
@@ -115,7 +116,7 @@ from pathlib import Path
 app=Path('build/Payload/ScreenLinkAirPlayLab.app')
 plugins=list((app/'PlugIns').glob('*.appex'))
 assert (app/'Frameworks/WebRTC.framework/WebRTC').is_file()
-assert len(plugins)==2, 'Expected embedded VPN and screen broadcast extensions'
+assert len(plugins)==3, 'Expected embedded VPN, broadcast and widget extensions'
 vpn=next(p for p in plugins if p.name=='ScreenLinkLocalTunnel.appex')
 broadcast=next(p for p in plugins if p.name=='ScreenLinkBroadcast.appex')
 info=plistlib.loads((vpn/'Info.plist').read_bytes())
@@ -138,7 +139,16 @@ assert b['CFBundleIdentifier'].startswith(parent['CFBundleIdentifier']+'.')
 assert (broadcast/b['CFBundleExecutable']).is_file()
 for name in ['SplitViewer.html','MapPlayer.html','MediaPlayer.html','HLSPlayer.js']:
     assert (broadcast/name).is_file(),name
-print('Embedded VPN and broadcast extension packaging verified:', info['CFBundleIdentifier'],b['CFBundleIdentifier'])
+widget=next(p for p in plugins if p.name=='ScreenLinkWidgets.appex')
+w=plistlib.loads((widget/'Info.plist').read_bytes())
+assert w['NSExtension']['NSExtensionPointIdentifier']=='com.apple.widgetkit-extension'
+assert w['CFBundleVersion']==parent['CFBundleVersion']
+assert w['CFBundleIdentifier'].startswith(parent['CFBundleIdentifier']+'.')
+assert (widget/w['CFBundleExecutable']).is_file()
+assert parent['NSSupportsLiveActivities']
+assert any('screenlink' in u.get('CFBundleURLSchemes',[]) for u in parent['CFBundleURLTypes'])
+print('Embedded widget, VPN and broadcast extension packaging verified:',w['CFBundleIdentifier'])
+print('Existing extensions:', info['CFBundleIdentifier'],b['CFBundleIdentifier'])
 VERIFY_VPN
 (cd build && zip -qry ScreenLink-AirPlay-Lab-unsigned.ipa Payload)
 echo 'Unsigned IPA built. Free signing still required. Same-phone AirPlay has NOT been tested by this build.'

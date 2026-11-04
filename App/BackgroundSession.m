@@ -44,7 +44,7 @@
         }];
         if(!_registered){[self log:@"iOS rejected background handler registration. Use floating preview and copy the log."];return;}
     }
-    id<SLContinuedRequest> request=[(id<SLContinuedRequest>)[requestClass alloc] initWithIdentifier:_identifier title:@"ScreenLink · 30-minute cast" subtitle:@"Video over your local hotspot"];
+    id<SLContinuedRequest> request=[(id<SLContinuedRequest>)[requestClass alloc] initWithIdentifier:_identifier title:@"ScreenLink · YouTube" subtitle:@"Video over your local hotspot"];
     // Public BGContinuedProcessingTaskRequestSubmissionStrategyFail = 1.
     // Never queue a cast that could begin unexpectedly after the user leaves.
     request.strategy=1;_pending=YES;
@@ -81,7 +81,7 @@
     // Progress is the completed part of this explicitly timed, live session;
     // a disconnected stream never claims useful progress.
     if(live)_task.progress.completedUnitCount=MIN(1799,(int64_t)elapsed);
-    if(((NSInteger)elapsed)%5==0)[_task updateTitle:@"ScreenLink · 30-minute cast" subtitle:live?[NSString stringWithFormat:@"%ld minutes remaining",(long)MAX(0,30-(NSInteger)(elapsed/60))]:@"Waiting for the AirPlay stream"];
+    if(((NSInteger)elapsed)%5==0)[_task updateTitle:@"ScreenLink · YouTube" subtitle:live?@"Running · local hotspot":@"Waiting for the AirPlay stream"];
     if(elapsed>=1800){[self log:@"The 30-minute background session finished. Receiver state is retained; iOS may suspend the app without floating preview. Start another session in ScreenLink if needed."];[self complete:live notify:YES];}
 }
 - (void)complete:(BOOL)success notify:(BOOL)notify {
