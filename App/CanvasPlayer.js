@@ -92,7 +92,7 @@ class CanvasPlayer {
   this.audioContext=audioContext;this.ownsAudioContext=!audioContext;this.audioTail=null;
   this.quality=quality;this.offeredHeights=[];this.selectedHeight=0;this.onerror=onerror;this.paused=true;this.muted=true;this.duration=0;this.readyState=0;this.ended=false;this.error=null;this.closed=false;
   this.frames=[];this.audio=[];this.nodes=new Set();this.position=0;this.videoEnd=0;this.anchor=0;this.running=false;this.serial=0;this.decoders=new Map();this.configs=new Map();this.initializers=new Map();
-  this.stats={drawn:0,dropped:0,decoded:0,audioDecoded:0,maxFrames:0,maxAudio:0,audioScheduled:0,audioLate:0,audioJoined:0,audioRestored:0};
+  this.stats={drawn:0,dropped:0,decoded:0,audioDecoded:0,maxFrames:0,maxAudio:0,audioScheduled:0,audioLate:0,audioJoined:0,audioRestored:0,bufferWaitMs:0};
   this.animation=requestAnimationFrame(()=>this.paint());
   // Audio look-ahead must not depend on Canvas animation callbacks.
   this.audioTimer=setInterval(()=>{if(!this.closed&&!this.paused&&this.running){try{this.scheduleAudio(this.currentTime);}catch(error){this.fail(error);}}},20);
@@ -151,9 +151,13 @@ class CanvasPlayer {
   }
   if(kind==='video')this.readyState=2;
  }
- async decodeSegment(segment,kind,serial){
+ async prepareSegment(segment,serial=this.serial){
   let init=null;if(segment.map){const key=JSON.stringify(segment.map);if(!this.initializers.has(key))this.initializers.set(key,await this.bytes(segment.map.url,segment.map.range));init=this.initializers.get(key);}
-  const bytes=await this.bytes(segment.url,segment.range);if(serial!==this.serial||this.closed)return;
+  if(serial!==this.serial||this.closed)throw new DOMException('Playback replaced','AbortError');
+  const bytes=await this.bytes(segment.url,segment.range);return {init,bytes};
+ }
+ async decodeSegment(segment,kind,serial,prepared=null){
+  const {init,bytes}=prepared||await this.prepareSegment(segment,serial);if(serial!==this.serial||this.closed)return;
   let extracted;try{extracted=demux(bytes,init);}catch(error){throw Error('HLS '+kind+' segment at '+segment.start.toFixed(2)+'s: '+error.message);}
   const samples=extracted.filter(s=>s.track&&(kind==='all'||(kind==='audio'?!!s.track.audio:!!s.track.video))).sort((a,b)=>(a.dts??a.cts)/a.timescale-(b.dts??b.cts)/b.timescale);
   if(!samples.length)throw Error('Selected HLS track has no samples');
@@ -178,11 +182,21 @@ class CanvasPlayer {
   const run=async()=>{
    // Interleave muxed samples by decode time; independently pace alternate tracks.
    // Otherwise a bounded video queue can starve audio while waiting for drawing.
-   const consume=async(list,kind)=>{for(const segment of list.segments.filter(s=>s.start+s.duration>this.position)){
-    while(serial===this.serial&&!this.closed&&segment.start>this.currentTime+2)await sleep(30);
-    if(serial!==this.serial||this.closed)return;
-    await this.decodeSegment(segment,kind,serial);
-   }};
+   const consume=async(list,kind)=>{
+    const segments=list.segments.filter(s=>s.start+s.duration>this.position);
+    // One encoded segment ahead per rendition. Fetch while decoding/playing
+    // the current segment, not only after its bounded decoded queue drains.
+    const fetchAt=index=>this.prepareSegment(segments[index],serial).then(data=>({data}),error=>({error}));
+    let pending=segments.length?fetchAt(0):null;
+    for(let index=0;index<segments.length;index++){
+     const segment=segments[index];
+     while(serial===this.serial&&!this.closed&&segment.start>this.currentTime+2)await sleep(30);
+     if(serial!==this.serial||this.closed)return;
+     const result=await pending;if(serial!==this.serial||this.closed)return;if(result.error)throw result.error;
+     pending=index+1<segments.length?fetchAt(index+1):null;
+     await this.decodeSegment(segment,kind,serial,result.data);
+    }
+   };
    if(this.audioList)await Promise.all([consume(this.videoList,'video'),consume(this.audioList,'audio')]);
    else await consume(this.videoList,'all');
    if(serial===this.serial)this.finished=true;
@@ -238,7 +252,7 @@ class CanvasPlayer {
   if(this.closed)return;
   if(!this.paused){
    if(this.readyState>=2&&!this.running){this.anchor=this.clock();this.running=true;}
-   const now=this.currentTime;if(this.running&&!this.finished&&this.position+this.clock()-this.anchor>this.videoEnd){this.position=now;this.anchor=this.clock();}let frame=null;
+   const now=this.currentTime;if(this.running&&!this.finished&&this.position+this.clock()-this.anchor>this.videoEnd){this.stats.bufferWaitMs+=Math.max(0,(this.position+this.clock()-this.anchor-this.videoEnd)*1000);this.position=now;this.anchor=this.clock();}let frame=null;
    while(this.frames.length&&this.frames[0].timestamp/1e6<=now+0.015){if(frame){frame.close();this.stats.dropped++;}frame=this.frames.shift();}
    if(frame){try{if(this.canvas.width!==frame.displayWidth||this.canvas.height!==frame.displayHeight){this.canvas.width=frame.displayWidth;this.canvas.height=frame.displayHeight;}this.ctx.drawImage(frame,0,0,this.canvas.width,this.canvas.height);this.stats.drawn++;}catch(error){this.fail(error);}finally{frame.close();}}
    this.scheduleAudio(now);
