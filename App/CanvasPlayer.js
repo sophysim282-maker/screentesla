@@ -200,11 +200,12 @@ class CanvasPlayer {
   this.nodes.clear();this.audioTail=null;
   if(restore)this.audio.sort((a,b)=>a.timestamp-b.timestamp);
  }
- async enableAudio(){
+ async enableAudio(sharedContext=null){
   const position=this.currentTime;
+  this.position=position;this.stopAudio(true);
+  if(sharedContext&&!this.audioContext){this.audioContext=sharedContext;this.ownsAudioContext=false;}
   if(!this.audioContext)this.audioContext=new AudioContext();
   if(!this.gain){this.gain=this.audioContext.createGain();this.low=this.audioContext.createBiquadFilter();this.low.type='lowshelf';this.low.frequency.value=180;this.high=this.audioContext.createBiquadFilter();this.high.type='highshelf';this.high.frequency.value=3500;this.gain.connect(this.low).connect(this.high).connect(this.audioContext.destination);}
-  this.position=position;this.stopAudio(true);
   await this.audioContext.resume();this.position=position;this.anchor=this.clock();this.muted=false;this.gain.gain.value=1;await this.play();
  }
  setEQ(mode){if(this.low){this.low.gain.value=mode==='music'?3:0;this.high.gain.value=mode==='music'?2:0;}}

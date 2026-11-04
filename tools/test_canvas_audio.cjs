@@ -11,7 +11,7 @@ function fixture(){
  const player=new ScreenLinkCanvas.CanvasPlayer({getContext:()=>({})},{audioContext:context});
  player.paused=false;player.running=true;player.muted=false;player.duration=100;player.videoEnd=100;player.position=0;player.anchor=0.05;player.gain={};
  function packet(i,jitter=0){return {timestamp:i*duration+jitter,frames:size,sampleRate:rate,pcm:[Float32Array.from({length:size},(_,n)=>0.5*Math.sin(2*Math.PI*440*(i*size+n)/rate))]};}
- return {player,starts,packet,setClock(t){clock=t;}};
+ return {player,context,starts,packet,setClock(t){clock=t;}};
 }
 const f=fixture();for(let i=0;i<90;i++)f.player.audio.push(f.packet(i,i===30?0.008:0));
 for(let t=0;t<1.95;t+=0.02){f.setClock(t);f.player.scheduleAudio(Math.max(0,t-0.05));}
@@ -28,3 +28,9 @@ const paused=fixture();for(let i=0;i<20;i++)paused.player.audio.push(paused.pack
 const muted=fixture();muted.player.muted=true;muted.player.audio.push(muted.packet(0));muted.player.scheduleAudio(0);assert.equal(muted.player.audio.length,1,'Muting must not discard future PCM');
 const gap=fixture();gap.player.audio.push(gap.packet(0),gap.packet(1,.1));gap.player.scheduleAudio(0);assert(gap.starts[1].at-gap.starts[0].at>0.1,'A real timestamp gap must not be flattened');
 console.log('CANVAS_AUDIO_PASSED: jittered clock, AAC boundary correction, continuous PCM waveform, pause restoration, mute preservation, real timestamp gaps. maxGap='+maxGap+' maxStep='+maxStep);
+
+(async()=>{
+ const f=fixture(),p=f.player;p.audioContext=null;p.gain=null;p.anchor=performance.now()/1000-.4;
+ const before=p.currentTime;f.context.resume=async()=>{};f.context.createGain=f.context.createBiquadFilter=()=>({connect(){return this;},disconnect(){},gain:{value:0},frequency:{value:0}});f.context.destination={};
+ await p.enableAudio(f.context);assert(p.currentTime>=before-.01&&p.currentTime<before+.05,'Enabling shared audio must preserve playhead across performance/AudioContext clocks');console.log('AUDIO_CLOCK_HANDOFF_PASSED');
+})().catch(error=>{console.error(error);process.exitCode=1;});
