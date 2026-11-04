@@ -1,0 +1,98 @@
+name: Real browser streaming regression
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  browser:
+    strategy:
+      fail-fast: false
+      matrix:
+        playwright: ['1.55.0', '1.58.2']
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-save playwright@${{ matrix.playwright }}
+      - run: npx playwright install --with-deps chromium
+      - name: Pin official Chrome 140 matching Tesla's reported version
+        if: matrix.playwright == '1.55.0'
+        run: |
+          curl --fail --location --retry 3 https://storage.googleapis.com/chrome-for-testing-public/140.0.7339.207/linux64/chrome-linux64.zip -o /tmp/chrome140.zip
+          unzip -q /tmp/chrome140.zip -d /tmp/screenlink-chrome140
+          echo "SCREENLINK_CHROME_BIN=/tmp/screenlink-chrome140/chrome-linux64/chrome" >> "$GITHUB_ENV"
+      - name: Compare packet resampling against continuous audio
+        run: node --require ./tools/test_browser_engine.cjs tools/test_audio_resampling.cjs
+      - name: In-place transport retry and bounded HD ranges
+        run: |
+          node tools/test_canvas_transport.cjs
+          node tools/test_canvas_reconnect.cjs
+      - name: HLS range and error-propagation regression
+        run: |
+          node --require ./tools/test_browser_engine.cjs tools/test_rtc_ice_diagnostics.cjs
+          node --require ./tools/test_browser_engine.cjs tools/test_local_viewer_browser.cjs
+          node --require ./tools/test_browser_engine.cjs tools/test_codefree.cjs
+          node --require ./tools/test_browser_engine.cjs tools/test_youtube_loader.cjs
+      - name: WebRTC ping viewer with approval and signaling expiry
+        run: |
+          node --require ./tools/test_browser_engine.cjs tools/test_rtc_viewer.cjs
+          node --require ./tools/test_browser_engine.cjs tools/test_rtc_viewer.cjs --vp8
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: Compare AAC decoder state across segment flushes
+        run: node --require ./tools/test_browser_engine.cjs tools/test_audio_decode_continuity.cjs
+      - name: Generate and play sustained 60 fps compressed video
+        run: |
+          mkdir -p build
+          ffmpeg -v error -f lavfi -i testsrc2=size=640x360:rate=60 -t 12 -c:v libx264 -preset ultrafast -tune zerolatency -x264-params aud=1:keyint=120:scenecut=0 -f h264 build/source.h264
+          cc tools/test_fmp4.c -o build/mux
+          build/mux build/source.h264 build/live.mp4
+          node --require ./tools/test_browser_engine.cjs tools/test_browser_live.cjs App/Viewer.html build/live.mp4
+      - name: Pure Canvas HTTPS/WSS, privacy and offline UI
+        run: |
+          python3 tools/fetch_canvas.py
+          mkdir -p build/pure
+          ffmpeg -v error -f lavfi -i testsrc2=size=640x360:rate=30 -f lavfi -i sine=frequency=440:sample_rate=48000 -t 10 -c:v libx264 -preset ultrafast -tune zerolatency -g 60 -c:a aac -hls_time 2 -hls_playlist_type vod -hls_segment_filename build/pure/part%02d.ts build/pure/master.m3u8
+          ffmpeg -v error -f lavfi -i testsrc2=size=640x360:rate=30 -f lavfi -i sine=frequency=440:sample_rate=48000 -t 10 -c:v libx264 -preset ultrafast -g 60 -c:a aac -hls_time 2 -hls_segment_type fmp4 -hls_playlist_type vod -hls_segment_filename build/pure/fragment%02d.m4s build/pure/fragmented.m3u8
+          python3 tools/create_packed_audio_fixture.py build/pure
+          node tools/test_canvas_prefetch.cjs App/CanvasPlayer.js
+          node tools/test_canvas_lifecycle.cjs App/CanvasPlayer.js
+          node tools/test_canvas_buffer.cjs
+          node tools/test_canvas_engine.cjs App/CanvasPlayer.js
+          node tools/test_canvas_horizon.cjs App/CanvasPlayer.js
+          node tools/test_canvas_timeline.cjs App build/pure
+          node tools/test_canvas_audio.cjs App/CanvasPlayer.js
+          node tools/test_canvas_demux.cjs App build/pure
+          ffmpeg -v error -f lavfi -i sine=frequency=440:sample_rate=44100 -t 6.1 -c:a aac -f adts build/pure/complete.aac
+          node tools/test_packed_aac.cjs App build/pure/complete.aac
+          git fetch --depth=1 origin 4da653434dd0debdc331fd2113cdc77fa91691ce
+          git show 4da653434dd0debdc331fd2113cdc77fa91691ce:App/CanvasPlayer.js > build/baseline-canvas.js
+          SCREENLINK_TEST_PLAYER_OVERRIDE="$PWD/build/baseline-canvas.js" SCREENLINK_EXPECT_SEGMENT_STALL=1 node --require ./tools/test_browser_engine.cjs tools/test_pure_canvas.cjs App build/pure build/live.mp4
+          node --require ./tools/test_browser_engine.cjs tools/test_pure_canvas.cjs App build/pure build/live.mp4
+      - name: Native media HLS video and audio player
+        run: |
+          python3 tools/fetch_hls.py
+          python3 tools/fetch_canvas.py
+          mkdir -p build/media
+          ffmpeg -v error -f lavfi -i testsrc2=size=640x360:rate=30 -f lavfi -i sine=frequency=440:sample_rate=48000 -t 10 -c:v libx264 -preset ultrafast -tune zerolatency -g 60 -c:a aac -hls_time 2 -hls_playlist_type vod -hls_segment_filename build/media/part%02d.ts build/media/master.m3u8
+          node --require ./tools/test_browser_engine.cjs tools/test_media_browser.cjs App build/media
+          node --require ./tools/test_browser_engine.cjs tools/test_youtube_rtc_browser.cjs build/media
+          node --require ./tools/test_browser_engine.cjs tools/test_youtube_rtc_browser.cjs build/media --recovery
+          ffmpeg -v error -f lavfi -i testsrc2=size=640x360:rate=30 -f lavfi -i sine=frequency=440:sample_rate=48000 -t 10 -c:v libx264 -preset ultrafast -g 60 -c:a aac -hls_time 2 -hls_segment_type fmp4 -hls_playlist_type vod -hls_segment_filename build/media/fragment%02d.m4s build/media/fragmented.m3u8
+          node --require ./tools/test_browser_engine.cjs tools/test_youtube_rtc_browser.cjs build/media --fragmented
+          node --require ./tools/test_browser_engine.cjs tools/test_canvas_browser.cjs App build/media
+          node --require ./tools/test_browser_engine.cjs tools/test_split_browser.cjs App build/live.mp4
+          python3 tools/create_quality_fixtures.py build/quality
+          node --require ./tools/test_browser_engine.cjs tools/test_canvas_browser.cjs App build/quality --quality
+          node --require ./tools/test_browser_engine.cjs tools/test_youtube_rtc_browser.cjs build/quality --quality
+          node --require ./tools/test_browser_engine.cjs tools/test_youtube_rtc_browser.cjs build/quality --quality --maps --screen-fixture=build/live.mp4
+      - name: Viewer state and pacing checks
+        run: |
+          python3 tools/test_h264_viewer.py
+          python3 tools/test_viewer.py
+

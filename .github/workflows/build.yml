@@ -1,0 +1,44 @@
+name: Build unsigned iPhone AirPlay lab
+on:
+  pull_request:
+  workflow_dispatch:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build prerequisites
+        run: brew install xcodegen autoconf automake libtool openssl@3
+      - name: Build
+        id: native-build
+        run: bash tools/build.sh
+      - name: Native-to-Chromium local TCP fallback (UDP excluded)
+        run: |
+          npm install --no-save playwright@1.55.0
+          curl --fail --location --retry 3 https://storage.googleapis.com/chrome-for-testing-public/140.0.7339.207/mac-arm64/chrome-mac-arm64.zip -o build/chrome140.zip
+          unzip -q build/chrome140.zip -d build/chrome140
+          export SCREENLINK_CHROME_BIN="$PWD/build/chrome140/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing"
+          export NODE_OPTIONS="--require=$PWD/tools/test_browser_engine.cjs"
+          rtc_mac="$PWD/Vendor/WebRTC.xcframework/macos-x86_64_arm64"
+          xcrun --sdk macosx clang -fobjc-arc -fblocks -IRTC -F"$rtc_mac" tools/test_rtc_tcp_browser.m RTC/SLPingPeer.m RTC/SLTestVideo.m build/local-stun.o -framework CoreVideo -framework Foundation -framework WebRTC -Wl,-rpath,"$rtc_mac" -o build/test-rtc-tcp-browser
+          build/test-rtc-tcp-browser tools/test_rtc_tcp_browser.cjs
+      - name: Public HTTPS transport check (no credentials)
+        run: curl --head --connect-timeout 8 --max-time 15 https://tesla4khmer.com/api/public/screenlink
+      - name: Production signaling integration (real native SDP and ping)
+        if: ${{ !cancelled() && steps.native-build.outcome == 'success' }}
+        run: |
+          build/test-rtc-peer --live
+          build/test-rtc-media --live
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ScreenLink-AirPlay-Lab
+          path: |
+            build/*.ipa
+            build/xcodebuild.log
+

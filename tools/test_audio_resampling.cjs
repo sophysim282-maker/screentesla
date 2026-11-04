@@ -1,0 +1,8 @@
+const {chromium}=require('playwright');
+(async()=>{const browser=await chromium.launch({headless:true,args:['--no-sandbox']});try{const page=await browser.newPage();const results=await page.evaluate(async()=>{
+ const out=[];for(const outputRate of [44100,48000])for(const frequency of [440,1000,6000]){
+ const rate=44100,size=1024,count=180,length=size*count,offset=.1;
+ const source=new Float32Array(length);for(let i=0;i<length;i++)source[i]=.35*Math.sin(2*Math.PI*frequency*i/rate);
+ async function render(chunked){const c=new OfflineAudioContext(1,Math.ceil((length/rate+.2)*outputRate),outputRate);for(let at=0;at<length;at+=chunked?size:length){const n=chunked?size:length,b=c.createBuffer(1,n,rate);b.copyToChannel(source.subarray(at,at+n),0);const node=c.createBufferSource();node.buffer=b;node.connect(c.destination);node.start(offset+at/rate);}return (await c.startRendering()).getChannelData(0);}
+ const reference=await render(false),chunks=await render(true);let peak=0,sum=0,steps=0,edgePeak=0,n=0;for(let i=Math.ceil((offset+.05)*outputRate);i<(offset+length/rate-.05)*outputRate;i++){const e=chunks[i]-reference[i];peak=Math.max(peak,Math.abs(e));sum+=e*e;n++;steps=Math.max(steps,Math.abs(chunks[i]-chunks[i-1]));const phase=((i/outputRate-offset)*rate)%size;if(phase<20||phase>size-20)edgePeak=Math.max(edgePeak,Math.abs(e));}out.push({outputRate,frequency,peakError:peak,rmsError:Math.sqrt(sum/n),edgePeak,maxStep:steps});}
+ return out;});console.log('AUDIO_RESAMPLING_COMPARISON',JSON.stringify(results));}finally{await browser.close();}})().catch(e=>{console.error(e);process.exitCode=1;});

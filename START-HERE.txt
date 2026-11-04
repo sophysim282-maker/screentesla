@@ -1,0 +1,86 @@
+VERSION 0.16.0 — YOUTUBE VIDEO + SOUND THROUGH YOUR HTTPS WEBSITE
+
+1. Sign/install the IPA with KravaSign. Keep BOTH extensions and WebRTC.framework.
+2. Ask Lovable to publish docs/webrtc-youtube-viewer.html at https://tesla4khmer.com/screenlink-youtube . The same pairing backend is used; the old moving-test page is separate.
+3. Connect built-in VPN and turn on Personal Hotspot. Connect the Mac to that hotspot.
+4. Tap YouTube website · pair video + sound. Tap the round system button and Start Broadcast (ScreenLink Screen).
+5. Tap Start website pairing, enter its code on /screenlink-youtube and press Approve viewer on the phone.
+6. Leave the system broadcast running. Open YouTube → Cast → AirPlay & Bluetooth devices → ScreenLink VPN Phone.
+7. Press Play with sound on the website. Actual video/audio should arrive through the local WebRTC media channel.
+
+This is original YouTube media, not the colored moving pattern. Phone-screen capture stays hidden and the YouTube WebRTC channel cannot request it. Do not press Show in another legacy local viewer unless you intend to share your phone screen.
+
+The broadcast extension owns the session so leaving the main app does not intentionally stop it. iOS can still stop the broadcast; physical YouTube compatibility, memory pressure and sustained background operation need testing. Copy diagnostics on both sides if playback fails. The app cannot silently grant or restart a system broadcast.
+
+VERSION 0.15.0 — REAL WEBRTC MOVING-VIDEO TEST
+
+1. Re-sign/install the new IPA with KravaSign, keeping BOTH extensions and WebRTC.framework.
+2. Ask Lovable to replace /screenlink-ping with the updated docs/webrtc-ping-viewer.html.
+3. Connect your Mac (or parked Tesla) to the iPhone hotspot.
+4. In ScreenLink, open WebRTC moving-video test, Start video test, enter its code on /screenlink-ping, then approve on the phone.
+5. Keep the phone test screen open. The website should show a moving white square and colored background. Press Play video if needed.
+6. Wait for VIDEO ACTIVE, then Copy diagnostics on both sides if it fails.
+
+This sends generated video motion only. YouTube, Maps and sound have NOT been connected to WebRTC in this build. Their existing local modes remain available. Foreground video is being tested first; this does not promise background playback or bypass vehicle restrictions.
+
+VERSION 0.14.0 — WEBRTC PAIRING/PING PROTOTYPE
+
+This milestone tests connection setup only. It does NOT stream Maps or YouTube over WebRTC yet.
+
+1. Re-sign/install the IPA as before, keeping both extensions and the embedded WebRTC.framework.
+2. Turn on iPhone Personal Hotspot and connect the Mac or parked Tesla to it.
+3. Open WebRTC pairing test · no video yet in ScreenLink. Keep this screen open.
+4. Tap Start pairing test and enter the displayed six-digit code on the website pairing page.
+5. Approve the request on the iPhone. Wait for LOCAL P2P PING VERIFIED.
+6. If it fails, Copy diagnostics from the test screen. No SDP or role secrets are included.
+
+For Lovable: deploy docs/webrtc-ping-viewer.html on an HTTPS route such as /screenlink-ping. That reference client is provided in this repository; its deployment to your website is a separate step.
+
+The viewer must implement the v2 API and the ordered data channel named ping, with UTF-8 ping/pong replies. Browser API support alone is not an end-to-end connection test. Local streaming modes remain available on the previous screen.
+
+VERSION 0.13.1 — MANUAL PHONE SCREEN PRIVACY
+
+The broadcast starts HIDDEN.
+1. Open Google Maps on the iPhone. On the Mac viewer, press Show phone screen.
+2. BEFORE switching away from Google Maps, press Hide phone screen on the viewer. Wait for HIDDEN confirmation.
+3. Use your other phone apps. YouTube keeps playing in its separate panel.
+4. Return to Google Maps, then press Show phone screen again.
+
+This does not automatically recognize Google Maps. Never press Show while another private app is visible. If Hide is NOT confirmed, keep Maps open or stop the system broadcast before switching apps.
+
+VERSION 0.13.0 — LIVE IPHONE MAPS + YOUTUBE
+
+1. Re-sign the entire IPA with KravaSign. Keep BOTH extensions: ScreenLinkLocalTunnel and ScreenLinkBroadcast. Keep VPN entitlements.
+2. Connect built-in VPN. Choose Maps + YouTube · prepare screen broadcast.
+3. Tap the round iOS broadcast button, choose ScreenLink Screen, then Start Broadcast. Wait for SCREEN BROADCAST ACTIVE in the app log.
+4. Open YouTube and select ScreenLink VPN Phone using AirPlay. Then open Google Maps on the iPhone.
+5. Open http://172.20.10.1:8080/ on the Mac. The broadcast viewer defaults to split view. Drag the middle line, reset it, or switch to stacked panels.
+
+The map panel shows the currently visible iPhone screen, including other apps if you switch. Keep the phone unlocked. The extension hosts the receiver during an active screen broadcast; the main app no longer needs its timed background task in this mode. iOS can still interrupt or stop capture. Simultaneous YouTube AirPlay and ReplayKit capture requires your physical iPhone test and is not guaranteed by build tests.
+
+Stop through Control Center or Stop sharing in ScreenLink. Starting this mode replaces a normal receiver; reconnect YouTube AirPlay after the broadcast starts. No extra third-party VPN is required.
+
+VERSION 0.12.0 — CANVAS VIDEO + SOUND EQ
+
+Install/sign as before, retaining the built-in VPN extension. The hotspot viewer now draws video on Canvas. Play with sound enables audio; choose Normal or Music sound. Pause/Play, seek and full screen controls are above the Canvas.
+
+Direct MP4Box/mux.js → WebCodecs → Canvas + Web Audio is available only in secure browser contexts with supported decoders. Your ordinary HTTP hotspot link uses the compatible HLS decoder and Canvas display automatically. This does not hide video from the browser, and does not change iOS background execution.
+
+VERSION 0.11.0 — BUILT-IN LOCAL VPN
+
+Sign the entire IPA with KravaSign, retaining the embedded ScreenLinkLocalTunnel.appex. The app and extension both require the packet-tunnel-provider Network Extension entitlement in their signing profiles.
+
+1. Disconnect LocalDevVPN or other VPNs.
+2. Open ScreenLink → Connect built-in VPN → Allow the iOS VPN configuration prompt. Wait for BUILT-IN VPN CONNECTED.
+3. Connect the Mac to the iPhone hotspot. Start YouTube video-only in ScreenLink and wait for BACKGROUND SESSION ACTIVE. Open http://172.20.10.1:8080/ on the Mac.
+4. Open YouTube → Cast → AirPlay & Bluetooth devices → ScreenLink VPN Phone. Press Play with sound on the Mac viewer.
+
+A VPN connection does not provide unlimited background execution for the receiver app. Native YouTube playback, background behavior and this new VPN require physical iPhone testing. This build includes the 0.10.4 playlist status-zero and reverse EVENT fixes.
+
+The source ZIP contains code and cannot be installed by tapping it. The separately supplied ScreenLink-AirPlay-Lab-unsigned.ipa is the installable app package after re-signing. Physical device behavior still needs testing.
+
+If you have a Mac with Xcode: follow README.md → Free build routes.
+If you do not: the included GitHub workflow can attempt an unsigned cloud build.
+Signing and a real-iPhone test are still necessary after that build.
+
+The built-in VPN requires the packet-tunnel-provider entitlement in both the app and VPN extension. Use a compatible signing profile and keep both embedded extensions and WebRTC.framework.
