@@ -1,0 +1,27 @@
+name: Cancel superseded build59 checks
+on:
+  push:
+    branches: ['ci/build59-maintenance']
+    paths: ['.github/workflows/cleanup-build59.yml']
+permissions:
+  actions: write
+  contents: read
+jobs:
+  cleanup:
+    if: github.repository == 'sophysim282-maker/screentesla'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Cancel only superseded checks created during this build59 task
+        run: |
+          python3 - <<'PY'
+          import json,subprocess
+          superseded={'ab41488b88c4df869a4c46036fbcf5c75f547efc','57500eb057b95aca76bcb85c04c8514847c3f4a9','9011ba8009e5522862289f8b9819dc8c088fb829','c41f7f97e05a4fd4daf68ec099300729eeef1cc2','8ce8bcd6bb844b499921c497dbb584485388ba25','ea13e76b7591b5c7f61e2d45ced2e9dcc8d697f5'}
+          runs=json.loads(subprocess.check_output(['gh','api','repos/sophysim282-maker/screentesla/actions/runs?branch=feature/youtube-airplay-010&per_page=100']))['workflow_runs']
+          for run in runs:
+              if run['head_sha'] in superseded and run['status'] in {'queued','in_progress','waiting','pending'}:
+                  result=subprocess.run(['gh','api','--method','POST','repos/sophysim282-maker/screentesla/actions/runs/'+str(run['id'])+'/cancel'],capture_output=True)
+                  print('Superseded run',run['id'],'cancel requested' if result.returncode==0 else 'already completed or cancellation unavailable')
+          PY
