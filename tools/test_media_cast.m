@@ -52,8 +52,10 @@ int main(void){@autoreleasepool{
     NSDictionary *master=[media resource:identifier range:nil];assert([master[@"code"] intValue]==200);NSString *masterText=[[NSString alloc]initWithData:master[@"data"] encoding:NSUTF8StringEncoding];assert([masterText containsString:@"/media/resource/"]);assert(![masterText containsString:@"mlhls://"]);
     NSString *child=nil;for(NSString *line in [masterText componentsSeparatedByString:@"\n"])if([line hasPrefix:@"/media/resource/"])child=[NSURLComponents componentsWithString:line].path.lastPathComponent;assert(child);
     dispatch_semaphore_t done=dispatch_semaphore_create(0);__block NSDictionary *variant=nil;dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED,0),^{variant=[media resource:child range:nil];dispatch_semaphore_signal(done);});
+    __block NSDictionary *secondVariant=nil;dispatch_semaphore_t secondDone=dispatch_semaphore_create(0);
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED,0),^{secondVariant=[media resource:child range:nil];dispatch_semaphore_signal(secondDone);});
     assert([childRequest[@"request"][@"FCUP_Response_URL"] isEqual:@"mlhls://localhost/video.m3u8"]);
-    deliver(media,childRequest,@"#EXTM3U\n#YT-EXT-CONDENSED-URL:BASE-URI=\"https://example.test/videoplayback\",PARAMS=\"sq,lmt\",PREFIX=\"s/\"\n#EXTINF:2.0,\ns/1/42\n#EXT-X-ENDLIST\n",@"S1");assert(!dispatch_semaphore_wait(done,dispatch_time(DISPATCH_TIME_NOW,5*NSEC_PER_SEC)));assert([variant[@"code"] intValue]==200);NSString *variantText=[[NSString alloc]initWithData:variant[@"data"] encoding:NSUTF8StringEncoding];assert([variantText containsString:@"/media/resource/"]);assert(![variantText containsString:@"s/1/42"]);
+    deliver(media,childRequest,@"#EXTM3U\n#YT-EXT-CONDENSED-URL:BASE-URI=\"https://example.test/videoplayback\",PARAMS=\"sq,lmt\",PREFIX=\"s/\"\n#EXTINF:2.0,\ns/1/42\n#EXT-X-ENDLIST\n",@"S1");assert(!dispatch_semaphore_wait(done,dispatch_time(DISPATCH_TIME_NOW,5*NSEC_PER_SEC)));assert([variant[@"code"] intValue]==200);NSString *variantText=[[NSString alloc]initWithData:variant[@"data"] encoding:NSUTF8StringEncoding];assert(!dispatch_semaphore_wait(secondDone,dispatch_time(DISPATCH_TIME_NOW,5*NSEC_PER_SEC)));assert([secondVariant[@"code"] intValue]==200);assert([variantText containsString:@"/media/resource/"]);assert(![variantText containsString:@"s/1/42"]);
     MediaCast *rolling=[MediaCast new];rolling.token=@"secret";NSString *owner=@"https://example.test/rolling.m3u8";
     assert(status(exchange(rolling,@"POST",@"/play",@"R",@{@"Content-Location":owner},NULL,-1))==200);
     NSString *epoch=[rolling state][@"epoch"];NSInteger rewriteCode;NSMutableDictionary *resources=[rolling valueForKey:@"resources"],*flights=[rolling valueForKey:@"inflight"];NSMutableArray *retired=[rolling valueForKey:@"retiredLinks"];NSString *pinned=nil;
@@ -64,6 +66,17 @@ int main(void){@autoreleasepool{
         for(NSString *line in [rewritten componentsSeparatedByString:@"\n"])if([line hasPrefix:@"/media/resource/"]){NSString *key=[NSURLComponents componentsWithString:line].path.lastPathComponent;assert(resources[key]);assert([[NSUUID alloc]initWithUUIDString:key]);if(!pinned){pinned=key;flights[key]=@1;}}
         assert(resources[pinned]);assert([[rolling rewrite:list base:[NSURL URLWithString:owner] owner:owner epoch:epoch code:&rewriteCode] isEqual:rewritten]);
     }
+    // A paused source must retain full cached seek references while another
+    // rendition is loaded; consuming a rendition pins it across long gaps.
+    NSString *vod=@"https://example.test/vod.m3u8";NSInteger pausedCode;
+    NSString *vodBody=[rolling rewrite:@"#EXTM3U\nhttps://example.test/vod/early.ts\nhttps://example.test/vod/late.ts\n#EXT-X-ENDLIST\n" base:[NSURL URLWithString:vod] owner:vod epoch:epoch code:&pausedCode];assert(vodBody);
+    NSSet *vodLinks=[[[rolling valueForKey:@"playlistLinks"] objectForKey:vod] copy];
+    NSMutableDictionary *times=[rolling valueForKey:@"playlistTimes"];
+    assert(status(exchange(rolling,@"POST",@"/rate?value=0",@"R",nil,NULL,-1))==200);times[vod]=@0;
+    assert([rolling rewrite:@"#EXTM3U\nhttps://example.test/other.ts\n" base:[NSURL URLWithString:owner] owner:owner epoch:epoch code:&pausedCode]);
+    for(NSString *key in vodLinks)assert(resources[key]);
+    [[rolling valueForKey:@"selectedPlaylists"] addObject:vod];assert(status(exchange(rolling,@"POST",@"/rate?value=1",@"R",nil,NULL,-1))==200);times[vod]=@0;
+    assert([rolling rewrite:@"#EXTM3U\nhttps://example.test/another.ts\n" base:[NSURL URLWithString:owner] owner:owner epoch:epoch code:&pausedCode]);for(NSString *key in vodLinks)assert(resources[key]);
     NSUInteger count=resources.count;
     assert(![rolling rewrite:@"#EXTM3U\nfile:///private/test\n" base:[NSURL URLWithString:owner] owner:owner epoch:epoch code:&rewriteCode]&&rewriteCode==422&&resources.count==count);
     assert(![rolling rewrite:@"#EXTM3U\nhttps://example.test/a\n" base:[NSURL URLWithString:owner] owner:owner epoch:@"stale" code:&rewriteCode]&&rewriteCode==410&&resources.count==count);

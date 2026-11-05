@@ -219,8 +219,10 @@ static BOOL sendBytes(int fd,NSData *data){const char *p=data.bytes;NSUInteger n
     if(virtualURL(url)){
         [_ready lock];NSDictionary *cached=_cache[location];BOOL fresh=cached && ([cached[@"code"] integerValue]==200) && (stablePlaylist(cached[@"data"]) || NSProcessInfo.processInfo.systemUptime-[cached[@"time"] doubleValue]<2);[_ready unlock];
         if(!fresh)[self requestURL:location];
-        [_ready lock];NSDate *deadline=[NSDate dateWithTimeIntervalSinceNow:10];while([epoch isEqual:_epoch] && _active && _pending[location])if(![_ready waitUntilDate:deadline])break;
-        cached=[epoch isEqual:_epoch]?_cache[location]:nil;data=cached[@"data"];code=cached?[cached[@"code"] integerValue]:504;if(_pending[location])[_pending removeObjectForKey:location];[_ready unlock];mime=@"application/vnd.apple.mpegurl";
+        [_ready lock];NSDate *deadline=[NSDate dateWithTimeIntervalSinceNow:15];while([epoch isEqual:_epoch] && _active && _pending[location])if(![_ready waitUntilDate:deadline])break;
+        cached=[epoch isEqual:_epoch]?_cache[location]:nil;data=cached[@"data"];code=cached?[cached[@"code"] integerValue]:504;// requestURL owns the shared request lifetime. A timed-out browser/PiP waiter
+        // must not cancel another waiter or a new epoch request for the same URL.
+        [_ready unlock];mime=@"application/vnd.apple.mpegurl";
     }else if(webURL(url)){
         NSMutableURLRequest *request=[NSMutableURLRequest requestWithURL:url];[request setValue:@"AppleCoreMedia/1.0 ScreenLink" forHTTPHeaderField:@"User-Agent"];
         if(range.length<128 && [range hasPrefix:@"bytes="] && [range rangeOfCharacterFromSet:NSCharacterSet.newlineCharacterSet].location==NSNotFound)[request setValue:range forHTTPHeaderField:@"Range"];
