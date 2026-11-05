@@ -78,7 +78,7 @@
             fragment.length=length;
             [_units addObject:@{@"id":@(_sequence),@"data":fragment,@"key":@(_pendingKey)}];_bytes+=length;
             while(_units.count>1 && (_bytes>_maxBytes || _units.count>_maxPackets)){
-                NSInteger keyIdx = -1;
+               if (_maxPackets >= 60)  {NSInteger keyIdx = -1;
                 for (NSInteger i = (NSInteger)_units.count - 1; i >= 1; i--) {
                     if ([_units[i][@"key"] boolValue]) {
                         keyIdx = i;
@@ -92,7 +92,7 @@
                     }
                 } else {
                     _bytes-=[_units.firstObject[@"data"] length];[_units removeObjectAtIndex:0];
-                }
+                }} else { _bytes-=[_units.firstObject[@"data"] length];[_units removeObjectAtIndex:0]; }
             }
             _sequence++;
         }
