@@ -7,11 +7,7 @@
 static inline int sl_frame_due(double now, double fps, double *deadline) {
     if(fps<=0 || now<*deadline)return 0;
     double interval=1.0/fps;
-    if(*deadline>0 && (now-*deadline)>interval*2.0){
-        *deadline=now+interval;
-    }else{
-        *deadline=(*deadline>0 && now-*deadline<interval)?*deadline+interval:now+interval;
-    }
+    *deadline=(*deadline>0 && now-*deadline<interval)?*deadline+interval:now+interval;
     return 1;
 }
 
