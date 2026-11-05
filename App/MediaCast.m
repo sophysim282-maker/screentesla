@@ -12,6 +12,9 @@
     void *_reverseConnection;
     NSString *_appleSession,*_epoch,*_primary,*_uuid;
     NSMutableDictionary *_resources,*_identifiers,*_cache,*_pending;
+    NSMutableDictionary *_playlistLinks,*_playlistTimes,*_inflight;
+    NSMutableArray *_retiredLinks;
+    NSMutableOrderedSet *_selectedPlaylists;
     NSMutableOrderedSet *_prefetch;
     NSArray<NSNumber *> *_sourceHeights;
     NSUInteger _requestID,_command;
@@ -29,7 +32,7 @@ static BOOL virtualURL(NSURL *url){return [url.scheme.lowercaseString isEqual:@"
 static BOOL stablePlaylist(NSData *data){NSString *text=[[NSString alloc]initWithData:data encoding:NSUTF8StringEncoding];return [text hasPrefix:@"#EXTM3U"] && ([text containsString:@"#EXT-X-ENDLIST"] || [text containsString:@"#EXT-X-STREAM-INF:"] || [text containsString:@"#EXT-X-I-FRAME-STREAM-INF:"]);}
 static BOOL sendBytes(int fd,NSData *data){const char *p=data.bytes;NSUInteger n=data.length;while(n){ssize_t k=send(fd,p,n,0);if(k<0 && errno==EINTR)continue;if(k<=0)return NO;p+=k;n-=(NSUInteger)k;}return YES;}
 @implementation MediaCast
-- (instancetype)init{if((self=[super init])){_ready=[NSCondition new];_events=dispatch_queue_create("ScreenLink.media.events",DISPATCH_QUEUE_SERIAL);_reverse=-1;_resources=[NSMutableDictionary dictionary];_identifiers=[NSMutableDictionary dictionary];_cache=[NSMutableDictionary dictionary];_pending=[NSMutableDictionary dictionary];_prefetch=[NSMutableOrderedSet orderedSet];_epoch=NSUUID.UUID.UUIDString;}return self;}
+- (instancetype)init{if((self=[super init])){_ready=[NSCondition new];_events=dispatch_queue_create("ScreenLink.media.events",DISPATCH_QUEUE_SERIAL);_reverse=-1;_resources=[NSMutableDictionary dictionary];_identifiers=[NSMutableDictionary dictionary];_cache=[NSMutableDictionary dictionary];_pending=[NSMutableDictionary dictionary];_prefetch=[NSMutableOrderedSet orderedSet];_playlistLinks=[NSMutableDictionary dictionary];_playlistTimes=[NSMutableDictionary dictionary];_inflight=[NSMutableDictionary dictionary];_retiredLinks=[NSMutableArray array];_selectedPlaylists=[NSMutableOrderedSet orderedSet];_epoch=NSUUID.UUID.UUIDString;}return self;}
 - (void)log:(NSString *)text{if(self.status)self.status(text);}
 - (BOOL)active{[_ready lock];BOOL value=_active;[_ready unlock];return value;}
 - (BOOL)videoIsLive{[_ready lock];BOOL value=_active && _readyToPlay && NSProcessInfo.processInfo.systemUptime-_heartbeat<10;[_ready unlock];return value;}
@@ -37,6 +40,39 @@ static BOOL sendBytes(int fd,NSData *data){const char *p=data.bytes;NSUInteger n
     NSString *identifier=_identifiers[url];
     if(!identifier){if(_resources.count>=4096)return nil;identifier=NSUUID.UUID.UUIDString;_resources[identifier]=url;_identifiers[url]=identifier;}
     return [NSString stringWithFormat:@"/media/resource/%@?token=%@",identifier,self.token];
+}
+// Registry mutation is serialized by _ready, and publication is transactional.
+// UUID resource paths preserve compatibility with every existing website loader.
+- (NSString *)rewrite:(NSString *)text base:(NSURL *)base owner:(NSString *)owner epoch:(NSString *)epoch code:(NSInteger *)code {
+    NSMutableOrderedSet *urls=[NSMutableOrderedSet orderedSet];__block NSString *reason=nil;NSError *error=nil;
+    NSString *valid=SLRewritePlaylist(text,^NSString *(NSString *uri){
+        NSURL *target=[NSURL URLWithString:uri relativeToURL:base].absoluteURL;
+        if(!webURL(target)&&!virtualURL(target)){reason=@"unsupported URI scheme or authority";return nil;}
+        if([target.absoluteString lengthOfBytesUsingEncoding:NSUTF8StringEncoding]>16384){reason=@"URI size limit";return nil;}
+        [urls addObject:target.absoluteString];return uri;
+    },&error);
+    if(!valid){*code=422;[self log:[@"MEDIA PLAYLIST INVALID: " stringByAppendingString:reason?:error.localizedDescription?:@"invalid HLS"]];return nil;}
+    [_ready lock];
+    if(![epoch isEqual:_epoch]||!_active){[_ready unlock];*code=410;[self log:@"MEDIA PLAYLIST STALE: playback epoch changed."];return nil;}
+    double now=NSProcessInfo.processInfo.systemUptime;
+    for(NSString *key in _playlistLinks.allKeys)if(!_paused&&![key isEqual:_primary]&&![_selectedPlaylists containsObject:key]&&now-[_playlistTimes[key] doubleValue]>120){[_playlistLinks removeObjectForKey:key];[_playlistTimes removeObjectForKey:key];}
+    NSIndexSet *expired=[_retiredLinks indexesOfObjectsPassingTest:^BOOL(NSDictionary *entry,NSUInteger index,BOOL *stop){return [entry[@"until"] doubleValue]<=now;}];[_retiredLinks removeObjectsAtIndexes:expired];
+    NSMutableDictionary *mapping=[NSMutableDictionary dictionary];NSMutableSet *next=[NSMutableSet set],*keep=[NSMutableSet setWithArray:_inflight.allKeys];
+    if(_primary&&_identifiers[_primary])[keep addObject:_identifiers[_primary]];
+    for(NSString *url in urls){NSString *identifier=_identifiers[url]?:NSUUID.UUID.UUIDString;mapping[url]=identifier;[next addObject:identifier];}
+    [keep unionSet:next];for(NSString *key in _playlistLinks)if(![key isEqual:owner])[keep unionSet:_playlistLinks[key]];
+    for(NSDictionary *entry in _retiredLinks)[keep unionSet:entry[@"ids"]];
+    NSSet *old=_playlistLinks[owner];double until=[_playlistTimes[owner] doubleValue]+30;BOOL retiring=old&&![old isEqual:next]&&until>now;
+    if(retiring)[keep unionSet:old];
+    if(keep.count>4096||(!_playlistLinks[owner]&&_playlistLinks.count>=64)||(retiring&&_retiredLinks.count>=64)){
+        [_ready unlock];*code=503;[self log:@"MEDIA PLAYLIST CAPACITY: active/in-flight references fill bounded registry; retry after snapshot grace."];return nil;
+    }
+    if(retiring)[_retiredLinks addObject:@{@"ids":old,@"until":@(until)}];
+    for(NSString *identifier in _resources.allKeys)if(![keep containsObject:identifier]){NSString *url=_resources[identifier];[_resources removeObjectForKey:identifier];[_identifiers removeObjectForKey:url];[_cache removeObjectForKey:url];}
+    for(NSString *url in mapping){_identifiers[url]=mapping[url];_resources[mapping[url]]=url;}
+    _playlistLinks[owner]=next;_playlistTimes[owner]=@(now);NSString *token=self.token;
+    NSString *rewritten=SLRewritePlaylist(text,^NSString *(NSString *uri){NSString *url=[NSURL URLWithString:uri relativeToURL:base].absoluteURL.absoluteString;return [NSString stringWithFormat:@"/media/resource/%@?token=%@",mapping[url],token];},NULL);
+    [_ready unlock];*code=200;return rewritten;
 }
 - (void)sendEvent:(NSDictionary *)object session:(NSString *)session{
     NSData *body=plistData(object);if(!body)return;
@@ -99,7 +135,7 @@ static BOOL sendBytes(int fd,NSData *data){const char *p=data.bytes;NSUInteger n
     if(event){[self sendEvent:@{@"category":@"video",@"state":event} session:session];[self log:[NSString stringWithFormat:@"MEDIA BROWSER %@: video-only playback state reported.",event.uppercaseString]];}
 }
 - (void)connectionClosed:(void *)connection{[_ready lock];if(connection==_reverseConnection){if(_reverse>=0)close(_reverse);_reverse=-1;_reverseConnection=NULL;[_pending removeAllObjects];[_ready broadcast];}[_ready unlock];}
-- (void)stop{[_ready lock];_active=NO;_readyToPlay=NO;_primary=nil;_sourceHeights=@[];_epoch=NSUUID.UUID.UUIDString;[_resources removeAllObjects];[_identifiers removeAllObjects];[_pending removeAllObjects];[_prefetch removeAllObjects];[_cache removeAllObjects];if(_reverse>=0)close(_reverse);_reverse=-1;_reverseConnection=NULL;[_ready broadcast];[_ready unlock];}
+- (void)stop{[_ready lock];_active=NO;_readyToPlay=NO;_primary=nil;_sourceHeights=@[];_epoch=NSUUID.UUID.UUIDString;[_resources removeAllObjects];[_identifiers removeAllObjects];[_playlistLinks removeAllObjects];[_playlistTimes removeAllObjects];[_inflight removeAllObjects];[_retiredLinks removeAllObjects];[_selectedPlaylists removeAllObjects];[_pending removeAllObjects];[_prefetch removeAllObjects];[_cache removeAllObjects];if(_reverse>=0)close(_reverse);_reverse=-1;_reverseConnection=NULL;[_ready broadcast];[_ready unlock];}
 - (void)reply:(http_response_t **)response status:(int)code type:(NSString *)type data:(NSData *)data{
     *response=http_response_init("HTTP/1.1",code,code==200?"OK":(code==101?"Switching Protocols":"Request Failed"));
     if(type)http_response_add_header(*response,"Content-Type",type.UTF8String);
@@ -134,7 +170,7 @@ static BOOL sendBytes(int fd,NSData *data){const char *p=data.bytes;NSUInteger n
         if(!location){NSString *text=[[NSString alloc]initWithData:body encoding:NSUTF8StringEncoding];for(NSString *line in [text componentsSeparatedByCharactersInSet:NSCharacterSet.newlineCharacterSet])if([line hasPrefix:@"Content-Location:"])location=[[line substringFromIndex:17] stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceCharacterSet];}
         NSURL *target=[NSURL URLWithString:location?:@""];
         if(!session.length || session.length>128 || [session rangeOfCharacterFromSet:NSCharacterSet.newlineCharacterSet].location!=NSNotFound || (!webURL(target)&&!virtualURL(target))){[self log:[NSString stringWithFormat:@"MEDIA PLAY REJECTED: session %@, content URL scheme %@, plist keys %@.",session.length?@"present":@"missing",target.scheme?:@"missing",[[plist.allKeys sortedArrayUsingSelector:@selector(compare:)] componentsJoinedByString:@", "]?:@"none"]];[self reply:response status:400 type:nil data:nil];return YES;}
-        [_ready lock];_active=YES;_readyToPlay=NO;_paused=NO;_position=0;_duration=0;_heartbeat=0;_rate=1;_command=0;_commandKind=@"rate";_seekPosition=0;_start=MAX(0,[plist[@"Start-Position-Seconds"] doubleValue]);_fraction=MAX(0,MIN(1,[plist[@"Start-Position"] doubleValue]));_error=nil;_eventState=@"loading";_appleSession=session;_sourceHeights=@[];_primary=target.absoluteString;_uuid=[plist[@"uuid"] isKindOfClass:NSString.class]?plist[@"uuid"]:NSUUID.UUID.UUIDString;_epoch=NSUUID.UUID.UUIDString;[_resources removeAllObjects];[_identifiers removeAllObjects];[_cache removeAllObjects];[_pending removeAllObjects];[_prefetch removeAllObjects];[_ready broadcast];[_ready unlock];
+        [_ready lock];_active=YES;_readyToPlay=NO;_paused=NO;_position=0;_duration=0;_heartbeat=0;_rate=1;_command=0;_commandKind=@"rate";_seekPosition=0;_start=MAX(0,[plist[@"Start-Position-Seconds"] doubleValue]);_fraction=MAX(0,MIN(1,[plist[@"Start-Position"] doubleValue]));_error=nil;_eventState=@"loading";_appleSession=session;_sourceHeights=@[];_primary=target.absoluteString;_uuid=[plist[@"uuid"] isKindOfClass:NSString.class]?plist[@"uuid"]:NSUUID.UUID.UUIDString;_epoch=NSUUID.UUID.UUIDString;[_resources removeAllObjects];[_identifiers removeAllObjects];[_playlistLinks removeAllObjects];[_playlistTimes removeAllObjects];[_inflight removeAllObjects];[_retiredLinks removeAllObjects];[_selectedPlaylists removeAllObjects];[_cache removeAllObjects];[_pending removeAllObjects];[_prefetch removeAllObjects];[_ready broadcast];[_ready unlock];
         [self reply:response status:200 type:nil data:nil];
         [self log:@"MEDIA PLAY REQUEST: native video-only handoff received. Open the hotspot viewer; its video player will show only the playing media."];
         [self sendEvent:@{@"category":@"video",@"state":@"loading"} session:session];if(virtualURL(target))[self requestURL:target.absoluteString];return YES;
@@ -169,7 +205,16 @@ static BOOL sendBytes(int fd,NSData *data){const char *p=data.bytes;NSUInteger n
     [self reply:response status:200 type:@"text/x-apple-plist+xml" data:plistData(@{@"errorCode":@0})];return YES;
 }
 - (NSDictionary *)resource:(NSString *)identifier range:(NSString *)range{
-    [_ready lock];NSString *location=_resources[identifier],*epoch=_epoch;[_ready unlock];if(!location)return @{@"code":@404};
+    [_ready lock];NSString *location=_resources[identifier],*epoch=_epoch;
+    if(location){
+        _inflight[identifier]=@([_inflight[identifier] unsignedIntegerValue]+1);
+        for(NSString *owner in _playlistLinks)if([_playlistLinks[owner] containsObject:identifier]){
+            _playlistTimes[owner]=@(NSProcessInfo.processInfo.systemUptime);
+            if(![owner isEqual:_primary]){[_selectedPlaylists removeObject:owner];[_selectedPlaylists addObject:owner];while(_selectedPlaylists.count>4)[_selectedPlaylists removeObjectAtIndex:0];}
+        }
+    }
+    [_ready unlock];if(!location)return @{@"code":@404};
+    @try {
     NSURL *url=[NSURL URLWithString:location];NSData *data=nil;NSInteger code=200;NSString *mime=nil,*contentRange=nil;
     if(virtualURL(url)){
         [_ready lock];NSDictionary *cached=_cache[location];BOOL fresh=cached && ([cached[@"code"] integerValue]==200) && (stablePlaylist(cached[@"data"]) || NSProcessInfo.processInfo.systemUptime-[cached[@"time"] doubleValue]<2);[_ready unlock];
@@ -190,14 +235,14 @@ static BOOL sendBytes(int fd,NSData *data){const char *p=data.bytes;NSUInteger n
     NSString *text=[[NSString alloc]initWithData:data encoding:NSUTF8StringEncoding];
     if([text hasPrefix:@"#EXTM3U"]){
         [self recordSourceHeights:data location:location epoch:epoch];
-        NSError *error=nil;NSString *rewritten=SLRewritePlaylist(text,^NSString *(NSString *uri){
-            NSURL *target=[NSURL URLWithString:uri relativeToURL:url].absoluteURL;if(!webURL(target)&&!virtualURL(target))return nil;
-            [self->_ready lock];NSString *path=[epoch isEqual:self->_epoch]?[self registerURL:target.absoluteString]:nil;[self->_ready unlock];return path;
-        },&error);
-        if(!rewritten){[self log:[@"MEDIA PLAYLIST ERROR: " stringByAppendingString:error.localizedDescription?:@"Unknown playlist error"]];return @{@"code":@422};}
+        NSInteger rewriteCode;NSString *rewritten=[self rewrite:text base:url owner:location epoch:epoch code:&rewriteCode];
+        if(!rewritten)return @{@"code":@(rewriteCode)};
         data=[rewritten dataUsingEncoding:NSUTF8StringEncoding];mime=@"application/vnd.apple.mpegurl";
     }
     [_ready lock];BOOL current=[epoch isEqual:_epoch];[_ready unlock];if(!current)return @{@"code":@410};
     NSMutableDictionary *result=[@{@"code":@(code),@"data":data,@"mime":mime?:@"application/octet-stream"} mutableCopy];if(contentRange)result[@"range"]=contentRange;return result;
+    } @finally {
+        [_ready lock];if([epoch isEqual:_epoch]){NSUInteger n=[_inflight[identifier] unsignedIntegerValue];if(n>1)_inflight[identifier]=@(n-1);else [_inflight removeObjectForKey:identifier];}[_ready unlock];
+    }
 }
 @end

@@ -23,6 +23,9 @@ static NSDictionary *event(int fd){
     NSMutableData *body=[NSMutableData dataWithLength:length];NSUInteger used=0;while(used<length){ssize_t n=recv(fd,(char *)body.mutableBytes+used,length-used,0);assert(n>0);used+=n;}return parse(body);
 }
 static void deliver(MediaCast *media,NSDictionary *request,NSString *text,NSString *session){NSDictionary *p=request[@"request"];NSDictionary *response=@{@"type":@"unhandledURLResponse",@"params":@{@"FCUP_Response_URL":p[@"FCUP_Response_URL"],@"FCUP_Response_RequestID":p[@"FCUP_Response_RequestID"],@"FCUP_Response_StatusCode":@0,@"FCUP_Response_Data":[text dataUsingEncoding:NSUTF8StringEncoding]}};assert(status(exchange(media,@"POST",@"/action",session,response,NULL,-1))==200);}
+@interface MediaCast (RegistryTest)
+- (NSString *)rewrite:(NSString *)text base:(NSURL *)base owner:(NSString *)owner epoch:(NSString *)epoch code:(NSInteger *)code;
+@end
 int main(void){@autoreleasepool{
     NSData *validPlaylist=[@"#EXTM3U\n#EXT-X-ENDLIST\n" dataUsingEncoding:NSUTF8StringEncoding];
     assert(SLFCUPPlaylistStatus(0,validPlaylist)==200);
@@ -51,6 +54,23 @@ int main(void){@autoreleasepool{
     dispatch_semaphore_t done=dispatch_semaphore_create(0);__block NSDictionary *variant=nil;dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED,0),^{variant=[media resource:child range:nil];dispatch_semaphore_signal(done);});
     assert([childRequest[@"request"][@"FCUP_Response_URL"] isEqual:@"mlhls://localhost/video.m3u8"]);
     deliver(media,childRequest,@"#EXTM3U\n#YT-EXT-CONDENSED-URL:BASE-URI=\"https://example.test/videoplayback\",PARAMS=\"sq,lmt\",PREFIX=\"s/\"\n#EXTINF:2.0,\ns/1/42\n#EXT-X-ENDLIST\n",@"S1");assert(!dispatch_semaphore_wait(done,dispatch_time(DISPATCH_TIME_NOW,5*NSEC_PER_SEC)));assert([variant[@"code"] intValue]==200);NSString *variantText=[[NSString alloc]initWithData:variant[@"data"] encoding:NSUTF8StringEncoding];assert([variantText containsString:@"/media/resource/"]);assert(![variantText containsString:@"s/1/42"]);
+    MediaCast *rolling=[MediaCast new];rolling.token=@"secret";NSString *owner=@"https://example.test/rolling.m3u8";
+    assert(status(exchange(rolling,@"POST",@"/play",@"R",@{@"Content-Location":owner},NULL,-1))==200);
+    NSString *epoch=[rolling state][@"epoch"];NSInteger rewriteCode;NSMutableDictionary *resources=[rolling valueForKey:@"resources"],*flights=[rolling valueForKey:@"inflight"];NSMutableArray *retired=[rolling valueForKey:@"retiredLinks"];NSString *pinned=nil;
+    for(NSUInteger generation=0;generation<12;generation++){
+        for(NSUInteger i=0;i<retired.count;i++)retired[i]=@{@"ids":retired[i][@"ids"],@"until":@0};
+        NSMutableString *list=[NSMutableString stringWithString:@"#EXTM3U\n"];for(NSUInteger i=0;i<1000;i++)[list appendFormat:@"#EXTINF:2,\nhttps://example.test/s/%lu\n",(unsigned long)(generation*500+i)];
+        NSString *rewritten=[rolling rewrite:list base:[NSURL URLWithString:owner] owner:owner epoch:epoch code:&rewriteCode];assert(rewritten&&rewriteCode==200);assert(resources.count<=2002);
+        for(NSString *line in [rewritten componentsSeparatedByString:@"\n"])if([line hasPrefix:@"/media/resource/"]){NSString *key=[NSURLComponents componentsWithString:line].path.lastPathComponent;assert(resources[key]);assert([[NSUUID alloc]initWithUUIDString:key]);if(!pinned){pinned=key;flights[key]=@1;}}
+        assert(resources[pinned]);assert([[rolling rewrite:list base:[NSURL URLWithString:owner] owner:owner epoch:epoch code:&rewriteCode] isEqual:rewritten]);
+    }
+    NSUInteger count=resources.count;
+    assert(![rolling rewrite:@"#EXTM3U\nfile:///private/test\n" base:[NSURL URLWithString:owner] owner:owner epoch:epoch code:&rewriteCode]&&rewriteCode==422&&resources.count==count);
+    assert(![rolling rewrite:@"#EXTM3U\nhttps://example.test/a\n" base:[NSURL URLWithString:owner] owner:owner epoch:@"stale" code:&rewriteCode]&&rewriteCode==410&&resources.count==count);
+    NSMutableString *oversized=[NSMutableString stringWithString:@"#EXTM3U\n"];for(NSUInteger i=0;i<4100;i++)[oversized appendFormat:@"https://example.test/b/%lu\n",(unsigned long)i];
+    assert(![rolling rewrite:oversized base:[NSURL URLWithString:owner] owner:owner epoch:epoch code:&rewriteCode]&&rewriteCode==503&&resources.count==count&&resources[pinned]);
+    [rolling stop];assert(!resources.count&&!flights.count&&!retired.count);
+    puts("Registry lifecycle passed: 6500 unique URLs, current seek links, stable UUID reloads, in-flight pinning, bounded memory, transactional capacity and invalid/stale errors.");
     [media report:@{@"epoch":state[@"epoch"],@"command":@0,@"position":@4,@"duration":@10,@"ready":@YES,@"paused":@NO}];assert(media.videoIsLive);assert([event(fds[1])[@"state"] isEqual:@"playing"]);
     NSDictionary *info=responsePlist(exchange(media,@"GET",@"/playback-info",@"S1",nil,NULL,-1));assert([info[@"duration"] intValue]==10 && [info[@"position"] intValue]==4);
     assert(status(exchange(media,@"POST",@"/scrub?position=7",@"S1",nil,NULL,-1))==200);assert([[media state][@"seek"] intValue]==7);

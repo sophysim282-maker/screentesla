@@ -3,11 +3,44 @@ on:
   pull_request:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, feature/youtube-airplay-010]
 permissions:
   contents: read
 jobs:
+  recovery:
+    runs-on: macos-15-intel
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Discovery daemon lifecycle with injected DNS callbacks
+        run: |
+          mkdir -p build
+          xcrun --sdk macosx clang -fobjc-arc -fblocks -Itools/fixtures -IApp tools/test_discovery_recovery.m App/VPNDiscovery.m -framework Foundation -o build/test-discovery-recovery
+          build/test-discovery-recovery
+      - name: Playlist registry lifecycle with native HTTP/FCUP
+        run: |
+          python3 tools/prepare_receiver.py
+          xcrun --sdk macosx clang -fobjc-arc -fblocks -IApp -IVendor/RPiPlay/lib tools/test_media_cast.m App/MediaCast.m App/BoundedDownload.m App/HLSPlaylist.m Vendor/RPiPlay/lib/http_request.c Vendor/RPiPlay/lib/http_response.c Vendor/RPiPlay/lib/llhttp/api.c Vendor/RPiPlay/lib/llhttp/http.c Vendor/RPiPlay/lib/llhttp/llhttp.c -framework Foundation -o build/test-media-cast
+          build/test-media-cast
+  video-recovery:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-save playwright@1.55.0
+      - run: npx playwright install --with-deps chromium
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: Real 1080p decode under stall and reordered output with continuous audio
+        run: |
+          python3 tools/fetch_canvas.py
+          mkdir -p build/stress
+          ffmpeg -v error -f lavfi -i testsrc2=size=1920x1080:rate=30 -f lavfi -i sine=frequency=440:sample_rate=48000 -t 20 -c:v libx264 -preset ultrafast -g 30 -bf 2 -c:a aac -hls_time 2 -hls_playlist_type vod -hls_segment_filename build/stress/part%02d.ts build/stress/master.m3u8
+          node tools/test_video_recovery.cjs App build/stress
   build:
+    needs: [recovery, video-recovery]
     runs-on: macos-15-intel
     timeout-minutes: 35
     steps:
@@ -39,7 +72,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ScreenLink-AirPlay-Lab
+          name: ScreenLink-0.20.22-build59-GENERIC-NO-HTTPS
           path: |
             build/*.ipa
             build/xcodebuild.log

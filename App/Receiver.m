@@ -235,6 +235,7 @@ _decodeQueue=dispatch_queue_create("ScreenLink.decode",DISPATCH_QUEUE_SERIAL);_j
     }];
     _foregroundObserver=[NSNotificationCenter.defaultCenter addObserverForName:UIApplicationDidBecomeActiveNotification object:nil queue:NSOperationQueue.mainQueue usingBlock:^(NSNotification *note){
         Receiver *owner=weak;if(!owner)return;
+        if(owner->_running&&owner.discoveryMode==SLDiscoveryPhoneVPN)[owner->_vpnDiscovery recoverOnForeground];
         dispatch_async(owner->_decodeQueue,^{
             owner->_appBackgrounded=NO;owner->_backgroundFailures=0;owner->_nextDecoderAttempt=0;
             if(owner->_running && owner->_waitingForIDR)[owner emit:@"App active again. Decoder recovery will resume at the next H.264 keyframe; the browser may hold its last image until then."];
@@ -411,6 +412,7 @@ static NSArray *txtStrings(const char *bytes,int length) {
 }
 - (void)refreshDiscovery {
     if(!_running){[self emit:@"Start the receiver before refreshing discovery."];return;}
+    if(_vpnDiscovery){[_vpnDiscovery recoverIfNeeded];return;}
     BOOL busy;@synchronized(self){busy=_controlClients>0 || _mirrorTransportOpen;}
     if(busy){[self emit:@"Discovery kept unchanged: AirPlay is connecting or connected. Refreshing now could interrupt the session."];return;}
     if(self.discoveryMode!=SLDiscoveryPhoneVPN){[self emit:@"Refresh discovery applies to iPhone VPN mode. For Mac VPN mode, keep its helper running."];return;}

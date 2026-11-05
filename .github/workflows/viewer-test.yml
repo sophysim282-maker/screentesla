@@ -2,7 +2,7 @@ name: Real browser streaming regression
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, feature/youtube-airplay-010]
   workflow_dispatch:
 permissions:
   contents: read

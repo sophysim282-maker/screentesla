@@ -10,8 +10,13 @@
     NSString *_expectedName, *_expectedPeer;
     BOOL _resolvedPeer;
     NSUInteger _generation;
+    NSDictionary *_profile;
+    BOOL _needsRecovery,_retryScheduled;
+    NSUInteger _retryCount;
 }
 - (void)report:(NSString *)message;
+- (void)serviceFailed:(DNSServiceRef)service error:(DNSServiceErrorType)error;
+- (void)closeReferences;
 - (void)foundService:(const char *)name type:(const char *)type domain:(const char *)domain;
 - (void)resolveHost:(const char *)host port:(uint16_t)port;
 - (void)verifiedAddress:(const struct sockaddr *)address;
@@ -20,17 +25,20 @@
 static void addressReply(DNSServiceRef service, DNSRecordRef record, DNSServiceFlags flags,
                          DNSServiceErrorType error, void *context) {
     VPNDiscovery *owner=(__bridge VPNDiscovery *)context;
+    if(error)[owner serviceFailed:service error:error];
     [owner report:error?[NSString stringWithFormat:@"VPN address registration failed: %d",error]:@"VPN peer address registered. This is DNS publication, not yet an AirPlay connection."];
 }
 static void serviceReply(DNSServiceRef service, DNSServiceFlags flags, DNSServiceErrorType error,
                          const char *name, const char *type, const char *domain, void *context) {
     VPNDiscovery *owner=(__bridge VPNDiscovery *)context;
+    if(error)[owner serviceFailed:service error:error];
     if(error)[owner report:[NSString stringWithFormat:@"VPN service registration failed: %d. Save the test log.",error]];
     else [owner report:[NSString stringWithFormat:@"Published %s (%s) at the VPN peer. Check Screen Mirroring for ScreenLink VPN Phone.",name,type]];
 }
 static void browseReply(DNSServiceRef service, DNSServiceFlags flags, uint32_t interface,
                         DNSServiceErrorType error, const char *name, const char *type, const char *domain, void *context) {
     VPNDiscovery *owner=(__bridge VPNDiscovery *)context;
+    if(error)[owner serviceFailed:service error:error];
     if(error)[owner report:[NSString stringWithFormat:@"Local browse error: %d",error]];
     else if(flags & kDNSServiceFlagsAdd)[owner foundService:name type:type domain:domain];
 }
@@ -38,6 +46,7 @@ static void resolveReply(DNSServiceRef service, DNSServiceFlags flags, uint32_t 
                          DNSServiceErrorType error, const char *fullname, const char *host, uint16_t port,
                          uint16_t txtLength, const unsigned char *txt, void *context) {
     VPNDiscovery *owner=(__bridge VPNDiscovery *)context;
+    if(error)[owner serviceFailed:service error:error];
     if(error)[owner report:[NSString stringWithFormat:@"Local service resolve error: %d",error]];
     else [owner resolveHost:host port:port];
 }
@@ -45,6 +54,7 @@ static void lookupReply(DNSServiceRef service, DNSServiceFlags flags, uint32_t i
                         DNSServiceErrorType error, const char *host, const struct sockaddr *address,
                         uint32_t ttl, void *context) {
     VPNDiscovery *owner=(__bridge VPNDiscovery *)context;
+    if(error)[owner serviceFailed:service error:error];
     if(error)[owner report:[NSString stringWithFormat:@"Local address lookup error: %d",error]];
     else if(flags & kDNSServiceFlagsAdd)[owner verifiedAddress:address];
 }
@@ -61,7 +71,9 @@ static NSData *encodedTXT(NSArray<NSString *> *strings) {
 - (void)report:(NSString *)message { if(self.status)self.status(message); }
 - (BOOL)startWithProfile:(NSDictionary *)profile {
     NSAssert(NSThread.isMainThread,@"Discovery must use the main queue");
-    [self stop];
+    if([_profile isEqual:profile]&&!_needsRecovery&&_addressConnection&&_airplay&&_raop)return YES;
+    if(![_profile isEqual:profile])_retryCount=0;
+    _profile=[profile copy];[self closeReferences];_needsRecovery=NO;
     _expectedName=profile[@"name"];_expectedPeer=profile[@"peer"];_resolvedPeer=NO;
     NSString *peer=profile[@"peer"],*host=profile[@"host"],*name=profile[@"name"];
     NSData *airplayTXT=encodedTXT(profile[@"airplayTXT"]),*raopTXT=encodedTXT(profile[@"raopTXT"]);
@@ -79,7 +91,7 @@ static NSData *encodedTXT(NSArray<NSString *> *strings) {
     if(!error)error=DNSServiceRegister(&_raop,kDNSServiceFlagsNoAutoRename,kDNSServiceInterfaceIndexLocalOnly,
         [profile[@"raopName"] UTF8String],"_raop._tcp","local.",host.UTF8String,port,(uint16_t)raopTXT.length,raopTXT.bytes,serviceReply,(__bridge void *)self);
     if(!error)error=DNSServiceSetDispatchQueue(_raop,dispatch_get_main_queue());
-    if(error){[self report:[NSString stringWithFormat:@"Could not publish VPN discovery: %d. Mac VPN mode remains available.",error]];[self stop];return NO;}
+    if(error){[self report:[NSString stringWithFormat:@"Could not publish VPN discovery: %d. Mac VPN mode remains available.",error]];[self closeReferences];_needsRecovery=YES;[self serviceFailed:NULL error:error];return NO;}
     error=DNSServiceBrowse(&_verifyBrowse,0,kDNSServiceInterfaceIndexLocalOnly,"_airplay._tcp","local.",browseReply,(__bridge void *)self);
     if(!error)error=DNSServiceSetDispatchQueue(_verifyBrowse,dispatch_get_main_queue());
     if(error)[self report:[NSString stringWithFormat:@"Local discovery verification could not start: %d",error]];
@@ -115,8 +127,30 @@ static NSData *encodedTXT(NSArray<NSString *> *strings) {
         [self report:[NSString stringWithFormat:@"Local proxy address verified: %s. DNS lookup passed; Screen Mirroring visibility and video are separate tests.",text]];
     } else [self report:[NSString stringWithFormat:@"Unexpected proxy address: %s (expected %@)",text,_expectedPeer]];
 }
-- (void)stop {
-    _generation++;
+- (void)serviceFailed:(DNSServiceRef)service error:(DNSServiceErrorType)error {
+    if(service&&service!=_addressConnection&&service!=_airplay&&service!=_raop&&service!=_verifyBrowse&&service!=_verifyResolve&&service!=_verifyAddress)return;
+    if(error!=kDNSServiceErr_DefunctConnection&&error!=kDNSServiceErr_ServiceNotRunning)return;
+    _needsRecovery=YES;
+    if(!_profile||_retryScheduled||_retryCount>=3)return;
+    _retryScheduled=YES;NSUInteger generation=_generation;__weak VPNDiscovery *weak=self;
+    // Never deallocate a DNSServiceRef inside its own callback.
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW,NSEC_PER_SEC),dispatch_get_main_queue(),^{
+        VPNDiscovery *owner=weak;if(!owner||generation!=owner->_generation)return;
+        owner->_retryScheduled=NO;owner->_retryCount++;[owner recoverIfNeeded];
+    });
+}
+- (BOOL)recoverIfNeeded {
+    NSAssert(NSThread.isMainThread,@"Discovery must use the main queue");
+    if(!_profile)return NO;
+    if(!_needsRecovery&&_addressConnection&&_airplay&&_raop)return YES;
+    [self report:@"DISCOVERY RECOVERY: replacing defunct Bonjour handles; AirPlay listener and viewer authorization are preserved."];
+    return [self startWithProfile:_profile];
+}
+- (void)recoverOnForeground {
+    _retryCount=0;[self recoverIfNeeded];
+}
+- (void)closeReferences {
+    _generation++;_retryScheduled=NO;
     if(_verifyAddress){DNSServiceRefDeallocate(_verifyAddress);_verifyAddress=NULL;}
     if(_verifyResolve){DNSServiceRefDeallocate(_verifyResolve);_verifyResolve=NULL;}
     if(_verifyBrowse){DNSServiceRefDeallocate(_verifyBrowse);_verifyBrowse=NULL;}
@@ -124,5 +158,6 @@ static NSData *encodedTXT(NSArray<NSString *> *strings) {
     if(_raop){DNSServiceRefDeallocate(_raop);_raop=NULL;}
     if(_addressConnection){DNSServiceRefDeallocate(_addressConnection);_addressConnection=NULL;}
 }
-- (void)dealloc { [self stop]; }
+- (void)stop {_profile=nil;_needsRecovery=NO;_retryCount=0;[self closeReferences];}
+- (void)dealloc { [self closeReferences]; }
 @end
