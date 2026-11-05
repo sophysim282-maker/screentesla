@@ -10,5 +10,4 @@ static inline int sl_frame_due(double now, double fps, double *deadline) {
     *deadline=(*deadline>0 && now-*deadline<interval)?*deadline+interval:now+interval;
     return 1;
 }
-
 #endif

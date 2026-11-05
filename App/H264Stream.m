@@ -1,71 +1,41 @@
 #import "H264Stream.h"
 #import "FMP4.h"
-
-@implementation H264Stream {
+@interface H264Stream () {
     NSCondition *_ready;
-    NSData *_initialization;
+    NSData *_initialization,*_pending;
     NSMutableArray<NSDictionary *> *_units;
-    uint64_t _bytes;
-    uint64_t _maxBytes;
-    NSUInteger _maxPackets;
-    uint64_t _sequence;
-    NSString *_epoch;
-    BOOL _privacyHidden;
-    NSUInteger _privacyRevision;
-    uint64_t _notBefore;
-    BOOL _needKey;
-    uint64_t _base;
+    NSString *_epoch,*_codec;
+    uint64_t _sequence,_base,_pendingTime;
     uint32_t _lastDuration;
-    NSData *_pending;
-    uint64_t _pendingTime;
-    BOOL _pendingKey;
-    NSString *_codec;
+    BOOL _pendingKey,_needKey;
+    NSUInteger _bytes,_maxBytes,_maxPackets,_privacyRevision;
+    BOOL _privacyHidden;
+    uint64_t _notBefore;
 }
-
-- (instancetype)init {
-    if ((self = [super init])) {
-        _ready = [NSCondition new];
-        _units = [NSMutableArray new];
-        _maxBytes = 24 * 1024 * 1024;
-        _maxPackets = 1200;
-        _epoch = [[NSUUID UUID] UUIDString];
-    }
-    return self;
+@end
+@implementation H264Stream
+- (instancetype)init {return [self initWithMaxBytes:24*1024*1024 packets:720];}
+- (instancetype)initWithMaxBytes:(NSUInteger)bytes packets:(NSUInteger)packets {if((self=[super init])){_maxBytes=MAX(1024,bytes);_maxPackets=MAX(2,packets);_privacyRevision=1;_ready=[NSCondition new];[self reset];}return self;}
+- (void)reset {
+    [_ready lock];_initialization=nil;_pending=nil;_units=[NSMutableArray array];_epoch=NSUUID.UUID.UUIDString;_sequence=0;_base=0;_bytes=0;_needKey=YES;_lastDuration=33333;[_ready broadcast];[_ready unlock];
 }
-
+- (BOOL)privacyHidden {[_ready lock];BOOL hidden=_privacyHidden;[_ready unlock];return hidden;}
+- (void)setPrivacyHidden:(BOOL)hidden notBefore:(uint64_t)timestamp {[self changePrivacyHidden:hidden notBefore:timestamp expectedRevision:[[self info][@"privacyRevision"] unsignedIntegerValue]];}
+- (BOOL)changePrivacyHidden:(BOOL)hidden notBefore:(uint64_t)timestamp expectedRevision:(NSUInteger)revision {
+    [_ready lock];if(!hidden && revision!=_privacyRevision){[_ready unlock];return NO;}_privacyHidden=hidden;_privacyRevision++;_notBefore=timestamp;_pending=nil;[_units removeAllObjects];_bytes=0;_sequence=0;_base=0;_needKey=YES;_epoch=NSUUID.UUID.UUIDString;[_ready broadcast];[_ready unlock];return YES;
+}
+- (NSUInteger)privacyPermitForTimestamp:(uint64_t)timestamp {[_ready lock];NSUInteger permit=(!_privacyHidden && timestamp>=_notBefore)?_privacyRevision:0;[_ready unlock];return permit;}
 - (void)configureSPS:(NSData *)sps PPS:(NSData *)pps width:(uint16_t)width height:(uint16_t)height {
     NSMutableData *data=[NSMutableData dataWithLength:2048+sps.length+pps.length];
     size_t length=sl_mp4_init(data.mutableBytes,data.length,sps.bytes,sps.length,pps.bytes,pps.length,width,height);
     [self reset];if(!length)return;data.length=length;const uint8_t *p=sps.bytes;
     [_ready lock];_initialization=data;_codec=[NSString stringWithFormat:@"avc1.%02X%02X%02X",p[1],p[2],p[3]];[_ready broadcast];[_ready unlock];
 }
-
-- (void)reset {
-    [_ready lock];
-    _initialization=nil;[_units removeAllObjects];_bytes=0;_sequence=0;_needKey=YES;
-    _epoch=[NSUUID UUID].UUIDString;_privacyHidden=NO;_privacyRevision=0;_notBefore=0;
-    _pending=nil;_pendingTime=0;_pendingKey=NO;_lastDuration=10000;
-    [_ready broadcast];[_ready unlock];
-}
-
-- (void)setPrivacyHidden:(BOOL)hidden revision:(NSUInteger)revision {
-    [_ready lock];
-    _privacyHidden=hidden;_privacyRevision=revision;
-    if(hidden){_pending=nil;[_units removeAllObjects];_bytes=0;_needKey=YES;}
-    [_ready broadcast];[_ready unlock];
-}
-
-- (void)flushBeforeTimestamp:(uint64_t)notBefore {
-    [_ready lock];
-    _notBefore=notBefore;
-    if(_pending && _pendingTime<notBefore){_pending=nil;[_units removeAllObjects];_bytes=0;_needKey=YES;}
-    [_ready broadcast];[_ready unlock];
-}
-
+- (void)appendAVCC:(NSData *)sample timestamp:(uint64_t)time keyframe:(BOOL)key {[self appendAVCC:sample timestamp:time keyframe:key privacyPermit:[self privacyPermitForTimestamp:time]];}
 - (void)appendAVCC:(NSData *)sample timestamp:(uint64_t)time keyframe:(BOOL)key privacyPermit:(NSUInteger)permit {
     [_ready lock];
     if(!permit || _privacyHidden || permit!=_privacyRevision || time<_notBefore){[_ready unlock];return;}
-    if(_pending && time<_pendingTime){_pending=nil;[_units removeAllObjects];_bytes=0;_sequence=0;_needKey=YES;_epoch=[NSUUID UUID].UUIDString;}
+    if(_pending && time<_pendingTime){_pending=nil;[_units removeAllObjects];_bytes=0;_sequence=0;_needKey=YES;_epoch=NSUUID.UUID.UUIDString;}
     if(_pending && time==_pendingTime)time=_pendingTime+_lastDuration;
     if(!_initialization || (_needKey && !key)){[_ready unlock];return;}
     if(_needKey){_pending=nil;_needKey=NO;_base=time;}
@@ -76,59 +46,40 @@
         size_t length=sl_mp4_fragment(fragment.mutableBytes,fragment.length,_pending.bytes,_pending.length,(uint32_t)(_sequence+1),_pendingTime>=_base?_pendingTime-_base:0,duration,_pendingKey);
         if(length) {
             fragment.length=length;
-            [_units addObject:@{@"id":@(_sequence),@"data":fragment,@"key":@(_pendingKey)}];_bytes+=length;
+            // Keep preceding GOPs for viewers briefly delayed by Wi-Fi or a
+            // browser scheduling pause. A keyframe alone is not eviction.
+            [_units addObject:@{@"id":@(++_sequence),@"data":fragment,@"key":@(_pendingKey)}];_bytes+=length;
+            // Evict cache history without interrupting clients that are already
+            // decoding. A new client waits for a retained keyframe; it must
+            // never bootstrap using a dependent frame after eviction.
             while(_units.count>1 && (_bytes>_maxBytes || _units.count>_maxPackets)){
-               if (_maxPackets >= 60)  {NSInteger keyIdx = -1;
-                for (NSInteger i = (NSInteger)_units.count - 1; i >= 1; i--) {
-                    if ([_units[i][@"key"] boolValue]) {
-                        keyIdx = i;
-                        break;
-                    }
-                }
-                if (keyIdx > 0) {
-                    for (NSInteger i = 1; i < keyIdx; i++) {
-                        _bytes -= [_units[1][@"data"] length];
-                        [_units removeObjectAtIndex:1];
-                    }
-                } else {
-                    _bytes-=[_units.firstObject[@"data"] length];[_units removeObjectAtIndex:0];
-                }} else { _bytes-=[_units.firstObject[@"data"] length];[_units removeObjectAtIndex:0]; }
-            }
-            _sequence++;
-        }
-    }
-    _pending=sample;_pendingTime=time;_pendingKey=key;
-    [_ready broadcast];[_ready unlock];
-}
-
-- (NSDictionary *)fetchAfterSequence:(int64_t)sequence limitBytes:(NSUInteger)limitBytes {
-    [_ready lock];
-    if (sequence < 0 && _units.count > 0) {
-        for (NSInteger i = (NSInteger)_units.count - 1; i >= 0; i--) {
-            if ([_units[i][@"key"] boolValue]) {
-                sequence = [_units[i][@"id"] longLongValue] - 1;
-                break;
+                _bytes-=[_units.firstObject[@"data"] length];[_units removeObjectAtIndex:0];
             }
         }
     }
-    NSMutableArray *items = [NSMutableArray new];
-    uint64_t total = 0;
-    for (NSDictionary *unit in _units) {
-        if ([unit[@"id"] longLongValue] > sequence) {
-            NSData *data = unit[@"data"];
-            if (items.count > 0 && limitBytes > 0 && total + data.length > limitBytes) break;
-            [items addObject:data];
-            total += data.length;
-        }
-    }
-    NSDictionary *result = @{
-        @"epoch": _epoch ?: @"",
-        @"init": _initialization ?: [NSData data],
-        @"codec": _codec ?: @"",
-        @"units": items
-    };
-    [_ready unlock];
-    return result;
+    _pending=sample;_pendingTime=time;_pendingKey=key;[_ready broadcast];[_ready unlock];
 }
-
+- (NSDictionary *)info {[_ready lock];NSDictionary *result=@{@"epoch":_epoch,@"ready":@(_initialization!=nil&&!_privacyHidden),@"hidden":@(_privacyHidden),@"privacyRevision":@(_privacyRevision),@"codec":_codec ?: @"",@"sequence":@(_sequence)};[_ready unlock];return result;}
+- (NSDictionary *)initialization {[_ready lock];NSDictionary *result=@{@"epoch":_epoch,@"data":(!_privacyHidden?_initialization:nil) ?: [NSData data]};[_ready unlock];return result;}
+- (NSDictionary *)readAfter:(uint64_t)after epoch:(NSString *)epoch {return [self readAfter:after epoch:epoch maxBytes:2*1024*1024 wait:1];}
+- (NSDictionary *)readAfter:(uint64_t)after epoch:(NSString *)epoch maxBytes:(NSUInteger)limit wait:(NSTimeInterval)wait {
+    limit=MAX(1024,MIN(limit,2*1024*1024));[_ready lock];NSDate *deadline=[NSDate dateWithTimeIntervalSinceNow:MAX(0,MIN(wait,1))];
+    while(!_privacyHidden && [epoch isEqual:_epoch] && (!_units.count || after>=_sequence))if(![_ready waitUntilDate:deadline])break;
+    if(_privacyHidden){NSDictionary *result=@{@"reset":@YES,@"hidden":@YES,@"epoch":_epoch,@"data":NSData.data};[_ready unlock];return result;}
+    uint64_t first=[_units.firstObject[@"id"] unsignedLongLongValue];
+    if(![epoch isEqual:_epoch] || after>_sequence || (after && first && after+1<first)) {
+        NSDictionary *result=@{@"reset":@YES,@"epoch":_epoch};[_ready unlock];return result;
+    }
+    NSMutableData *data=[NSMutableData data];uint64_t last=after;
+    NSUInteger bootstrap=NSNotFound;
+    if(!after)for(NSUInteger i=0;i<_units.count;i++)if([_units[i][@"key"] boolValue])bootstrap=i;
+    if(!after && bootstrap==NSNotFound){
+        NSDictionary *result=@{@"reset":@NO,@"epoch":_epoch,@"id":@0,@"data":data};[_ready unlock];return result;
+    }
+    for(NSUInteger i=after?0:bootstrap;i<_units.count;i++){
+        NSDictionary *unit=_units[i];
+        if([unit[@"id"] unsignedLongLongValue]>after){if([unit[@"data"] length]>limit-data.length)break;[data appendData:unit[@"data"]];last=[unit[@"id"] unsignedLongLongValue];if(data.length>=limit)break;}
+    }
+    NSDictionary *result=@{@"reset":@NO,@"epoch":_epoch,@"id":@(last),@"data":data};[_ready unlock];return result;
+}
 @end

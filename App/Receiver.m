@@ -169,16 +169,16 @@ static SLVideoSettings videoSettings(SLVideoProfile profile) {
     }
 }
 @implementation Receiver
-- (instancetype) { if((self=[super ])) { _socket=-1;_httpsSocket=-1;_localViewer=[LocalViewerApproval new];_h264=[H264Stream new];_media=[MediaCast new];
+- (instancetype)init { if((self=[super init])) { _socket=-1;_httpsSocket=-1;_localViewer=[LocalViewerApproval new];_h264=[H264Stream new];_media=[MediaCast new];
 #if SL_BROADCAST_EXTENSION
-        _h264=[[H264Stream alloc]WithMaxBytes:2*1024*1024 packets:90];_screenStream=[[H264Stream alloc]WithMaxBytes:3*1024*1024 packets:120];_broadcastLog=[NSMutableArray array];_appBackgrounded=YES;_compressedOnlyInBackground=YES;
+        _h264=[[H264Stream alloc]initWithMaxBytes:2*1024*1024 packets:90];_screenStream=[[H264Stream alloc]initWithMaxBytes:3*1024*1024 packets:120];_broadcastLog=[NSMutableArray array];_appBackgrounded=YES;_compressedOnlyInBackground=YES;
 #else
         _ci=[CIContext contextWithOptions:nil];
 #endif
-_decodeQueue=dispatch_queue_create("ScreenLink.decode",DISPATCH_QUEUE_SERIAL);_jpegQueue=dispatch_queue_create("ScreenLink.jpeg",DISPATCH_QUEUE_SERIAL);_httpSlots=dispatch_semaphore_create(12);_mediaSlots=dispatch_semaphore_create(_screenStream?3:8);_streamSlots=dispatch_semaphore_create(2);_frameReady=[NSCondition new];_token=NSUUID.UUID.UUIDString;[self installLifecycleObservers];[[NSNotificationCenter defaultCenter] addObserverForName:UIApplicationDidBecomeActiveNotification object:nil queue:[NSOperationQueue mainQueue] usingBlock:^(NSNotification * _Nonnull note) { Receiver *owner=weak; if(!owner)return; if(owner->_running && !owner->_mirrorTransportOpen) [owner start]; }];__weak Receiver *weakSelf=self;[[NSNotificationCenter defaultCenter] addObserverForName:UIApplicationDidBecomeActiveNotification object:nil queue:[NSOperationQueue mainQueue] usingBlock:^(NSNotification * _Nonnull note) { Receiver *owner=weakSelf; if(!owner)return; if(owner->_running && !owner->_mirrorTransportOpen) [owner start]; }];__weak Receiver *weakSelf=self;[[NSNotificationCenter defaultCenter] addObserverForName:UIApplicationDidBecomeActiveNotification object:nil queue:[NSOperationQueue mainQueue] usingBlock:^(NSNotification * _Nonnull note) { Receiver *owner=weakSelf; if(!owner)return; if(owner->_running && !owner->_mirrorTransportOpen) [owner start]; }];
+_decodeQueue=dispatch_queue_create("ScreenLink.decode",DISPATCH_QUEUE_SERIAL);_jpegQueue=dispatch_queue_create("ScreenLink.jpeg",DISPATCH_QUEUE_SERIAL);_httpSlots=dispatch_semaphore_create(12);_mediaSlots=dispatch_semaphore_create(_screenStream?3:8);_streamSlots=dispatch_semaphore_create(2);_frameReady=[NSCondition new];_token=NSUUID.UUID.UUIDString;[self installLifecycleObservers];
         __weak Receiver *weak=self;
         _media.status=^(NSString *text){[weak emit:text];};
-        _inbox=[[VideoInbox alloc]WithQueue:_decodeQueue maxBytes:(_screenStream?2:16)*1024*1024 maxPackets:(_screenStream?30:120) consume:^(NSData *data,uint64_t timestamp,NSUInteger generation){
+        _inbox=[[VideoInbox alloc]initWithQueue:_decodeQueue maxBytes:(_screenStream?2:16)*1024*1024 maxPackets:(_screenStream?30:120) consume:^(NSData *data,uint64_t timestamp,NSUInteger generation){
             Receiver *owner=weak;if(!owner)return;BOOL current;@synchronized(owner){current=owner->_running && generation==owner->_generation;}
             if(current)[owner decode:data timestamp:timestamp];
         } discontinuity:^(NSUInteger generation){
@@ -187,7 +187,7 @@ _decodeQueue=dispatch_queue_create("ScreenLink.decode",DISPATCH_QUEUE_SERIAL);_j
         }];
     } return self; }
 - (NSDictionary *)nativeMediaState {return [_media state];}
-- (void)prepareMediaOnly {if(_running)return;self.mediaOnly=YES;_screenStream=[[H264Stream alloc]WithMaxBytes:3*1024*1024 packets:120];_compressedOnlyInBackground=YES;[self setScreenHidden:YES];}
+- (void)prepareMediaOnly {if(_running)return;self.mediaOnly=YES;_screenStream=[[H264Stream alloc]initWithMaxBytes:3*1024*1024 packets:120];_compressedOnlyInBackground=YES;[self setScreenHidden:YES];}
 - (void)authorizeNextLocalViewer {[_localViewer armAutomaticAt:NSProcessInfo.processInfo.systemUptime];[self setScreenHidden:YES];}
 - (H264Stream *)screenStream {return _screenStream;}
 - (BOOL)screenHidden {return !_screenStream || _screenStream.privacyHidden;}
@@ -199,7 +199,7 @@ _decodeQueue=dispatch_queue_create("ScreenLink.decode",DISPATCH_QUEUE_SERIAL);_j
     if(!_screenStream||!self.running)return @{@"code":@503};
     if([path isEqual:@"/screen/info"])return @{@"code":@200,@"mime":@"application/json",@"data":[NSJSONSerialization dataWithJSONObject:[self screenInfo] options:0 error:nil]};
     if([path isEqual:@"/screen/privacy"]){NSDictionary *body=request[@"body"];BOOL changed=[self changeScreenHidden:[body[@"hidden"] boolValue] expectedRevision:[body[@"expectedRevision"] unsignedIntegerValue]];return @{@"code":changed?@200:@409,@"mime":@"application/json",@"data":[NSJSONSerialization dataWithJSONObject:[self screenInfo] options:0 error:nil]};}
-    NSDictionary *part=[path isEqual:@"/screen/.mp4"]?[_screenStream ialization]:[_screenStream readAfter:[request[@"after"] unsignedLongLongValue] epoch:request[@"epoch"]?:@"" maxBytes:262144 wait:.2];NSData *bytes=part[@"data"]?:NSData.data;NSInteger code=[part[@"reset"] boolValue]?409:(bytes.length?200:204);return @{@"code":@(code),@"mime":@"video/mp4",@"data":bytes,@"epoch":part[@"epoch"]?:@"",@"lastId":part[@"id"]?:@0};
+    NSDictionary *part=[path isEqual:@"/screen/init.mp4"]?[_screenStream initialization]:[_screenStream readAfter:[request[@"after"] unsignedLongLongValue] epoch:request[@"epoch"]?:@"" maxBytes:262144 wait:.2];NSData *bytes=part[@"data"]?:NSData.data;NSInteger code=[part[@"reset"] boolValue]?409:(bytes.length?200:204);return @{@"code":@(code),@"mime":@"video/mp4",@"data":bytes,@"epoch":part[@"epoch"]?:@"",@"lastId":part[@"id"]?:@0};
 }
 - (NSDictionary *)screenInfo {NSMutableDictionary *info=[[_screenStream info] mutableCopy]?:[NSMutableDictionary dictionary];@synchronized(self){info[@"frames"]=@(_screenFrames);info[@"orientation"]=@(_screenOrientation?:1);info[@"ageMs"]=@(_screenTime?(CACurrentMediaTime()-_screenTime)*1000:999999);}return info;}
 - (BOOL)mediaRequest:(http_request_t *)request connection:(void *)connection socket:(int)socket response:(http_response_t **)response{return [_media handle:request connection:connection socket:socket response:response];}
@@ -370,18 +370,18 @@ _decodeQueue=dispatch_queue_create("ScreenLink.decode",DISPATCH_QUEUE_SERIAL);_j
 static NSArray *txtStrings(const char *bytes,int length) {
     NSMutableArray *result=[NSMutableArray array];int offset=0;
     while(offset<length){unsigned int size=(uint8_t)bytes[offset++];if(size>(unsigned int)(length-offset))break;
-        NSString *item=[[NSString alloc]WithBytes:bytes+offset length:size encoding:NSUTF8StringEncoding];
+        NSString *item=[[NSString alloc]initWithBytes:bytes+offset length:size encoding:NSUTF8StringEncoding];
         if(item)[result addObject:item];offset+=size;}
     return result;
 }
 - (BOOL)start {
-    if(_running){if(!_mirrorTransportOpen && _controlClients <= 0){[self stop];}else return YES;}
+    if(_running)return YES;
     @synchronized(self){_generation++;}
     NSString *saved=[NSUserDefaults.standardUserDefaults stringForKey:@"viewerToken"];
     if(!saved.length){saved=NSUUID.UUID.UUIDString;[NSUserDefaults.standardUserDefaults setObject:saved forKey:@"viewerToken"];}
     _token=saved;_media.token=saved;
-    raop_callbacks_t cb={0};cb.cls=(__bridge void *)self;cb.audio_process=audio;cb.video_process=video;cb.video_flush=flush;cb.audio_flush=flush;cb.conn_=connection;cb.conn_destroy=disconnection;
-    _raop=raop_(8,&cb);if(!_raop){[self emit:@"Receiver ialization failed."];return NO;}
+    raop_callbacks_t cb={0};cb.cls=(__bridge void *)self;cb.audio_process=audio;cb.video_process=video;cb.video_flush=flush;cb.audio_flush=flush;cb.conn_init=connection;cb.conn_destroy=disconnection;
+    _raop=raop_init(8,&cb);if(!_raop){[self emit:@"Receiver initialization failed."];return NO;}
     raop_set_log_level(_raop,RAOP_LOG_INFO);raop_set_log_callback(_raop,log_message,(__bridge void *)self);
     unsigned short port=7000;
     if(raop_start(_raop,&port)<0){[self stop];[self emit:@"Could not start AirPlay listener."];return NO;}
@@ -390,8 +390,8 @@ static NSArray *txtStrings(const char *bytes,int length) {
     NSUserDefaults *prefs=NSUserDefaults.standardUserDefaults;
     NSData *identity=[prefs dataForKey:@"receiverID"];
     if(identity.length!=6){uint8_t b[6];arc4random_buf(b,6);b[0]=(b[0]|2)&0xfe;identity=[NSData dataWithBytes:b length:6];[prefs setObject:identity forKey:@"receiverID"];}
-    int error=0;_dns=dnssd_("ScreenLink",10,identity.bytes,6,&error);
-    if(!_dns){[self stop];[self emit:@"AirPlay discovery ialization failed."];return NO;}
+    int error=0;_dns=dnssd_init("ScreenLink",10,identity.bytes,6,&error);
+    if(!_dns){[self stop];[self emit:@"AirPlay discovery initialization failed."];return NO;}
     raop_set_dnssd(_raop,_dns);
     sl_dnssd_set_external(_dns,self.externalDiscovery);
     if(dnssd_register_raop(_dns,port)<=0 || dnssd_register_airplay(_dns,port)<=0){[self stop];[self emit:@"Bonjour registration failed. Check Local Network permission."];return NO;}
@@ -442,7 +442,7 @@ static NSArray *txtStrings(const char *bytes,int length) {
             int client=accept(server,NULL,NULL);if(client<0)break;
             if(dispatch_semaphore_wait(self->_httpSlots,DISPATCH_TIME_NOW)!=0){close(client);continue;}
             if(context)SSL_CTX_up_ref(context);
-            dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_IATED,0),^{
+            dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED,0),^{
                 struct timeval timeout={5,0};setsockopt(client,SOL_SOCKET,SO_RCVTIMEO,&timeout,sizeof timeout);setsockopt(client,SOL_SOCKET,SO_SNDTIMEO,&timeout,sizeof timeout);
                 int one=1;setsockopt(client,SOL_SOCKET,SO_NOSIGPIPE,&one,sizeof one);
                 @try {@autoreleasepool {if(!context || sl_tls_begin(context,client))[self serveClient:client generation:generation];}}
@@ -460,7 +460,7 @@ static NSArray *txtStrings(const char *bytes,int length) {
         ssize_t n=sl_tls_read(client,buffer,sizeof buffer);if(n<=0)return;[request appendBytes:buffer length:n];
         if([request rangeOfData:[@"\r\n\r\n" dataUsingEncoding:NSUTF8StringEncoding] options:0 range:NSMakeRange(0,request.length)].location!=NSNotFound)break;
     }
-    NSString *line=[[NSString alloc]WithData:request encoding:NSUTF8StringEncoding] ?: @"";
+    NSString *line=[[NSString alloc]initWithData:request encoding:NSUTF8StringEncoding] ?: @"";
     NSArray *parts=[line componentsSeparatedByString:@" "];NSString *target=parts.count>1?parts[1]:@"";
     NSURLComponents *url=[NSURLComponents componentsWithString:[@"http://localhost" stringByAppendingString:target]];
     NSString *token=nil,*epoch=nil;uint64_t after=0;BOOL longPoll=NO;
@@ -538,12 +538,12 @@ static NSArray *txtStrings(const char *bytes,int length) {
         }
     }
     else if(current && localOwner){mime=@"application/json";NSDictionary *owner;@synchronized(self){owner=@{@"broadcast":@(_screenStream!=nil&&!self.mediaOnly),@"mediaOnly":@(self.mediaOnly),@"screenLocked":@(self.screenCaptureLocked),@"running":@(_running),@"frames":@(_screenFrames),@"token":self.token,@"logs":_broadcastLog.copy?:@[],@"localViewer":[_localViewer statusAt:localNow]};}body=[NSJSONSerialization dataWithJSONObject:owner options:0 error:NULL];}
-    else if(current&&localRTC){__block NSDictionary *result;NSString *command=[url.path substringFromIndex:11];BOOL allowed=([parts.firstObject isEqual:@"GET"]&&[command isEqual:@"status"])||([parts.firstObject isEqual:@"POST"]&&[@[@"start",@"approve",@"reject",@"stop"] containsObject:command]);if(!allowed){status=@"405 Method Not Allowed";}else{dispatch_sync(dispatch_get_main_queue(),^{if(!self->_rtcMedia&&[command isEqual:@"start"]){self->_rtcMedia=[[SLMediaSession alloc]WithMedia:self->_media];__weak Receiver *weak=self;self->_rtcMedia.status=^(NSString *message){[weak emit:message];};self->_rtcMedia.screenProvider=^NSDictionary *(NSString *path,NSDictionary *request){return [weak rtcScreenRequest:path request:request]?:@{@"code":@503};};}result=self->_rtcMedia?[self->_rtcMedia control:command]:@{@"phase":@"idle",@"approvalRequested":@NO,@"events":@[]};});mime=@"application/json";body=[NSJSONSerialization dataWithJSONObject:result options:0 error:nil];}}
+    else if(current&&localRTC){__block NSDictionary *result;NSString *command=[url.path substringFromIndex:11];BOOL allowed=([parts.firstObject isEqual:@"GET"]&&[command isEqual:@"status"])||([parts.firstObject isEqual:@"POST"]&&[@[@"start",@"approve",@"reject",@"stop"] containsObject:command]);if(!allowed){status=@"405 Method Not Allowed";}else{dispatch_sync(dispatch_get_main_queue(),^{if(!self->_rtcMedia&&[command isEqual:@"start"]){self->_rtcMedia=[[SLMediaSession alloc]initWithMedia:self->_media];__weak Receiver *weak=self;self->_rtcMedia.status=^(NSString *message){[weak emit:message];};self->_rtcMedia.screenProvider=^NSDictionary *(NSString *path,NSDictionary *request){return [weak rtcScreenRequest:path request:request]?:@{@"code":@503};};}result=self->_rtcMedia?[self->_rtcMedia control:command]:@{@"phase":@"idle",@"approvalRequested":@NO,@"events":@[]};});mime=@"application/json";body=[NSJSONSerialization dataWithJSONObject:result options:0 error:nil];}}
     else if(current && localStop && _screenStream){mime=@"application/json";body=[@"{}" dataUsingEncoding:NSUTF8StringEncoding];dispatch_after(dispatch_time(DISPATCH_TIME_NOW,NSEC_PER_MSEC*250),dispatch_get_main_queue(),^{if(self.broadcastStop)self.broadcastStop();});}
     else if(!current || (![parts.firstObject isEqual:@"GET"] && !report && !privacy) || !(aliasDestination?(aliasClient && [_localViewer allowsToken:token peer:peerHost now:localNow]):[token isEqual:self.token])){status=@"403 Forbidden";body=[(aliasDestination?@"Open http://240.3.3.3:8080/ and request approval on the iPhone.":@"On the iPhone hotspot, open http://172.20.10.1:8080/ . On other Wi-Fi, use the complete viewer link from ScreenLink.") dataUsingEncoding:NSUTF8StringEncoding];}
     else if(privacy){NSData *json=[request subdataWithRange:NSMakeRange(bodyOffset,bodyLength)];id object=[NSJSONSerialization JSONObjectWithData:json options:0 error:NULL];id value=[object isKindOfClass:NSDictionary.class]?object[@"hidden"]:nil;if(!_screenStream){status=@"409 Conflict";}else if(!value || CFGetTypeID((__bridge CFTypeRef)value)!=CFBooleanGetTypeID()){status=@"400 Bad Request";}else{if(![self changeScreenHidden:[value boolValue] expectedRevision:[object[@"expectedRevision"] unsignedIntegerValue]])status=@"409 Conflict";mime=@"application/json";body=[NSJSONSerialization dataWithJSONObject:[self screenInfo] options:0 error:NULL];}}
     else if([url.path isEqual:@"/screen/info"]){mime=@"application/json";body=[NSJSONSerialization dataWithJSONObject:[self screenInfo] options:0 error:NULL];}
-    else if([url.path isEqual:@"/screen/.mp4"]){NSDictionary *part=[_screenStream ialization];body=part[@"data"]?:NSData.data;mime=@"video/mp4";extra=[NSString stringWithFormat:@"X-Stream-Epoch: %@\r\n",part[@"epoch"]?:@""];if(!body.length)status=@"503 Service Unavailable";}
+    else if([url.path isEqual:@"/screen/init.mp4"]){NSDictionary *part=[_screenStream initialization];body=part[@"data"]?:NSData.data;mime=@"video/mp4";extra=[NSString stringWithFormat:@"X-Stream-Epoch: %@\r\n",part[@"epoch"]?:@""];if(!body.length)status=@"503 Service Unavailable";}
     else if([url.path isEqual:@"/screen/segments"]){NSDictionary *part=[_screenStream readAfter:after epoch:epoch?:@""];if([part[@"reset"] boolValue])status=@"409 Conflict";else{body=part[@"data"]?:NSData.data;if(!body.length)status=@"204 No Content";}mime=@"video/mp4";extra=[NSString stringWithFormat:@"X-Stream-Epoch: %@\r\nX-Last-ID: %@\r\n",part[@"epoch"]?:@"",part[@"id"]?:@0];}
     else if([url.path isEqual:@"/split"] || [url.path isEqual:@"/map"]){mime=@"text/html; charset=utf-8";NSString *path=[NSBundle.mainBundle pathForResource:[url.path isEqual:@"/split"]?@"SplitViewer":@"MapPlayer" ofType:@"html"];body=path?[NSData dataWithContentsOfFile:path]:NSData.data;}
     else if([url.path isEqual:@"/media/state"]){mime=@"application/json";NSMutableDictionary *state=[[_media state] mutableCopy];state[@"screenLocked"]=@(self.screenCaptureLocked||self.mediaOnly);body=[NSJSONSerialization dataWithJSONObject:state options:0 error:NULL];}
@@ -560,7 +560,7 @@ static NSArray *txtStrings(const char *bytes,int length) {
         mime=script?@"application/javascript":@"text/html; charset=utf-8";body=path?[NSData dataWithContentsOfFile:path]:nil;if(!body){status=@"503 Service Unavailable";body=[NSData data];}
     }
     else if([url.path isEqual:@"/h264/info"]){mime=@"application/json";body=[NSJSONSerialization dataWithJSONObject:[_h264 info] options:0 error:NULL];}
-    else if([url.path isEqual:@"/h264/.mp4"]){NSDictionary *part=[_h264 ialization];body=part[@"data"];mime=@"video/mp4";extra=[NSString stringWithFormat:@"X-Stream-Epoch: %@\r\n",part[@"epoch"]];if(!body.length)status=@"503 Service Unavailable";}
+    else if([url.path isEqual:@"/h264/init.mp4"]){NSDictionary *part=[_h264 initialization];body=part[@"data"];mime=@"video/mp4";extra=[NSString stringWithFormat:@"X-Stream-Epoch: %@\r\n",part[@"epoch"]];if(!body.length)status=@"503 Service Unavailable";}
     else if([url.path isEqual:@"/h264/segments"]) {
         NSDictionary *part=[_h264 readAfter:after epoch:epoch ?: @""];
         if([part[@"reset"] boolValue])status=@"409 Conflict";
@@ -608,7 +608,7 @@ static NSArray *txtStrings(const char *bytes,int length) {
         if(!current||![_localViewer allowsToken:token peer:peer now:NSProcessInfo.processInfo.systemUptime])break;
         NSDictionary *info=[self screenInfo];NSData *binary=nil;NSString *kind=@"state";
         if(![info[@"hidden"] boolValue]&&[info[@"ready"] boolValue]){
-            if(![epoch isEqual:info[@"epoch"]]){NSDictionary *=[_screenStream ialization];if([[@"epoch"] isEqual:info[@"epoch"]]&&[[@"data"] length]){epoch=info[@"epoch"];after=0;kind=@"";binary=[@"data"];}}
+            if(![epoch isEqual:info[@"epoch"]]){NSDictionary *init=[_screenStream initialization];if([init[@"epoch"] isEqual:info[@"epoch"]]&&[init[@"data"] length]){epoch=info[@"epoch"];after=0;kind=@"init";binary=init[@"data"];}}
             else{NSDictionary *part=[_screenStream readAfter:after epoch:epoch maxBytes:2*1024*1024 wait:0.15];if([part[@"reset"] boolValue]){epoch=nil;continue;}if([part[@"data"] length]){kind=@"data";binary=part[@"data"];after=[part[@"id"] unsignedLongLongValue];}}
         }
         NSDictionary *fresh=[self screenInfo];if(![fresh[@"epoch"] isEqual:info[@"epoch"]]||[fresh[@"privacyRevision"] unsignedIntegerValue]!=[info[@"privacyRevision"] unsignedIntegerValue]){epoch=nil;continue;}
