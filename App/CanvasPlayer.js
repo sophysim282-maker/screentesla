@@ -126,7 +126,7 @@ class CanvasPlayer {
   this.audioContext=audioContext;this.ownsAudioContext=!audioContext;this.audioTail=null;
   this.bufferSeconds=Math.max(0,Math.min(2,Number(bufferSeconds)||0));this.bufferReadyAt=0;this.preparedVideoEnd=0;
   this.quality=quality;this.offeredHeights=[];this.selectedHeight=0;this.onerror=onerror;this.paused=true;this.muted=true;this.duration=0;this.readyState=0;this.ended=false;this.error=null;this.closed=false;
-  this.frames=[];this.audio=[];this.nodes=new Set();this.timelines=new Map();this.segmentDiagnostics=[];this.segmentCache=new Map();this.playbackEvents=[];this.audioEnd=0;this.lastAudioSampleRate=0;this.hasAudio=false;this.videoStarved=false;this.position=0;this.videoEnd=0;this.anchor=0;this.running=false;this.serial=0;this.videoNeedsKey=false;this.videoRecoveryAt=-Infinity;this.decoders=new Map();this.configs=new Map();this.initializers=new Map();
+  this.frames=[];this.audio=[];this.nodes=new Set();this.timelines=new Map();this.segmentDiagnostics=[];this.segmentCache=new Map();this.playbackEvents=[];this.audioEnd=0;this.lastAudioSampleRate=0;this.hasAudio=false;this.videoStarved=false;this.position=0;this.videoEnd=0;this.anchor=0;this.running=false;this.serial=0;this.videoNeedsKey=false;this.videoRecoveryAt=-Infinity;this.videoGeneration=0;this.decoders=new Map();this.configs=new Map();this.initializers=new Map();
   this.stats={drawn:0,dropped:0,decoded:0,audioDecoded:0,maxFrames:0,maxAudio:0,audioScheduled:0,audioLate:0,audioJoined:0,audioRestored:0,bufferWaitMs:0,rebufferCount:0,timestampResets:0,directAudioCopies:0,audioGapMs:0,maxAudioNodes:0,videoHiccups:0,audioUnderruns:0,staleAudioDropped:0,maxSegmentCache:0,audioDecoderFlushes:0,videoRecoveries:0,staleVideoDropped:0,videoQueueTimeouts:0};
   this.animation=requestAnimationFrame(()=>this.paint());
   // Audio look-ahead must not depend on Canvas animation callbacks.
@@ -198,13 +198,15 @@ class CanvasPlayer {
   const config=kind==='video'?{codec:track.codec,codedWidth:track.video.width,codedHeight:track.video.height,description:track.description,hardwareAcceleration:'prefer-hardware'}:{codec:track.codec,sampleRate:track.audio.sample_rate,numberOfChannels:track.audio.channel_count,description:track.description};
   if(config.codec.toLowerCase()==='opus'){config.codec='opus';delete config.description;}
   const key=JSON.stringify({...config,description:config.description?Array.from(config.description):[]});
-  if(this.configs.get(kind)===key)return this.decoders.get(kind);
+  if(this.configs.get(kind)===key&&this.decoders.get(kind)?.state==='configured')return this.decoders.get(kind);
+  const videoGeneration=this.videoGeneration;
   // Browser implementations may accept a codec while declining the hardware hint.
   const Type=kind==='video'?VideoDecoder:AudioDecoder;
   let supported=await Type.isConfigSupported(config);if(!supported.supported&&kind==='video'){delete config.hardwareAcceleration;supported=await Type.isConfigSupported(config);}
   if(serial!==this.serial||this.closed)throw new DOMException('Playback replaced','AbortError');
   if(!supported.supported)throw Error('Unsupported '+kind+' codec '+track.codec);
-  const old=this.decoders.get(kind);if(old){await old.flush();if(kind==='audio')this.stats.audioDecoderFlushes++;old.close();}
+  if(kind==='video'&&videoGeneration!==this.videoGeneration)return null;
+  const old=this.decoders.get(kind);if(old){if(kind==='audio'){await old.flush();this.stats.audioDecoderFlushes++;}if(old.state!=='closed')old.close();}
   const decoder=new Type({output:frame=>{if(serial!==this.serial||this.decoders.get(kind)!==decoder){frame.close();return;}this.output(kind,frame);},error:error=>{
    if(serial!==this.serial||this.decoders.get(kind)!==decoder)return;
    if(kind==='video'&&this.audible()&&this.running){this.resetVideo('decoder-error');return;}this.fail(error);
@@ -232,6 +234,7 @@ class CanvasPlayer {
   if(kind==='video')this.readyState=2;
  }
  resetVideo(reason){
+  this.videoGeneration++;
   const decoder=this.decoders.get('video');this.decoders.delete('video');this.configs.delete('video');
   if(decoder&&decoder.state!=='closed')decoder.close();
   for(const frame of this.frames)frame.close();this.frames=[];this.videoNeedsKey=true;
@@ -275,16 +278,27 @@ class CanvasPlayer {
     if(!this.videoNeedsKey)this.resetVideo('catch-up');
     this.stats.staleVideoDropped++;continue;
    }
-   if(type==='video'&&this.videoNeedsKey){if(!sample.is_sync){this.stats.staleVideoDropped++;continue;}this.videoNeedsKey=false;}
+   if(type==='video'&&this.videoNeedsKey&&!sample.is_sync){this.stats.staleVideoDropped++;continue;}
    let decoder=await this.configure(sample.track,type,serial);
+   if(!decoder)continue;
    const timestamp=Math.round((mapping+sample.cts/sample.timescale)*1e6),duration=Math.max(1,Math.round(sample.duration/sample.timescale*1e6));
    const Chunk=type==='video'?EncodedVideoChunk:EncodedAudioChunk;
    if(serial!==this.serial||this.closed)return;
    while((type==='video'&&this.frames.length>12)||(type==='audio'&&this.audio.length>128)){if(serial!==this.serial||this.closed)return;await sleep(10);}
    if(serial!==this.serial||this.closed)return;
-   decoder.decode(new Chunk({type:type==='audio'||sample.is_sync?'key':'delta',timestamp,duration,data:sample.data}));
+   if(type==='video'){
+    if(this.decoders.get(type)!==decoder||decoder.state!=='configured'||this.videoNeedsKey){
+     if(!sample.is_sync){this.stats.staleVideoDropped++;continue;}
+     decoder=await this.configure(sample.track,type,serial);
+     if(serial!==this.serial||this.closed)return;
+     if(!decoder||this.decoders.get(type)!==decoder||decoder.state!=='configured')continue;
+    }
+    this.videoNeedsKey=false;
+   }
+   try{decoder.decode(new Chunk({type:type==='audio'||sample.is_sync?'key':'delta',timestamp,duration,data:sample.data}));}
+   catch(error){if(type==='video'&&this.audible()&&this.running){this.resetVideo('decode-error');continue;}throw error;}
    const queuedAt=performance.now();
-   while(decoder.decodeQueueSize>12){
+   while(decoder.state==='configured'&&decoder.decodeQueueSize>12){
     if(serial!==this.serial||this.closed)return;
     if(type==='video'&&this.audible()&&this.running&&performance.now()-queuedAt>1500){
      this.stats.videoQueueTimeouts++;this.resetVideo('queue-timeout');break;

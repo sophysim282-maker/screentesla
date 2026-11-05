@@ -31,7 +31,7 @@ const server=http.createServer((req,res)=>{
   });
   for(const file of ['MP4Demux.js','TSDemux.js','CanvasPlayer.js'])await page.addScriptTag({url:'/'+file});
   await page.evaluate(async()=>{window.p=new ScreenLinkCanvas.CanvasPlayer(document.getElementById('c'),{onerror:e=>window.failure=e.message});await p.load('/master.m3u8');await p.enableAudio();await p.play();});
-  await page.waitForFunction(()=>p.currentTime>2&&p.stats.drawn>20,null,{timeout:25000});
+  try{await page.waitForFunction(()=>p.currentTime>2&&p.stats.drawn>20,null,{timeout:25000});}catch(e){console.log('STARTUP_STATE',await page.evaluate(()=>({failure:window.failure,time:p.currentTime,stats:p.stats,frames:p.frames.length,audio:p.audio.length,hasAudio:p.hasAudio,paused:p.paused,running:p.running,videoEnd:p.videoEnd,audioEnd:p.audioEnd,ready:p.readyState,errors:window.failure})));console.log('PAGE_ERRORS',errors);throw e;}
   const before=await page.evaluate(()=>{window.audioDecoder=p.decoders.get('audio');window.startSerial=p.serial;window.videoFault=true;return {time:p.currentTime,scheduled:p.stats.audioScheduled,drawn:p.stats.drawn};});
   await page.waitForTimeout(3200);
   const during=await page.evaluate(()=>({time:p.currentTime,audio:p.stats.audioScheduled,same:p.decoders.get('audio')===audioDecoder,serial:p.serial,recoveries:p.stats.videoRecoveries,failure:window.failure}));

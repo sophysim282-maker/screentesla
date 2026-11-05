@@ -12,7 +12,8 @@
 @property(nonatomic) BOOL sourcePaused;
 @property(nonatomic) NSUInteger generation,recoveryCount;
 @property(nonatomic,strong) NSMutableArray *itemObservers;
-@property(nonatomic) BOOL interrupted;
+@property(nonatomic) BOOL interrupted,seekInFlight;
+@property(nonatomic) double lastSeek;
 @end
 @implementation YouTubePiP
 + (Class)layerClass {return AVPlayerLayer.class;}
@@ -63,7 +64,7 @@
  if(![epoch isKindOfClass:NSString.class]||![path hasPrefix:@"/media/resource/"])return;
  BOOL replaced=![self.epoch isEqual:epoch];
  if(replaced){
-  self.epoch=epoch;self.recoveryCount=0;self.interrupted=NO;
+  self.epoch=epoch;self.recoveryCount=0;self.interrupted=NO;self.seekInFlight=NO;self.lastSeek=0;
   NSURL *url=[NSURL URLWithString:[@"http://localhost:8080" stringByAppendingString:path]];
   AVPlayerItem *item=[AVPlayerItem playerItemWithURL:url];item.preferredMaximumResolution=CGSizeMake(1280,720);item.preferredPeakBitRate=6000000;
   if(self.player)[self.player replaceCurrentItemWithPlayerItem:item];else self.player=[AVPlayer playerWithPlayerItem:item];self.player.muted=YES;self.player.allowsExternalPlayback=NO;self.player.automaticallyWaitsToMinimizeStalling=YES;
@@ -74,7 +75,13 @@
  BOOL paused=[state[@"paused"] boolValue];
  if(!self.interrupted&&(replaced||paused!=self.sourcePaused)){if(paused)[self.player pause];else [self.player play];}self.sourcePaused=paused;
  double position=[state[@"position"] doubleValue],current=CMTimeGetSeconds(self.player.currentTime);
- if(isfinite(current)&&fabs(current-position)>5)[self.player seekToTime:CMTimeMakeWithSeconds(position,600) toleranceBefore:CMTimeMakeWithSeconds(.5,600) toleranceAfter:CMTimeMakeWithSeconds(.5,600)];
+ double now=NSProcessInfo.processInfo.systemUptime;
+ if(isfinite(current)&&isfinite(position)&&position>=0&&fabs(current-position)>5&&!self.seekInFlight&&now-self.lastSeek>3&&self.player.currentItem.status==AVPlayerItemStatusReadyToPlay){
+  self.seekInFlight=YES;self.lastSeek=now;NSUInteger generation=self.generation;NSString *epoch=self.epoch;__weak YouTubePiP *weak=self;
+  [self.player seekToTime:CMTimeMakeWithSeconds(position,600) toleranceBefore:CMTimeMakeWithSeconds(.5,600) toleranceAfter:CMTimeMakeWithSeconds(.5,600) completionHandler:^(BOOL finished){
+   dispatch_async(dispatch_get_main_queue(),^{YouTubePiP *owner=weak;if(owner&&generation==owner.generation&&[epoch isEqual:owner.epoch])owner.seekInFlight=NO;});
+  }];
+ }
  [self beginIfReady];
 }
 - (void)startFloating {

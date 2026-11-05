@@ -157,8 +157,8 @@ static void SLActivityFinish(void) {
  if(UIApplication.sharedApplication.applicationState!=UIApplicationStateActive||self.mediaOnlyRestarting||![NSUserDefaults.standardUserDefaults boolForKey:@"resumeYouTubeOnReturn"])return;
  if(!self.receiver.isRunning||!self.receiver.mediaOnly){[self startYouTubeNoRecording];return;}
  [self.receiver refreshDiscovery];
- if(self.youtubePiP.active||self.session.active)return;
- self.mediaOnlyRestarting=YES;NSUInteger generation=self.mediaStartGeneration;[self.vpn connectRouteProbe:^(BOOL ok){if(generation!=self.mediaStartGeneration)return;self.mediaOnlyRestarting=NO;if(!ok)return;[self.receiver refreshDiscovery];self.session.allowWaitingForVideo=YES;[self.session start];self.localViewerStatus.text=self.session.active?@"READY":@"Restarting background session…";[self append:@"RESUMING YOUTUBE: foreground return requested a new timed session. The existing receiver, viewer authorization and media state are preserved. If YouTube released AirPlay, select ScreenLink VPN Phone again in YouTube."];}];
+ if((self.youtubePiP.active||self.session.active)&&self.vpn.connected)return;
+ self.mediaOnlyRestarting=YES;NSUInteger generation=self.mediaStartGeneration;[self.vpn connectRouteProbe:^(BOOL ok){if(generation!=self.mediaStartGeneration)return;self.mediaOnlyRestarting=NO;if(!ok)return;[self.receiver refreshDiscovery];if(!self.youtubePiP.active&&!self.session.active){self.session.allowWaitingForVideo=YES;[self.session start];}self.localViewerStatus.text=self.youtubePiP.active?@"PiP ACTIVE":(self.session.active?@"READY":@"Restarting background session…");[self append:@"RESUMING YOUTUBE: foreground return requested a new timed session. The existing receiver, viewer authorization and media state are preserved. If YouTube released AirPlay, select ScreenLink VPN Phone again in YouTube."];}];
 }
 - (void)startMediaOnlyWhenFree:(NSUInteger)attempts generation:(NSUInteger)generation {
  NSMutableURLRequest *request=[NSMutableURLRequest requestWithURL:[NSURL URLWithString:@"http://127.0.0.1:8080/local/owner"]];[request setValue:@"app" forHTTPHeaderField:@"X-ScreenLink-Control"];request.timeoutInterval=1;
