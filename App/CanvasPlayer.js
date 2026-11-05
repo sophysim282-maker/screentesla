@@ -126,7 +126,7 @@ class CanvasPlayer {
   this.audioContext=audioContext;this.ownsAudioContext=!audioContext;this.audioTail=null;
   this.bufferSeconds=Math.max(0,Math.min(2,Number(bufferSeconds)||0));this.bufferReadyAt=0;this.preparedVideoEnd=0;
   this.quality=quality;this.offeredHeights=[];this.selectedHeight=0;this.onerror=onerror;this.paused=true;this.muted=true;this.duration=0;this.readyState=0;this.ended=false;this.error=null;this.closed=false;
-  this.frames=[];this.audio=[];this.nodes=new Set();this.timelines=new Map();this.segmentDiagnostics=[];this.segmentCache=new Map();this.playbackEvents=[];this.audioEnd=0;this.lastAudioSampleRate=0;this.hasAudio=false;this.videoStarved=false;this.position=0;this.videoEnd=0;this.anchor=0;this.running=false;this.serial=0;this.videoNeedsKey=false;this.videoRecoveryAt=-Infinity;this.videoGeneration=0;this.decoders=new Map();this.configs=new Map();this.initializers=new Map();
+  this.frames=[];this.audio=[];this.nodes=new Set();this.timelines=new Map();this.segmentDiagnostics=[];this.segmentCache=new Map();this.playbackEvents=[];this.audioEnd=0;this.lastAudioSampleRate=0;this.hasAudio=false;this.videoStarved=false;this.position=0;this.videoEnd=0;this.anchor=0;this.running=false;this.serial=0;this.videoNeedsKey=false;this.videoRecoveryAt=-Infinity;this.videoGeneration=0;this.videoRecoveryWindow=0;this.videoRecoveryCount=0;this.videoRetryAfter=0;this.decoders=new Map();this.configs=new Map();this.initializers=new Map();
   this.stats={drawn:0,dropped:0,decoded:0,audioDecoded:0,maxFrames:0,maxAudio:0,audioScheduled:0,audioLate:0,audioJoined:0,audioRestored:0,bufferWaitMs:0,rebufferCount:0,timestampResets:0,directAudioCopies:0,audioGapMs:0,maxAudioNodes:0,videoHiccups:0,audioUnderruns:0,staleAudioDropped:0,maxSegmentCache:0,audioDecoderFlushes:0,videoRecoveries:0,staleVideoDropped:0,videoQueueTimeouts:0};
   this.animation=requestAnimationFrame(()=>this.paint());
   // Audio look-ahead must not depend on Canvas animation callbacks.
@@ -234,7 +234,9 @@ class CanvasPlayer {
   if(kind==='video')this.readyState=2;
  }
  resetVideo(reason){
-  this.videoGeneration++;
+  this.videoGeneration++;const now=performance.now();
+  if(now-this.videoRecoveryWindow>10000){this.videoRecoveryWindow=now;this.videoRecoveryCount=0;}
+  if(++this.videoRecoveryCount>4)this.videoRetryAfter=now+3000;
   const decoder=this.decoders.get('video');this.decoders.delete('video');this.configs.delete('video');
   if(decoder&&decoder.state!=='closed')decoder.close();
   for(const frame of this.frames)frame.close();this.frames=[];this.videoNeedsKey=true;
@@ -274,6 +276,7 @@ class CanvasPlayer {
    if(serial!==this.serial||this.closed)return;
    const type=sample.track.video?'video':'audio';
    const sampleTime=mapping+sample.cts/sample.timescale;
+   if(type==='video'&&performance.now()<this.videoRetryAfter){this.stats.staleVideoDropped++;continue;}
    if(type==='video'&&this.audible()&&this.running&&sampleTime<this.currentTime-.75){
     if(!this.videoNeedsKey)this.resetVideo('catch-up');
     this.stats.staleVideoDropped++;continue;

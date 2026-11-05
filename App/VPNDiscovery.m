@@ -94,7 +94,7 @@ static NSData *encodedTXT(NSArray<NSString *> *strings) {
     if(error){[self report:[NSString stringWithFormat:@"Could not publish VPN discovery: %d. Mac VPN mode remains available.",error]];[self closeReferences];_needsRecovery=YES;[self serviceFailed:NULL error:error];return NO;}
     error=DNSServiceBrowse(&_verifyBrowse,0,kDNSServiceInterfaceIndexLocalOnly,"_airplay._tcp","local.",browseReply,(__bridge void *)self);
     if(!error)error=DNSServiceSetDispatchQueue(_verifyBrowse,dispatch_get_main_queue());
-    if(error)[self report:[NSString stringWithFormat:@"Local discovery verification could not start: %d",error]];
+    if(error){[self serviceFailed:_verifyBrowse error:error];[self report:[NSString stringWithFormat:@"Local discovery verification could not start: %d",error]];}
     NSUInteger generation=_generation;__weak VPNDiscovery *weak=self;
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW,5*NSEC_PER_SEC),dispatch_get_main_queue(),^{
         VPNDiscovery *owner=weak;
@@ -109,14 +109,14 @@ static NSData *encodedTXT(NSArray<NSString *> *strings) {
     [self report:@"Local Bonjour browser found this proxy. Resolving its target next."];
     DNSServiceErrorType error=DNSServiceResolve(&_verifyResolve,0,kDNSServiceInterfaceIndexLocalOnly,name,type,domain,resolveReply,(__bridge void *)self);
     if(!error)error=DNSServiceSetDispatchQueue(_verifyResolve,dispatch_get_main_queue());
-    if(error)[self report:[NSString stringWithFormat:@"Local resolve could not start: %d",error]];
+    if(error){[self serviceFailed:_verifyResolve error:error];[self report:[NSString stringWithFormat:@"Local resolve could not start: %d",error]];}
 }
 - (void)resolveHost:(const char *)host port:(uint16_t)port {
     if(_verifyAddress)return;
     [self report:[NSString stringWithFormat:@"Local proxy target resolved: %s:%u",host,ntohs(port)]];
     DNSServiceErrorType error=DNSServiceGetAddrInfo(&_verifyAddress,0,kDNSServiceInterfaceIndexLocalOnly,kDNSServiceProtocol_IPv4,host,lookupReply,(__bridge void *)self);
     if(!error)error=DNSServiceSetDispatchQueue(_verifyAddress,dispatch_get_main_queue());
-    if(error)[self report:[NSString stringWithFormat:@"Local address lookup could not start: %d",error]];
+    if(error){[self serviceFailed:_verifyAddress error:error];[self report:[NSString stringWithFormat:@"Local address lookup could not start: %d",error]];}
 }
 - (void)verifiedAddress:(const struct sockaddr *)address {
     if(!address || address->sa_family!=AF_INET)return;

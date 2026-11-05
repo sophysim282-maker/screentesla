@@ -25,7 +25,7 @@ const server=http.createServer((req,res)=>{
     },error:callbacks.error});}
     configure(c){this.native.configure(c);}get state(){return this.native.state;}
     get decodeQueueSize(){return this.native.decodeQueueSize+(window.videoFault?32:0);}
-    decode(c){this.native.decode(c);}flush(){return window.videoFault?new Promise(()=>{}):this.native.flush();}
+    decode(c){this.native.decode(c);if(window.injectError){window.injectError=false;setTimeout(()=>{if(!this.retired){this.native.close();callbacks.error(new DOMException('Injected asynchronous video failure','EncodingError'));}},5);}}flush(){return window.videoFault?new Promise(()=>{}):this.native.flush();}
     close(){this.retired=true;for(const frame of this.held)frame.close();this.held.clear();this.native.close();}
    };
   });
@@ -40,8 +40,14 @@ const server=http.createServer((req,res)=>{
   await page.waitForFunction(()=>p.stats.drawn>recoveredDrawn+20&&p.currentTime>7,null,{timeout:15000});
   const result=await page.evaluate(()=>({stats:p.stats,time:p.currentTime,videoEnd:p.videoEnd,audioEnd:p.audioEnd,sameAudio:p.decoders.get('audio')===audioDecoder,sameSerial:p.serial===startSerial,width:p.canvas.width,height:p.canvas.height,queued:p.frames.map(f=>f.timestamp/1e6),failure:window.failure}));
   assert.equal(result.width,1920);assert.equal(result.height,1080);assert(result.sameAudio&&result.sameSerial);assert(result.stats.videoQueueTimeouts>0);assert(result.stats.maxFrames<=49);assert(result.queued.every(t=>t>=result.time-.15),'Stale frames survived catch-up');assert(!result.failure,result.failure);assert.deepEqual(errors,[]);
+  await page.evaluate(()=>{window.beforeError=p.stats.videoRecoveries;window.injectError=true;});
+  await page.waitForFunction(()=>p.stats.videoRecoveries>beforeError&&p.stats.drawn>recoveredDrawn+40,null,{timeout:15000});
   await page.waitForFunction(()=>p.currentTime>14&&p.stats.drawn>100,null,{timeout:20000});
   assert(await page.evaluate(()=>p.decoders.get('audio')===audioDecoder&&!p.error));
-  console.log('BUILD59_VIDEO_RECOVERY_PASSED',JSON.stringify(result));await page.evaluate(()=>p.destroy());
+  console.log('BUILD59_VIDEO_RECOVERY_PASSED',JSON.stringify(result));
+  await page.evaluate(async()=>{reorderFault=true;await p.seek(8);await p.play();});
+  await page.waitForFunction(()=>p.serial>startSerial&&p.currentTime>9&&p.stats.drawn>120,null,{timeout:15000});
+  assert(await page.evaluate(()=>!p.error&&p.frames.every(f=>f.timestamp/1e6>=p.currentTime-.15)),'Late old decoder callbacks crossed seek generation');
+  await page.evaluate(()=>p.destroy());
  }finally{await browser?.close();server.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});
