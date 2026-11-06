@@ -5,6 +5,10 @@
 @property(nonatomic,copy) void (^pending)(BOOL);
 @property(nonatomic) BOOL busy;
 @property(nonatomic) NSUInteger attempt;
+@property(nonatomic,readwrite) BOOL disconnecting;
+@property(nonatomic) BOOL stopRequested;
+@property(nonatomic) NSUInteger quietSamples;
+@property(nonatomic,strong) NSArray *ownedConnections;
 @end
 @implementation LocalVPN
 - (instancetype)init {
@@ -31,14 +35,16 @@
 }
 - (void)connect:(void (^)(BOOL))completion { [self connectMode:NO completion:completion]; }
 - (void)connectRouteProbe:(void (^)(BOOL))completion { [self connectMode:YES completion:completion]; }
-- (void)waitForAliasDisconnect:(void (^)(BOOL))completion attempts:(NSUInteger)attempts {if(self.manager.connection.status==NEVPNStatusDisconnected||self.manager.connection.status==NEVPNStatusInvalid){[self connectMode:YES completion:completion];return;}if(!attempts){if(completion)completion(NO);return;}dispatch_after(dispatch_time(DISPATCH_TIME_NOW,(int64_t)(0.5*NSEC_PER_SEC)),dispatch_get_main_queue(),^{[self waitForAliasDisconnect:completion attempts:attempts-1];});}
+- (void)waitForAliasDisconnect:(void (^)(BOOL))completion attempts:(NSUInteger)attempts generation:(NSUInteger)generation {if(generation!=self.attempt||self.disconnecting)return;if(self.manager.connection.status==NEVPNStatusDisconnected||self.manager.connection.status==NEVPNStatusInvalid){[self connectMode:YES completion:completion];return;}if(!attempts){if(completion)completion(NO);return;}dispatch_after(dispatch_time(DISPATCH_TIME_NOW,(int64_t)(0.5*NSEC_PER_SEC)),dispatch_get_main_queue(),^{[self waitForAliasDisconnect:completion attempts:attempts-1 generation:generation];});}
 - (BOOL)acceptConnectedMode:(BOOL)probe completion:(void (^)(BOOL))completion {
     BOOL activeProbe=[((NETunnelProviderProtocol *)self.manager.protocolConfiguration).providerConfiguration[@"routeProbe"] boolValue];
-    if(probe && !activeProbe){[self.manager.connection stopVPNTunnel];[self waitForAliasDisconnect:completion attempts:20];return YES;}
+    if(probe && !activeProbe){[self.manager.connection stopVPNTunnel];[self waitForAliasDisconnect:completion attempts:20 generation:self.attempt];return YES;}
     [self report:activeProbe?@"EXPERIMENTAL virtual-IP probe VPN is active. This is not a verified Tesla connection.":@"Built-in VPN is connected."];
     if(completion)completion(YES);return YES;
 }
 - (void)connectMode:(BOOL)probe completion:(void (^)(BOOL))completion {
+    if(self.disconnecting){[self report:@"VPN is disconnecting. Wait for confirmation before starting again."];if(completion)completion(NO);return;}
+    self.stopRequested=NO;self.ownedConnections=nil;
     if(self.connected){[self acceptConnectedMode:probe completion:completion];return;}
     if(self.busy){[self report:@"VPN setup is already in progress. Wait for Connected before starting AirPlay."];if(completion)completion(NO);return;}
     NSString *identifier=[self providerIdentifier];
@@ -73,7 +79,8 @@
 }
 - (void)changed:(NSNotification *)notification {
     dispatch_async(dispatch_get_main_queue(),^{
-        if(notification.object!=self.manager.connection)return;
+        if(notification.object!=self.manager.connection&&![self.ownedConnections containsObject:notification.object])return;
+        if(self.stopRequested){NEVPNConnection *connection=notification.object;if(connection.status!=NEVPNStatusDisconnected&&connection.status!=NEVPNStatusInvalid)[connection stopVPNTunnel];return;}
         switch(self.manager.connection.status) {
             case NEVPNStatusConnected:[self report:@"BUILT-IN VPN CONNECTED: 10.7.1.1 ↔ 10.7.0.1. LocalDevVPN is not required. The VPN does not extend the receiver app's background runtime."];[self complete:YES];[self routeProbeStatus];break;
             case NEVPNStatusDisconnected:case NEVPNStatusInvalid:[self report:@"Built-in VPN disconnected. Reconnect here before using iPhone VPN discovery."];break;
@@ -92,7 +99,33 @@
     }];
     if(!sent)[self report:[NSString stringWithFormat:@"Route probe status failed: %@",error.localizedDescription?:@"message not sent"]];
 }
-- (void)disconnect {
-    self.attempt++;[self.manager.connection stopVPNTunnel];[self complete:NO];[self report:@"Built-in VPN disconnect requested. Its saved configuration remains available in iOS Settings → VPN."];
+- (void)waitForOwnManagers:(NSArray<NETunnelProviderManager *> *)managers generation:(NSUInteger)generation remaining:(NSUInteger)remaining completion:(void (^)(BOOL))completion {
+    if(generation!=self.attempt)return;
+    BOOL stopped=YES;
+    for(NETunnelProviderManager *manager in managers)if(manager.connection.status!=NEVPNStatusDisconnected&&manager.connection.status!=NEVPNStatusInvalid){stopped=NO;[manager.connection stopVPNTunnel];}
+    self.quietSamples=stopped?self.quietSamples+1:0;
+    if((stopped&&self.quietSamples>=3)||!remaining){
+        self.disconnecting=NO;
+        [self report:stopped?@"ScreenLink VPN disconnected. Its saved configuration is retained.":@"ScreenLink VPN disconnect is not confirmed. Check iOS Settings → VPN."];
+        if(completion)completion(stopped);return;
+    }
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW,(int64_t)(.2*NSEC_PER_SEC)),dispatch_get_main_queue(),^{[self waitForOwnManagers:managers generation:generation remaining:remaining-1 completion:completion];});
 }
+- (void)disconnectWithCompletion:(void (^)(BOOL))completion {
+    if(self.disconnecting){if(completion)completion(NO);return;}
+    self.disconnecting=YES;self.stopRequested=YES;self.quietSamples=0;NSUInteger generation=++self.attempt;[self complete:NO];
+    NSString *identifier=[self providerIdentifier];
+    if(!identifier.length){self.disconnecting=NO;[self report:@"ScreenLink VPN ownership cannot be verified: embedded extension missing. No other VPN was changed."];if(completion)completion(NO);return;}
+    [self report:@"Disconnecting ScreenLink VPN…"];
+    [NETunnelProviderManager loadAllFromPreferencesWithCompletionHandler:^(NSArray<NETunnelProviderManager *> *all,NSError *error){dispatch_async(dispatch_get_main_queue(),^{
+        if(generation!=self.attempt)return;
+        if(error){self.disconnecting=NO;[self report:@"ScreenLink VPN disconnect could not be confirmed: saved configurations could not be read."];if(completion)completion(NO);return;}
+        NSMutableArray *ours=[NSMutableArray array];
+        for(NETunnelProviderManager *manager in all)if([((NETunnelProviderProtocol *)manager.protocolConfiguration).providerBundleIdentifier isEqual:identifier])[ours addObject:manager];
+        if(self.manager&&[((NETunnelProviderProtocol *)self.manager.protocolConfiguration).providerBundleIdentifier isEqual:identifier]&&![ours containsObject:self.manager])[ours addObject:self.manager];
+        self.ownedConnections=[ours valueForKey:@"connection"];if(!self.manager&&ours.count)self.manager=ours.firstObject;
+        [self waitForOwnManagers:ours generation:generation remaining:50 completion:completion];
+    });}];
+}
+- (void)disconnect {[self disconnectWithCompletion:nil];}
 @end

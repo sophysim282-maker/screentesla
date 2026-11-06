@@ -5,5 +5,7 @@
 - (void)connect:(void (^)(BOOL))completion;
 - (void)connectRouteProbe:(void (^)(BOOL))completion;
 - (void)routeProbeStatus;
+@property(nonatomic,readonly) BOOL disconnecting;
+- (void)disconnectWithCompletion:(void (^)(BOOL))completion;
 - (void)disconnect;
 @end

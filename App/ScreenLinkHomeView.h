@@ -1,0 +1,6 @@
+#import <UIKit/UIKit.h>
+@interface ScreenLinkHomeView : UIView
+@property(nonatomic,copy) void (^startAction)(void), (^disconnectAction)(void), (^developerAction)(void), (^copyAction)(void);
+@property(nonatomic,strong,readonly) UIView *previewHost;
+- (void)showStatus:(NSString *)status detail:(NSString *)detail busy:(BOOL)busy sharing:(BOOL)sharing attention:(BOOL)attention;
+@end

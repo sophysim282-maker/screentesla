@@ -75,6 +75,41 @@ private struct RoadsterLauncherWidget: Widget {
     var body: some WidgetConfiguration { launcherConfiguration(.roadster) }
 }
 
+private struct ControlsView: View {
+    @Environment(\.widgetFamily) var family
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Image(systemName: "airplayvideo").foregroundStyle(.mint)
+                Text("ScreenLink").font(.headline)
+                Spacer(minLength: 0)
+            }
+            Text("A bigger view").font(.title3.bold())
+            Text("Open the app to control sharing").font(.caption).foregroundStyle(.secondary)
+            Spacer(minLength: 0)
+            if family == .systemMedium {
+                HStack(spacing: 12) {
+                    Link(destination: startURL) { Label("Start + PiP", systemImage: "play.fill").font(.subheadline.bold()).padding(10).frame(maxWidth: .infinity).background(.teal, in: RoundedRectangle(cornerRadius: 12)) }
+                    Link(destination: URL(string: "screenlink://disconnect-all")!) { Label("Disconnect All", systemImage: "power").font(.subheadline.bold()).padding(10).frame(maxWidth: .infinity).background(.white.opacity(0.12), in: RoundedRectangle(cornerRadius: 12)) }
+                }.foregroundStyle(.white)
+            } else {
+                Label("Open controls", systemImage: "arrow.up.forward.app").font(.subheadline.bold()).foregroundStyle(.mint)
+            }
+        }
+        .foregroundStyle(.white)
+        .containerBackground(for: .widget) { LinearGradient(colors: [Color(red: 0.025, green: 0.065, blue: 0.13), Color(red: 0.03, green: 0.24, blue: 0.28)], startPoint: .topLeading, endPoint: .bottomTrailing) }
+        .widgetURL(resumeURL)
+    }
+}
+private struct ScreenLinkControlsWidget: Widget {
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: "ScreenLink.Controls", provider: LauncherProvider()) { _ in ControlsView() }
+            .configurationDisplayName("ScreenLink Controls")
+            .description("Start YouTube + PiP or disconnect all ScreenLink sharing. Controls open the app; iOS consent may be required.")
+            .supportedFamilies([.systemSmall, .systemMedium])
+    }
+}
+
 private struct MotionBadge: View {
     let phase: Int
     var body: some View {
@@ -145,6 +180,7 @@ private struct ScreenLinkLiveActivity: Widget {
 @main
 struct ScreenLinkWidgetBundle: WidgetBundle {
     var body: some Widget {
+        ScreenLinkControlsWidget()
         DogLauncherWidget()
         CatLauncherWidget()
         RoadsterLauncherWidget()

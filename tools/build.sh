@@ -99,6 +99,7 @@ if [[ ! -f deps/lib/libplist-2.0.a ]]; then
     make install
   )
 fi
+swift tools/render_brand.swift
 xcodegen generate
 xcodebuild -project ScreenLinkAirPlayLab.xcodeproj -scheme ScreenLinkAirPlayLab -configuration Release -destination 'generic/platform=iOS' -derivedDataPath build/DerivedData CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build 2>&1 | tee -a build/xcodebuild.log
 mkdir -p build/Payload
@@ -145,6 +146,13 @@ assert w['NSExtension']['NSExtensionPointIdentifier']=='com.apple.widgetkit-exte
 assert w['CFBundleVersion']==parent['CFBundleVersion']
 assert w['CFBundleIdentifier'].startswith(parent['CFBundleIdentifier']+'.')
 assert (widget/w['CFBundleExecutable']).is_file()
+assert w.get('CFBundlePackageType')=='XPC!'
+widget_binary=(widget/w['CFBundleExecutable']).read_bytes()
+for kind in [b'ScreenLink.Controls',b'start-youtube',b'disconnect-all']:
+    assert kind in widget_binary, 'Widget control route/configuration missing: '+str(kind)
+assert parent['CFBundleVersion']=='60' and parent['CFBundleShortVersionString']=='0.20.23'
+assert parent.get('CFBundleIcons',{}).get('CFBundlePrimaryIcon',{}).get('CFBundleIconName')=='AppIcon'
+assert (app/'Assets.car').is_file() and (app/'ScreenLinkCover.png').is_file()
 assert parent['NSSupportsLiveActivities']
 assert any('screenlink' in u.get('CFBundleURLSchemes',[]) for u in parent['CFBundleURLTypes'])
 print('Embedded widget, VPN and broadcast extension packaging verified:',w['CFBundleIdentifier'])

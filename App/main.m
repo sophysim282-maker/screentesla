@@ -6,10 +6,16 @@
 #import "YouTubePiP.h"
 #import "BackgroundSession.h"
 #import "LocalVPN.h"
+#import "ScreenLinkHomeView.h"
+#import "SLDisconnectFlow.h"
+#import "SLWidgetRoute.h"
 #import "RTCPrototypeController.h"
 #import "SLMediaController.h"
 #import <ReplayKit/ReplayKit.h>
 // Swift class has an explicit Objective-C runtime name; no generated header.
+@protocol SLPendingWidgetAPI
+- (void)cancelPendingWidgetAction;
+@end
 @protocol SLWidgetActivityAPI
 + (void)updateStatus:(NSString *)status running:(BOOL)running;
 + (void)finish;
@@ -50,15 +56,24 @@ static void SLActivityFinish(void) {
 @property(nonatomic,strong) UISegmentedControl *discoveryMode;
 @property(nonatomic,strong) UISegmentedControl *videoProfile;
 @property(nonatomic,strong) UILabel *bookmark;
+@property(nonatomic,strong) UIScrollView *developerScroll;
+@property(nonatomic,strong) UIStackView *developerStack;
+@property(nonatomic,strong) ScreenLinkHomeView *dashboard;
+@property(nonatomic,strong) NSArray<NSLayoutConstraint *> *previewConstraints;
+@property(nonatomic,strong) SLDisconnectFlow *disconnectFlow;
+@property(nonatomic) BOOL userDisconnected,disconnectNeedsAttention;
+@property(nonatomic) NSUInteger previewIndex;
+@property(nonatomic,strong) NSURLSession *disconnectSession;
+@property(nonatomic,copy) NSString *homeFailure;
 @end
 @implementation Controller
 - (void)viewDidLoad {
     [super viewDidLoad];self.view.backgroundColor=UIColor.systemBackgroundColor;
-    self.backgroundTask=UIBackgroundTaskInvalid;
+    self.backgroundTask=UIBackgroundTaskInvalid;self.userDisconnected=[NSUserDefaults.standardUserDefaults boolForKey:@"manualDisconnected"];self.disconnectFlow=[SLDisconnectFlow new];
     UIStackView *stack=[UIStackView new];stack.axis=UILayoutConstraintAxisVertical;stack.spacing=6;stack.translatesAutoresizingMaskIntoConstraints=NO;
-    UIScrollView *scroll=[UIScrollView new];scroll.translatesAutoresizingMaskIntoConstraints=NO;[self.view addSubview:scroll];[NSLayoutConstraint activateConstraints:@[[scroll.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor],[scroll.bottomAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.bottomAnchor],[scroll.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],[scroll.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor]]];[scroll addSubview:stack];
+    UIScrollView *scroll=[UIScrollView new];self.developerScroll=scroll;self.developerStack=stack;scroll.translatesAutoresizingMaskIntoConstraints=NO;[self.view addSubview:scroll];[NSLayoutConstraint activateConstraints:@[[scroll.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor],[scroll.bottomAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.bottomAnchor],[scroll.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],[scroll.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor]]];[scroll addSubview:stack];
     [NSLayoutConstraint activateConstraints:@[[stack.topAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.topAnchor constant:8],[stack.bottomAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.bottomAnchor constant:-8],[stack.leadingAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.leadingAnchor constant:16],[stack.trailingAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.trailingAnchor constant:-16],[stack.widthAnchor constraintEqualToAnchor:scroll.frameLayoutGuide.widthAnchor constant:-32]]];
-    UILabel *title=[UILabel new];title.text=@"ScreenLink · 0.20.22";title.font=[UIFont boldSystemFontOfSize:21];[stack addArrangedSubview:title];
+    UILabel *title=[UILabel new];title.text=@"ScreenLink · 0.20.23";title.font=[UIFont boldSystemFontOfSize:21];[stack addArrangedSubview:title];
     self.bookmark=[UILabel new];self.bookmark.font=[UIFont monospacedSystemFontOfSize:14 weight:UIFontWeightMedium];self.bookmark.numberOfLines=0;self.bookmark.text=@"Connect your Mac to the hotspot, then start receiver.";[stack addArrangedSubview:self.bookmark];
     UILabel *help=[UILabel new];help.numberOfLines=0;help.font=[UIFont systemFontOfSize:13];help.text=@"YouTube: enable Personal Hotspot, tap Start YouTube · no recording, then choose ScreenLink in YouTube AirPlay. No screen broadcast or automatic PiP is started. Background time is controlled by iOS.";[stack addArrangedSubview:help];
     self.discoveryMode=[[UISegmentedControl alloc]initWithItems:@[@"iPhone VPN",@"Mac VPN",@"Native"]];
@@ -91,8 +106,8 @@ static void SLActivityFinish(void) {
     self.text=[UITextView new];self.text.editable=NO;[self.text.heightAnchor constraintEqualToConstant:230].active=YES;self.text.font=[UIFont monospacedSystemFontOfSize:12 weight:UIFontWeightRegular];[stack addArrangedSubview:self.text];
     self.broadcastArmed=[NSUserDefaults.standardUserDefaults boolForKey:@"screenBroadcastArmed"];
     self.receiver=[Receiver new];__weak Controller *weak=self;
-    self.vpn=[LocalVPN new];self.vpn.status=^(NSString *message){[weak append:message];};
-    self.receiver.status=^(NSString *message){[weak append:message];};
+    self.vpn=[LocalVPN new];self.vpn.status=^(NSString *message){Controller *owner=weak;if([message hasPrefix:@"Built-in VPN failed"]||[message hasPrefix:@"VPN connection timed out"]||[message hasPrefix:@"VPN extension is missing"])owner.homeFailure=@"Couldn’t connect. Check the iOS VPN prompt or open Developer for details, then try Start again.";[owner append:message];};
+    self.receiver.status=^(NSString *message){Controller *owner=weak;if([message hasPrefix:@"Local HTTPS not started"])owner.homeFailure=@"The secure website connection is unavailable. Check Developer before continuing.";[owner append:message];};
     self.receiver.preview=^(CVPixelBufferRef pixel){[weak receivedPixel:pixel];};
     self.receiver.videoProfile=self.videoProfile.selectedSegmentIndex;
     self.session=[BackgroundSession new];
@@ -104,14 +119,90 @@ static void SLActivityFinish(void) {
         [owner append:@"BACKGROUND RUNTIME ENDED: receiver, viewer link and media session retained. iOS may suspend this app without PiP. Returning to ScreenLink resumes the existing receiver; Start is not required to rebuild it."];
         if(!owner.preview.active&&!owner.youtubePiP.active && UIApplication.sharedApplication.applicationState==UIApplicationStateBackground)[owner beginGrace];
     };
-    [self append:@"Version 0.20.22 / build 59: Recovers defunct Bonjour handles on foreground without restarting healthy AirPlay listeners or viewer authorization. Real-media PiP stall recovery is bounded and never reopens dismissed PiP. Video-only catch-up preserves the audio decoder and clock under delayed video decoding. Bounded playlist snapshots replace permanent registry exhaustion. Physical-device background endurance still requires testing. Retains build 57: The explicit Start YouTube + PiP button starts the receiver without recording and remembers a PiP request before AirPlay arrives. Open YouTube, select ScreenLink, and return once to ScreenLink to let real media prepare the movable PiP. No dummy video is generated. Retains the PiP controller across gaps between songs, pauses while the source is absent, and replaces actual media on a new epoch. Coexistence with YouTube AirPlay still needs physical-device verification. No fixed background duration is promised. Retains build 56: Connection request deadlines now cover response bodies as well as headers, preventing interrupted JSON responses from hanging automatic discovery and health polling. Cached-page restoration now restarts discovery; late approval replies cannot revive abandoned pages. Repeated YouTube Start preserves an already-running receiver. Background button no longer implies a reserved 30-minute grant. Auto source quality accepts lower resolutions up to 1080p. Viewer re-authenticates after sustained connection loss without interrupting healthy buffered playback, resets stale Maps state on a new connection, and supports authenticated hotspot peer changes. Adds elapsed-time background expiration diagnostics. YouTube-only starts the app-owned AirPlay receiver without ReplayKit recording. Removes the recording-based YouTube shortcut from build 52. Copy YouTube website link never opens recording. PiP stays optional and manual. The existing timed task is controlled by iOS and may end early; returning to ScreenLink resumes its receiver. No unlimited background runtime is promised. Maps screen broadcast remains a separate, explicitly labelled choice. Retains inline Tesla buttons, HD range downloads and in-place transport retries. Audio and Maps engines are unchanged."];
+    [self append:@"Version 0.20.23 / build 60: New client home and coordinated icon/cover; full technical controls remain in Developer. Disconnect All stops sharing, background tasks and only ScreenLink VPN, with confirmation and cancelled pending starts. Home Screen controls use explicit app-opening Start/Disconnect deep links. All extension identifiers are preserved. Retains build 59: Recovers defunct Bonjour handles on foreground without restarting healthy AirPlay listeners or viewer authorization. Real-media PiP stall recovery is bounded and never reopens dismissed PiP. Video-only catch-up preserves the audio decoder and clock under delayed video decoding. Bounded playlist snapshots replace permanent registry exhaustion. Physical-device background endurance still requires testing. Retains build 57: The explicit Start YouTube + PiP button starts the receiver without recording and remembers a PiP request before AirPlay arrives. Open YouTube, select ScreenLink, and return once to ScreenLink to let real media prepare the movable PiP. No dummy video is generated. Retains the PiP controller across gaps between songs, pauses while the source is absent, and replaces actual media on a new epoch. Coexistence with YouTube AirPlay still needs physical-device verification. No fixed background duration is promised. Retains build 56: Connection request deadlines now cover response bodies as well as headers, preventing interrupted JSON responses from hanging automatic discovery and health polling. Cached-page restoration now restarts discovery; late approval replies cannot revive abandoned pages. Repeated YouTube Start preserves an already-running receiver. Background button no longer implies a reserved 30-minute grant. Auto source quality accepts lower resolutions up to 1080p. Viewer re-authenticates after sustained connection loss without interrupting healthy buffered playback, resets stale Maps state on a new connection, and supports authenticated hotspot peer changes. Adds elapsed-time background expiration diagnostics. YouTube-only starts the app-owned AirPlay receiver without ReplayKit recording. Removes the recording-based YouTube shortcut from build 52. Copy YouTube website link never opens recording. PiP stays optional and manual. The existing timed task is controlled by iOS and may end early; returning to ScreenLink resumes its receiver. No unlimited background runtime is promised. Maps screen broadcast remains a separate, explicitly labelled choice. Retains inline Tesla buttons, HD range downloads and in-place transport retries. Audio and Maps engines are unchanged."];
     self.broadcastTimer=[NSTimer scheduledTimerWithTimeInterval:2 target:self selector:@selector(probeBroadcast) userInfo:nil repeats:YES];
     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(background) name:UIApplicationDidEnterBackgroundNotification object:nil];
     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(active) name:UIApplicationDidBecomeActiveNotification object:nil];
     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(foreground) name:UIApplicationWillEnterForegroundNotification object:nil];
+    [self buildHome];[self widgetDiagnostics];if(self.userDisconnected)[self disconnectAll];
+}
+- (void)ensurePolling {
+ if(!self.broadcastTimer)self.broadcastTimer=[NSTimer scheduledTimerWithTimeInterval:2 target:self selector:@selector(probeBroadcast) userInfo:nil repeats:YES];
+}
+- (BOOL)permitExplicitStart {
+ if(self.disconnectFlow.running||self.vpn.disconnecting){[self append:@"Disconnect is still in progress. Wait for confirmation before starting."];return NO;}
+ self.userDisconnected=NO;self.disconnectNeedsAttention=NO;self.homeFailure=nil;[NSUserDefaults.standardUserDefaults setBool:NO forKey:@"manualDisconnected"];[self ensurePolling];return YES;
+}
+- (void)buildHome {
+ self.previewIndex=[self.developerStack.arrangedSubviews indexOfObject:self.previewSlot];
+ UIButton *back=[UIButton buttonWithType:UIButtonTypeSystem];[back setTitle:@"‹ Home" forState:UIControlStateNormal];back.accessibilityIdentifier=@"developer.home";[back.heightAnchor constraintGreaterThanOrEqualToConstant:44].active=YES;[back addTarget:self action:@selector(showHome) forControlEvents:UIControlEventTouchUpInside];[self.developerStack insertArrangedSubview:back atIndex:0];self.previewIndex++;
+ self.dashboard=[ScreenLinkHomeView new];self.dashboard.translatesAutoresizingMaskIntoConstraints=NO;[self.view addSubview:self.dashboard];
+ [NSLayoutConstraint activateConstraints:@[[self.dashboard.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor],[self.dashboard.bottomAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.bottomAnchor],[self.dashboard.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],[self.dashboard.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor]]];
+ __weak Controller *weak=self;
+ self.dashboard.startAction=^{[weak startHome];};self.dashboard.disconnectAction=^{[weak disconnectAll];};self.dashboard.developerAction=^{[weak showDeveloper];};self.dashboard.copyAction=^{[weak youtubeOnlyWebsite];};
+ [self showHome];
+}
+- (void)showHome {
+ [self loadViewIfNeeded];self.developerScroll.hidden=YES;self.dashboard.hidden=NO;
+ [NSLayoutConstraint deactivateConstraints:self.previewConstraints?:@[]];[self.developerStack removeArrangedSubview:self.previewSlot];[self.previewSlot removeFromSuperview];
+ self.previewSlot.translatesAutoresizingMaskIntoConstraints=NO;[self.dashboard.previewHost addSubview:self.previewSlot];
+ self.previewConstraints=@[[self.previewSlot.topAnchor constraintEqualToAnchor:self.dashboard.previewHost.topAnchor],[self.previewSlot.bottomAnchor constraintEqualToAnchor:self.dashboard.previewHost.bottomAnchor],[self.previewSlot.leadingAnchor constraintEqualToAnchor:self.dashboard.previewHost.leadingAnchor],[self.previewSlot.trailingAnchor constraintEqualToAnchor:self.dashboard.previewHost.trailingAnchor]];[NSLayoutConstraint activateConstraints:self.previewConstraints];[self updateHome];
+}
+- (void)showDeveloper {
+ [NSLayoutConstraint deactivateConstraints:self.previewConstraints?:@[]];self.previewConstraints=nil;[self.previewSlot removeFromSuperview];[self.developerStack insertArrangedSubview:self.previewSlot atIndex:MIN(self.previewIndex,self.developerStack.arrangedSubviews.count)];
+ self.dashboard.hidden=YES;self.developerScroll.hidden=NO;
+}
+- (void)updateHome {
+ if(!self.dashboard)return;
+ BOOL busy=self.disconnectFlow.running||self.mediaOnlyRestarting;
+ NSString *status=@"Ready to connect",*detail=@"Turn on Personal Hotspot, then tap Start.";
+ BOOL sharing=self.receiver.isRunning||self.broadcastArmed;
+ if(self.disconnectFlow.running){status=@"Disconnecting…";detail=@"Stopping sharing and ScreenLink VPN. Please keep the app open.";}
+ else if(self.userDisconnected){status=self.disconnectNeedsAttention?@"Check disconnect status":@"Disconnected";detail=self.disconnectNeedsAttention?@"Sharing has stopped. VPN or screen broadcast could not be confirmed. Open Developer for details, or try Disconnect All again.":@"Sharing and ScreenLink VPN are off. Tap Start whenever you’re ready.";}
+ else if(self.homeFailure){status=@"Connection needs attention";detail=self.homeFailure;}
+ else if(self.mediaOnlyRestarting){status=@"Getting ready…";detail=@"Approve any iOS connection request to continue.";}
+ else if(self.broadcastArmed){status=@"Screen broadcast selected";detail=@"Manage this screen-sharing mode in Developer.";}
+ else if(self.youtubePiP.active){status=@"Floating video active";detail=@"Your floating video is active. Keep the viewer on your hotspot.";}
+ else if(self.receiver.isRunning){status=@"Ready for AirPlay";detail=@"Choose ScreenLink in YouTube’s AirPlay menu, then return here once to prepare PiP.";}
+ [self.dashboard showStatus:status detail:detail busy:busy sharing:sharing attention:self.disconnectNeedsAttention||self.homeFailure.length>0];
+}
+- (void)startHome {
+ if(![self permitExplicitStart])return;[self startYouTubePiP];[self updateHome];
+}
+- (void)stopOwnBroadcast:(NSUInteger)remaining completion:(void (^)(BOOL))completion {
+ NSMutableURLRequest *request=[NSMutableURLRequest requestWithURL:[NSURL URLWithString:@"http://127.0.0.1:8080/local/owner"]];request.timeoutInterval=1;request.cachePolicy=NSURLRequestReloadIgnoringLocalCacheData;[request setValue:@"app" forHTTPHeaderField:@"X-ScreenLink-Control"];
+ [[self.disconnectSession dataTaskWithRequest:request completionHandler:^(NSData *data,NSURLResponse *response,NSError *error){dispatch_async(dispatch_get_main_queue(),^{
+  if(!self.disconnectFlow.running)return;
+  if(error.code==NSURLErrorCannotConnectToHost){completion(YES);return;}
+  NSDictionary *owner=data.length?[NSJSONSerialization JSONObjectWithData:data options:0 error:NULL]:nil;
+  if(!error&&[(NSHTTPURLResponse *)response statusCode]==200&&[owner[@"broadcast"] boolValue]){
+   NSMutableURLRequest *stop=[NSMutableURLRequest requestWithURL:[NSURL URLWithString:@"http://127.0.0.1:8080/local/broadcast/stop"]];stop.HTTPMethod=@"POST";stop.timeoutInterval=1;[stop setValue:@"app" forHTTPHeaderField:@"X-ScreenLink-Control"];[[self.disconnectSession dataTaskWithRequest:stop] resume];
+  }
+  if(!remaining){[self append:@"DISCONNECT NOT CONFIRMED: screen broadcast listener still present or loopback check unavailable. Stop any active ScreenLink broadcast in Control Center."];completion(NO);return;}
+  dispatch_after(dispatch_time(DISPATCH_TIME_NOW,(int64_t)(.25*NSEC_PER_SEC)),dispatch_get_main_queue(),^{[self stopOwnBroadcast:remaining-1 completion:completion];});
+ });}] resume];
+}
+- (void)disconnectAll {
+ [self loadViewIfNeeded];if(self.disconnectFlow.running)return;
+ id delegate=UIApplication.sharedApplication.delegate;if([delegate respondsToSelector:@selector(cancelPendingWidgetAction)])[(id<SLPendingWidgetAPI>)delegate cancelPendingWidgetAction];
+ self.userDisconnected=YES;self.disconnectNeedsAttention=NO;self.homeFailure=nil;[NSUserDefaults.standardUserDefaults setBool:YES forKey:@"manualDisconnected"];
+ self.disconnectSession=[NSURLSession sessionWithConfiguration:NSURLSessionConfiguration.ephemeralSessionConfiguration];
+ [self.disconnectFlow runStopSources:^{
+  self.quickStartPending=NO;self.broadcastChecking=NO;[self stop];[self.broadcastTimer invalidate];self.broadcastTimer=nil;
+  self.networkProbe.delegate=nil;[self.networkProbe stop];self.networkProbe=nil;
+  [self dismissViewControllerAnimated:YES completion:nil];[self showHome];[self updateHome];
+ } broadcast:^(void(^reply)(BOOL)){[self stopOwnBroadcast:20 completion:reply];}
+ vpn:^(void(^reply)(BOOL)){[self.vpn disconnectWithCompletion:reply];}
+ completion:^(BOOL confirmed){
+  [self.disconnectSession invalidateAndCancel];self.disconnectSession=nil;
+  self.disconnectNeedsAttention=!confirmed;self.localViewerStatus.text=confirmed?@"Disconnected":@"Disconnect not fully confirmed";
+  [self append:confirmed?@"DISCONNECT ALL CONFIRMED: sharing, PiP, viewer sessions, background tasks and ScreenLink VPN stopped. Auto-resume is disabled; saved VPN configuration retained.":@"Sharing stopped; complete disconnect could not be confirmed. Check the VPN/broadcast status before starting again."];
+  [self updateHome];
+ }];
+ [self updateHome];
 }
 - (void)requestLocalNetwork {
-    if(self.networkProbe||UIApplication.sharedApplication.applicationState!=UIApplicationStateActive)return;
+    if(self.userDisconnected||self.networkProbe||UIApplication.sharedApplication.applicationState!=UIApplicationStateActive)return;
     self.networkProbe=[NSNetServiceBrowser new];self.networkProbe.delegate=self;
     [self.networkProbe searchForServicesOfType:@"_airplay._tcp." inDomain:@"local."];
     [self append:@"LOCAL NETWORK PREFLIGHT: allow ScreenLink Local Network access if iOS asks before leaving this app. A background broadcast extension cannot show that permission alert. This browse is not proof of Tesla connectivity."];
@@ -119,7 +210,7 @@ static void SLActivityFinish(void) {
 - (void)netServiceBrowser:(NSNetServiceBrowser *)browser didNotSearch:(NSDictionary<NSString *,NSNumber *> *)error {
     [self append:[NSString stringWithFormat:@"LOCAL NETWORK PREFLIGHT FAILED: %@. Check iPhone Settings → Privacy & Security → Local Network → ScreenLink. No permission grant is inferred.",error]];
 }
-- (void)append:(NSString *)s { self.text.text=[self.text.text stringByAppendingFormat:@"\n%@ %@\n",[NSDate date],s];if(self.text.text.length>24000)self.text.text=[self.text.text substringFromIndex:self.text.text.length-18000];[self.text scrollRangeToVisible:NSMakeRange(self.text.text.length,0)]; }
+- (void)append:(NSString *)s { if(!NSThread.isMainThread){dispatch_async(dispatch_get_main_queue(),^{[self append:s];});return;}[self updateHome];self.text.text=[self.text.text stringByAppendingFormat:@"\n%@ %@\n",[NSDate date],s];if(self.text.text.length>24000)self.text.text=[self.text.text substringFromIndex:self.text.text.length-18000];[self.text scrollRangeToVisible:NSMakeRange(self.text.text.length,0)]; }
 - (void)widgetDiagnostics {
  Class cls=NSClassFromString(@"SLWidgetActivity");
  if([cls respondsToSelector:@selector(widgetDiagnostics)])[self append:[(id<SLWidgetActivityAPI>)cls widgetDiagnostics]];
@@ -137,24 +228,18 @@ static void SLActivityFinish(void) {
  [self.youtubePiP updateState:state];
 }
 - (void)startYouTubePiP {
+ if(![self permitExplicitStart])return;
  if(!self.receiver.isRunning||!self.receiver.mediaOnly){[self startYouTubeNoRecordingWithPiP:YES];return;}
  self.youtubePiPRequested=YES;
  [self prepareYouTubePiP];
  if(!self.youtubePiP){[self append:@"Return to ScreenLink to prepare its PiP window. No recording starts."];return;}
  [self.youtubePiP startFloating];
 }
-- (void)startFromWidget {
- [self loadViewIfNeeded];
- if(self.receiver.isRunning&&self.receiver.mediaOnly){
-  [NSUserDefaults.standardUserDefaults setBool:YES forKey:@"resumeYouTubeOnReturn"];
-  [self resumeYouTubeOnReturn];
-  SLActivityStatus(self.session.active?(self.receiver.videoIsLive?@"PLAYING":@"READY"):@"Return to ScreenLink",self.session.active);
- } else [self startYouTubeNoRecording];
-}
+- (void)startFromWidget {[self loadViewIfNeeded];[self showHome];[self startHome];}
 - (void)startYouTubeNoRecording {[self startYouTubeNoRecordingWithPiP:NO];}
-- (void)startYouTubeNoRecordingWithPiP:(BOOL)requestPiP {if(self.mediaOnlyRestarting)return;if(self.receiver.isRunning&&self.receiver.mediaOnly){if(requestPiP){[self startYouTubePiP];return;}[NSUserDefaults.standardUserDefaults setBool:YES forKey:@"resumeYouTubeOnReturn"];[self resumeYouTubeOnReturn];[self append:@"YouTube receiver is already running. Keeping its AirPlay and viewer sessions; no recording or PiP is started."];return;}self.mediaOnlyRestarting=YES;NSUInteger generation=self.mediaStartGeneration;[self requestLocalNetwork];self.quickStartPending=NO;[self.vpn connectRouteProbe:^(BOOL ok){if(generation!=self.mediaStartGeneration||!self.mediaOnlyRestarting)return;if(!ok){self.mediaOnlyRestarting=NO;return;}[self stop];self.youtubePiPRequested=requestPiP;self.mediaOnlyRestarting=YES;[NSUserDefaults.standardUserDefaults setBool:YES forKey:@"resumeYouTubeOnReturn"];self.discoveryMode.selectedSegmentIndex=0;[self startMediaOnlyWhenFree:20 generation:self.mediaStartGeneration];}];}
+- (void)startYouTubeNoRecordingWithPiP:(BOOL)requestPiP {if(![self permitExplicitStart])return;if(self.mediaOnlyRestarting)return;if(self.receiver.isRunning&&self.receiver.mediaOnly){if(requestPiP){[self startYouTubePiP];return;}[NSUserDefaults.standardUserDefaults setBool:YES forKey:@"resumeYouTubeOnReturn"];[self resumeYouTubeOnReturn];[self append:@"YouTube receiver is already running. Keeping its AirPlay and viewer sessions; no recording or PiP is started."];return;}self.mediaOnlyRestarting=YES;NSUInteger generation=self.mediaStartGeneration;[self requestLocalNetwork];self.quickStartPending=NO;[self.vpn connectRouteProbe:^(BOOL ok){if(generation!=self.mediaStartGeneration||!self.mediaOnlyRestarting)return;if(!ok){self.mediaOnlyRestarting=NO;return;}[self stop];self.youtubePiPRequested=requestPiP;self.mediaOnlyRestarting=YES;[NSUserDefaults.standardUserDefaults setBool:YES forKey:@"resumeYouTubeOnReturn"];self.discoveryMode.selectedSegmentIndex=0;[self startMediaOnlyWhenFree:20 generation:self.mediaStartGeneration];}];}
 - (void)resumeYouTubeOnReturn {
- if(UIApplication.sharedApplication.applicationState!=UIApplicationStateActive||self.mediaOnlyRestarting||![NSUserDefaults.standardUserDefaults boolForKey:@"resumeYouTubeOnReturn"])return;
+ if(self.userDisconnected||self.disconnectFlow.running||UIApplication.sharedApplication.applicationState!=UIApplicationStateActive||self.mediaOnlyRestarting||![NSUserDefaults.standardUserDefaults boolForKey:@"resumeYouTubeOnReturn"])return;
  if(!self.receiver.isRunning||!self.receiver.mediaOnly){[self startYouTubeNoRecording];return;}
  [self.receiver refreshDiscovery];
  if((self.youtubePiP.active||self.session.active)&&self.vpn.connected)return;
@@ -169,8 +254,9 @@ static void SLActivityFinish(void) {
  });}] resume];
 }
 - (void)quickStart {
+ if(![self permitExplicitStart])return;NSUInteger generation=self.mediaStartGeneration;
  [self requestLocalNetwork];self.youtubePiPRequested=NO;[self.youtubePiP reset];[self.youtubePiP removeFromSuperview];self.youtubePiP=nil;
- [self.vpn connectRouteProbe:^(BOOL ok){if(!ok)return;self.quickStartPending=YES;self.broadcastYouTubeOnly=NO;[self prepareBroadcast];
+ [self.vpn connectRouteProbe:^(BOOL ok){if(!ok||generation!=self.mediaStartGeneration||self.userDisconnected)return;self.quickStartPending=YES;self.broadcastYouTubeOnly=NO;[self prepareBroadcast];
   for(UIView *view in self.broadcastPicker.subviews)if([view isKindOfClass:UIButton.class])[(UIButton *)view sendActionsForControlEvents:UIControlEventTouchUpInside];
  }];
 }
@@ -188,13 +274,14 @@ static void SLActivityFinish(void) {
 }
 - (void)refreshDiscovery { [self.receiver refreshDiscovery]; }
 - (void)prepareBroadcast {
+    if(![self permitExplicitStart])return;NSUInteger generation=self.mediaStartGeneration;
     if(@available(iOS 16.0,*)){}else{[self append:@"The screen broadcast encoder requires iOS 16 or later. Normal AirPlay remains available."];return;}
     NSString *identifier=nil;
     for(NSURL *url in [NSFileManager.defaultManager contentsOfDirectoryAtURL:NSBundle.mainBundle.builtInPlugInsURL includingPropertiesForKeys:nil options:0 error:nil]){NSBundle *bundle=[NSBundle bundleWithURL:url];if([bundle.infoDictionary[@"NSExtension"][@"NSExtensionPointIdentifier"] isEqual:@"com.apple.broadcast-services-upload"]){identifier=bundle.bundleIdentifier;break;}}
     if(!identifier){[self append:@"Screen broadcast extension is missing. Re-sign the full IPA keeping BOTH the VPN and screen broadcast extensions."];return;}
     if(self.broadcastArmed){self.broadcastPicker.preferredExtension=identifier;self.broadcastPicker.hidden=NO;[self probeBroadcast];[self append:@"Screen broadcast mode is already selected. Use the round system button to inspect or restart capture. Stop sharing exits this mode."];return;}
     self.discoveryMode.selectedSegmentIndex=0;
-    [self.vpn connect:^(BOOL ok){if(!ok)return;
+    [self.vpn connect:^(BOOL ok){if(!ok||generation!=self.mediaStartGeneration||self.userDisconnected)return;
         [self stop];self.broadcastArmed=YES;[NSUserDefaults.standardUserDefaults setBool:YES forKey:@"screenBroadcastArmed"];
         self.broadcastPicker.preferredExtension=identifier;self.broadcastPicker.hidden=NO;self.lastBroadcastLine=nil;
         [self append:@"Tap the round system broadcast button above, select ScreenLink Screen, then Start Broadcast. Wait for SCREEN BROADCAST ACTIVE, select ScreenLink VPN Phone in YouTube AirPlay, and open Google Maps. The website shows your whole current screen, including other apps if you switch. Keep the phone unlocked. Stop through Control Center or Stop sharing here. This mode hosts AirPlay and the viewer in the broadcast extension; simultaneous YouTube AirPlay still needs your iPhone test."];
@@ -202,12 +289,13 @@ static void SLActivityFinish(void) {
     }];
 }
 - (void)probeBroadcast {
+    [self updateHome];if(self.userDisconnected||self.disconnectFlow.running)return;NSUInteger generation=self.mediaStartGeneration;
     [self prepareYouTubePiP];
     if(self.receiver.mediaOnly&&self.receiver.isRunning)SLActivityStatus(self.youtubePiP.active?@"PLAYING · PiP":self.session.active?(self.receiver.videoIsLive?@"PLAYING":@"READY"):@"Return to ScreenLink",self.session.active||self.youtubePiP.active);
     if(!self.broadcastArmed||self.broadcastChecking||UIApplication.sharedApplication.applicationState!=UIApplicationStateActive)return;
     self.broadcastChecking=YES;NSMutableURLRequest *request=[NSMutableURLRequest requestWithURL:[NSURL URLWithString:@"http://127.0.0.1:8080/local/owner"]];[request setValue:@"app" forHTTPHeaderField:@"X-ScreenLink-Control"];request.timeoutInterval=2;request.cachePolicy=NSURLRequestReloadIgnoringLocalCacheData;
     [[NSURLSession.sharedSession dataTaskWithRequest:request completionHandler:^(NSData *data,NSURLResponse *response,NSError *error){dispatch_async(dispatch_get_main_queue(),^{
-        self.broadcastChecking=NO;if(!self.broadcastArmed||!data.length){self.localViewerRequestID=nil;self.localViewerApprove.enabled=NO;self.localViewerReject.enabled=NO;return;}NSDictionary *owner=[NSJSONSerialization JSONObjectWithData:data options:0 error:nil];if(![owner isKindOfClass:NSDictionary.class]||![owner[@"broadcast"] boolValue])return;
+        if(generation!=self.mediaStartGeneration||self.userDisconnected)return;self.broadcastChecking=NO;if(!self.broadcastArmed||!data.length){self.localViewerRequestID=nil;self.localViewerApprove.enabled=NO;self.localViewerReject.enabled=NO;return;}NSDictionary *owner=[NSJSONSerialization JSONObjectWithData:data options:0 error:nil];if(![owner isKindOfClass:NSDictionary.class]||![owner[@"broadcast"] boolValue])return;
         if(self.quickStartPending){self.quickStartPending=NO;[self localViewerDecision:@"automatic"];}
         NSDictionary *local=[owner[@"localViewer"] isKindOfClass:NSDictionary.class]?owner[@"localViewer"]:@{};BOOL pending=[local[@"phase"] isEqual:@"pending"];self.localViewerRequestID=pending?local[@"requestID"]:nil;self.localViewerApprove.enabled=pending;self.localViewerReject.enabled=pending;
         self.localViewerStatus.text=([owner[@"screenLocked"] boolValue]&&[local[@"automatic"] boolValue])?@"YOUTUBE READY · SCREEN LOCKED":[local[@"phase"] isEqual:@"approved"]?@"CONNECTED":([local[@"automatic"] boolValue]?@"READY":@"Start ScreenLink");
@@ -219,11 +307,13 @@ static void SLActivityFinish(void) {
 - (void)rejectLocalViewer { [self localViewerDecision:@"reject"]; }
 - (void)disconnectLocalViewer { [self localViewerDecision:@"disconnect"]; }
 - (void)localViewerDecision:(NSString *)action {
+    if(self.userDisconnected)return;NSUInteger generation=self.mediaStartGeneration;
     if(!self.broadcastArmed){[self append:@"Start the system screen broadcast before connecting a local alias viewer."];return;}
     if(![action isEqual:@"disconnect"]&&![action isEqual:@"automatic"]&&!self.localViewerRequestID.length)return;
     NSMutableURLRequest *request=[NSMutableURLRequest requestWithURL:[NSURL URLWithString:@"http://127.0.0.1:8080/local/viewer/decision"]];request.HTTPMethod=@"POST";request.timeoutInterval=2;[request setValue:@"app" forHTTPHeaderField:@"X-ScreenLink-Control"];[request setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];request.HTTPBody=[NSJSONSerialization dataWithJSONObject:@{@"action":action,@"requestID":self.localViewerRequestID?:@"",@"youtubeOnly":@(self.broadcastYouTubeOnly)} options:0 error:nil];
     self.localViewerApprove.enabled=NO;self.localViewerReject.enabled=NO;
     [[NSURLSession.sharedSession dataTaskWithRequest:request completionHandler:^(NSData *data,NSURLResponse *response,NSError *error){dispatch_async(dispatch_get_main_queue(),^{
+        if(generation!=self.mediaStartGeneration||self.userDisconnected)return;
         if(error||[(NSHTTPURLResponse *)response statusCode]!=200)[self append:@"Local viewer decision was not confirmed. Keep phone screen hidden and retry after status refresh."];
         if([action isEqual:@"automatic"]&&!error&&[(NSHTTPURLResponse *)response statusCode]==200)self.localViewerStatus.text=self.broadcastYouTubeOnly?@"YOUTUBE READY · SCREEN LOCKED":@"READY";else [self probeBroadcast];
     });}] resume];
@@ -234,25 +324,28 @@ static void SLActivityFinish(void) {
     self.broadcastArmed=NO;self.broadcastPicker.hidden=YES;self.broadcastToken=nil;[NSUserDefaults.standardUserDefaults setBool:NO forKey:@"screenBroadcastArmed"];
 }
 - (void)startRouteProbe {
-    [self.vpn connectRouteProbe:^(BOOL ok){if(!ok)return;
+    if(![self permitExplicitStart])return;NSUInteger generation=self.mediaStartGeneration;
+    [self.vpn connectRouteProbe:^(BOOL ok){if(!ok||generation!=self.mediaStartGeneration||self.userDisconnected)return;
         [self prepareBroadcast];
         [self append:@"ROUTING EXPERIMENT ONLY: start the system screen broadcast so the local server stays available. No website pairing or YouTube needed. While parked, try the FULL URLs http://172.20.10.1:8080/local-route-probe and http://240.3.3.3:8080/local-route-probe in Tesla. A success page proves TCP reached this phone; failure does not identify browser policy by itself. Copy the test log and Route probe status. Disconnect VPN, then reconnect normally to remove the alias."];
     }];
 }
 - (void)routeProbeStatus { [self.vpn routeProbeStatus]; }
-- (void)connectVPN { [self.vpn connect:nil]; }
+- (void)connectVPN {if([self permitExplicitStart])[self.vpn connect:nil];}
 - (void)disconnectVPN { [self.vpn disconnect]; }
 - (void)withVPN:(void (^)(void))ready {
+    NSUInteger generation=self.mediaStartGeneration;
     if(2-self.discoveryMode.selectedSegmentIndex!=SLDiscoveryPhoneVPN || self.vpn.connected){ready();return;}
-    [self.vpn connect:^(BOOL ok){if(ok)ready();}];
+    [self.vpn connect:^(BOOL ok){if(ok&&generation==self.mediaStartGeneration&&!self.userDisconnected)ready();}];
 }
-- (void)start { if(self.broadcastArmed){[self probeBroadcast];[self append:@"Screen broadcast mode is selected. Start it using the system broadcast button; Stop sharing exits this mode before starting the normal receiver."];return;} [self withVPN:^{[self startReceiver];}]; }
+- (void)start {if(![self permitExplicitStart])return; if(self.broadcastArmed){[self probeBroadcast];[self append:@"Screen broadcast mode is selected. Start it using the system broadcast button; Stop sharing exits this mode before starting the normal receiver."];return;} [self withVPN:^{[self startReceiver];}]; }
 - (void)startReceiver {
     if(!self.receiver.isRunning)self.receiver.discoveryMode=2-self.discoveryMode.selectedSegmentIndex;
     if([self.receiver start]){[NSUserDefaults.standardUserDefaults setBool:YES forKey:@"receiverArmed"];UIApplication.sharedApplication.idleTimerDisabled=YES;[self links];}
 }
 - (void)stop {self.youtubePiPRequested=NO;[self.youtubePiP reset];[self.youtubePiP removeFromSuperview];self.youtubePiP=nil;SLActivityFinish();self.mediaStartGeneration++;self.mediaOnlyRestarting=NO;[NSUserDefaults.standardUserDefaults setBool:NO forKey:@"resumeYouTubeOnReturn"]; [self stopBroadcast]; [NSUserDefaults.standardUserDefaults setBool:NO forKey:@"receiverArmed"];[self.session finish];[self endGrace];[self.receiver stop];[self.preview reset];[self.preview removeFromSuperview];self.preview=nil;if(_lastPixel){CVPixelBufferRelease(_lastPixel);_lastPixel=NULL;}UIApplication.sharedApplication.idleTimerDisabled=NO;[self append:@"Stopped. Video frames cleared."]; }
 - (void)startMedia {
+    if(![self permitExplicitStart])return;
     if(self.broadcastArmed){[self probeBroadcast];[self append:@"In screen broadcast mode, select ScreenLink VPN Phone inside YouTube AirPlay, then open Google Maps. The extension owns the receiver; no timed task or floating preview is needed for the main app. Verify both streams on your iPhone."];return;}
     [self withVPN:^{[self startMediaReady];}];
 }
@@ -262,15 +355,18 @@ static void SLActivityFinish(void) {
     [self append:@"NATIVE VIDEO TEST: open the fixed hotspot link on your Mac. Then switch to YouTube on iPhone, tap Cast → AirPlay & Bluetooth devices → ScreenLink VPN Phone. Do not start Control Center Screen Mirroring. Browser playback includes audio; press Play with sound on the Mac. A timed background session must be active before leaving ScreenLink. Native YouTube compatibility needs a device test."];
 }
 - (void)startSession {
+    if(![self permitExplicitStart])return;
     self.session.allowWaitingForVideo=NO;
     if(!self.receiver.videoIsLive){[self append:@"The AirPlay video connection is not live yet. Reconnect ScreenLink VPN Phone in Screen Mirroring and wait for at least 10 fresh frames before starting the background test."];return;}
     [self.session start];
 }
 - (void)receivedPixel:(CVPixelBufferRef)pixel {
+    if(self.userDisconnected||!self.receiver.isRunning)return;
     CVPixelBufferRetain(pixel);if(_lastPixel)CVPixelBufferRelease(_lastPixel);_lastPixel=pixel;
     [self.preview receivePixelBuffer:pixel];
 }
 - (void)startFloating {
+    if(![self permitExplicitStart])return;
     if(!self.receiver.isRunning || !_lastPixel){[self append:@"Connect AirPlay first and wait for actual video received. Then return here and start floating preview."];return;}
     if(!self.preview){
         self.preview=[[FloatingPreview alloc]initWithFrame:CGRectZero];self.preview.translatesAutoresizingMaskIntoConstraints=NO;
@@ -340,6 +436,7 @@ static void SLActivityFinish(void) {
     else {[self append:@"Floating preview is not active. Only a short background grace is available. Return and start floating preview before switching apps."];[self beginGrace];}
 }
 - (void)active {
+    [self updateHome];if(self.userDisconnected||self.disconnectFlow.running)return;
     [self requestLocalNetwork];
     [self prepareYouTubePiP];
     if(![NSUserDefaults.standardUserDefaults boolForKey:@"widgetChecked51"]){[NSUserDefaults.standardUserDefaults setBool:YES forKey:@"widgetChecked51"];[self widgetDiagnostics];}
@@ -353,25 +450,30 @@ static void SLActivityFinish(void) {
 @end
 @interface AppDelegate : UIResponder <UIApplicationDelegate>
 @property(nonatomic,strong) UIWindow *window;
-@property(nonatomic) BOOL pendingWidgetStart;
+@property(nonatomic) SLWidgetRoute pendingWidgetAction;
+@property(nonatomic) NSUInteger widgetGeneration;
 @end
 @implementation AppDelegate
 - (BOOL)application:(UIApplication *)app didFinishLaunchingWithOptions:(NSDictionary *)options {
-    self.window=[[UIWindow alloc]initWithFrame:UIScreen.mainScreen.bounds];self.window.rootViewController=[Controller new];[self.window makeKeyAndVisible];NSURL *url=options[UIApplicationLaunchOptionsURLKey];if([self isWidgetURL:url])self.pendingWidgetStart=YES;return YES;
+ self.window=[[UIWindow alloc]initWithFrame:UIScreen.mainScreen.bounds];self.window.rootViewController=[Controller new];[self.window makeKeyAndVisible];self.pendingWidgetAction=SLRouteForURL(options[UIApplicationLaunchOptionsURLKey]);return YES;
 }
-- (BOOL)isWidgetURL:(NSURL *)url {return [url.scheme.lowercaseString isEqual:@"screenlink"]&&([url.host isEqual:@"start-youtube"]||[url.host isEqual:@"resume"]);}
+- (void)cancelPendingWidgetAction {self.widgetGeneration++;self.pendingWidgetAction=SLWidgetRouteNone;}
 - (BOOL)application:(UIApplication *)app openURL:(NSURL *)url options:(NSDictionary<UIApplicationOpenURLOptionsKey,id> *)options {
- if(![self isWidgetURL:url])return NO;
- self.pendingWidgetStart=YES;
- if(app.applicationState==UIApplicationStateActive)[self consumeWidgetStart];
- return YES;
+ SLWidgetRoute action=SLRouteForURL(url);if(action==SLWidgetRouteNone)return NO;
+ self.widgetGeneration++;self.pendingWidgetAction=action;
+ if(app.applicationState==UIApplicationStateActive)[self consumeWidgetStart];return YES;
 }
 - (void)applicationDidBecomeActive:(UIApplication *)application {[self consumeWidgetStart];}
 - (void)consumeWidgetStart {
- if(!self.pendingWidgetStart)return;
- self.pendingWidgetStart=NO;
- [(Controller *)self.window.rootViewController startFromWidget];
+ if(self.pendingWidgetAction==SLWidgetRouteNone)return;
+ Controller *owner=(Controller *)self.window.rootViewController;[owner loadViewIfNeeded];[owner showHome];
+ if(owner.disconnectFlow.running&&self.pendingWidgetAction==SLWidgetRouteStart){
+  NSUInteger generation=self.widgetGeneration;dispatch_after(dispatch_time(DISPATCH_TIME_NOW,(int64_t)(.25*NSEC_PER_SEC)),dispatch_get_main_queue(),^{if(generation==self.widgetGeneration)[self consumeWidgetStart];});return;
+ }
+ SLWidgetRoute action=self.pendingWidgetAction;self.pendingWidgetAction=SLWidgetRouteNone;
+ if(action==SLWidgetRouteDisconnect)[owner disconnectAll];
+ else if(action==SLWidgetRouteStart)[owner startFromWidget];
+ else [owner resumeYouTubeOnReturn];
 }
 @end
 int main(int argc,char **argv){@autoreleasepool{return UIApplicationMain(argc,argv,nil,NSStringFromClass(AppDelegate.class));}}
-

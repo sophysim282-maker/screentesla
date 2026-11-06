@@ -12,6 +12,15 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+      - name: Disconnect orchestration, VPN cancellation and widget routes
+        run: |
+          mkdir -p build
+          xcrun --sdk macosx clang -fobjc-arc -fblocks -IApp tools/test_disconnect_flow.m App/SLDisconnectFlow.m -framework Foundation -o build/test-disconnect-flow
+          build/test-disconnect-flow
+          xcrun --sdk macosx clang -fobjc-arc -fblocks -Itools/vpn-fixture -IApp tools/test_vpn_teardown.m App/LocalVPN.m -framework Foundation -o build/test-vpn-teardown
+          build/test-vpn-teardown
+          xcrun --sdk macosx clang -fobjc-arc -IShared tools/test_widget_routes.m -framework Foundation -o build/test-widget-routes
+          build/test-widget-routes
       - name: Discovery daemon lifecycle with injected DNS callbacks
         run: |
           mkdir -p build
@@ -45,8 +54,74 @@ jobs:
           ffmpeg -v error -f lavfi -i testsrc2=size=1920x1080:rate=30 -f lavfi -i sine=frequency=440:sample_rate=48000 -t 20 -c:v libx264 -preset ultrafast -g 30 -bf 2 -c:a aac -hls_time 2 -hls_playlist_type vod -hls_segment_filename build/stress/part%02d.ts build/stress/master.m3u8
           node --require ./tools/test_browser_engine.cjs tools/test_video_recovery.cjs App build/stress
           node --require ./tools/test_browser_engine.cjs tools/test_cache_migration.cjs App
+  dashboard:
+    runs-on: macos-15-intel
+    timeout-minutes: 25
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Render original cover and icon
+        run: |
+          mkdir -p build
+          swift tools/render_brand.swift
+          brew install xcodegen
+          xcodegen generate --spec tools/ui-preview.yml --project tools
+      - name: Boot iPhone simulator and test actual dashboard component and widget gallery
+        run: |
+          set -euo pipefail
+          simulator_id="$(xcrun simctl list devices available -j | python3 -c 'import json,sys;d=json.load(sys.stdin);print(next(x["udid"] for rows in d["devices"].values() for x in rows if x["name"].startswith("iPhone")))')"
+          xcrun simctl boot "$simulator_id" || true
+          xcrun simctl bootstatus "$simulator_id" -b
+          xcodebuild -project tools/ScreenLinkPreview.xcodeproj -scheme ScreenLinkPreview -destination "platform=iOS Simulator,id=$simulator_id" -derivedDataPath build/PreviewDerived -resultBundlePath build/Preview.xcresult CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO test | tee build/dashboard-ui.log
+      - name: Export visual previews
+        if: always()
+        run: |
+          mkdir -p build/previews build/preview-attachments
+          cp build/ScreenLink-icon-preview.png build/ScreenLink-cover-preview.png build/previews/ || true
+          if [[ -d build/Preview.xcresult ]]; then
+            xcrun xcresulttool export attachments --path build/Preview.xcresult --output-path build/preview-attachments
+            python3 - <<'PY'
+          import pathlib,shutil,json
+          root=pathlib.Path('build/preview-attachments')
+          for file in root.rglob('*.png'):shutil.copy2(file,pathlib.Path('build/previews')/file.name)
+          for file in root.rglob('*.json'):
+              if file.stat().st_size<200000:print(file.read_text())
+          PY
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ScreenLink-build60-visual-previews
+          path: |
+            build/previews
+            build/preview-attachments
+            build/dashboard-ui.log
+          retention-days: 7
+      - name: Publish non-sensitive simulator and brand previews for review
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import base64,json,pathlib,subprocess,os
+          repo=os.environ['GITHUB_REPOSITORY'];sha=os.environ['GITHUB_SHA']
+          def api(path,data):
+              r=subprocess.run(['gh','api','--method','POST','repos/'+repo+'/'+path,'--input','-'],input=json.dumps(data),text=True,capture_output=True,check=True)
+              return json.loads(r.stdout)
+          entries=[]
+          for file in pathlib.Path('build/previews').glob('*.png'):
+              b=api('git/blobs',{'content':base64.b64encode(file.read_bytes()).decode(),'encoding':'base64'})
+              entries.append({'path':file.name,'mode':'100644','type':'blob','sha':b['sha']})
+          text='ScreenLink build60 visual previews. Original source '+sha+'. Dashboard screenshots use the real shared UIKit component in an isolated simulator harness; displayed connection state is a test fixture, not a phone connection. Widget gallery status is in the Actions UI log.'
+          b=api('git/blobs',{'content':text,'encoding':'utf-8'});entries.append({'path':'README.md','mode':'100644','type':'blob','sha':b['sha']})
+          tree=api('git/trees',{'tree':entries});commit=api('git/commits',{'message':'Build60 UI and brand previews for '+sha,'tree':tree['sha']})
+          ref='previews/build60-'+sha[:12]+'-'+os.environ['GITHUB_RUN_ID']
+          api('git/refs',{'ref':'refs/heads/'+ref,'sha':commit['sha']})
+          print('PREVIEW_BRANCH='+ref)
+          PY
   build:
-    needs: [recovery, video-recovery]
+    needs: [recovery, video-recovery, dashboard]
     runs-on: macos-15-intel
     timeout-minutes: 35
     steps:
@@ -78,7 +153,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ScreenLink-0.20.22-build59-GENERIC-NO-HTTPS
+          name: ScreenLink-0.20.23-build60-GENERIC-NO-HTTPS
           path: |
             build/*.ipa
             build/xcodebuild.log
