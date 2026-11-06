@@ -128,9 +128,38 @@ class CanvasPlayer {
   this.quality=quality;this.offeredHeights=[];this.selectedHeight=0;this.onerror=onerror;this.paused=true;this.muted=true;this.duration=0;this.readyState=0;this.ended=false;this.error=null;this.closed=false;
   this.frames=[];this.audio=[];this.nodes=new Set();this.timelines=new Map();this.segmentDiagnostics=[];this.segmentCache=new Map();this.playbackEvents=[];this.audioEnd=0;this.lastAudioSampleRate=0;this.hasAudio=false;this.videoStarved=false;this.position=0;this.videoEnd=0;this.anchor=0;this.running=false;this.serial=0;this.videoNeedsKey=false;this.videoRecoveryAt=-Infinity;this.lastVideoDrawAt=performance.now();this.videoGeneration=0;this.videoRecoveryWindow=0;this.videoRecoveryCount=0;this.videoRetryAfter=0;this.decoders=new Map();this.configs=new Map();this.initializers=new Map();
   this.stats={drawn:0,dropped:0,decoded:0,audioDecoded:0,maxFrames:0,maxAudio:0,audioScheduled:0,audioLate:0,audioJoined:0,audioRestored:0,bufferWaitMs:0,rebufferCount:0,timestampResets:0,directAudioCopies:0,audioGapMs:0,maxAudioNodes:0,videoHiccups:0,audioUnderruns:0,staleAudioDropped:0,maxSegmentCache:0,audioDecoderFlushes:0,videoRecoveries:0,staleVideoDropped:0,videoQueueTimeouts:0};
+  this.profileStart=performance.now();this.profileBuckets=[];this.profileEvents=[];this.lastProfilePaintAt=0;
+  this.profileDocument=self.document||null;this.profileVisibilityReset=()=>{this.lastProfilePaintAt=0;};
+  this.profileDocument?.addEventListener?.('visibilitychange',this.profileVisibilityReset);
   this.animation=requestAnimationFrame(()=>this.paint());
   // Audio look-ahead must not depend on Canvas animation callbacks.
   this.audioTimer=setInterval(()=>{if(!this.closed&&!this.paused&&this.running){try{this.scheduleAudio(this.currentTime);this.checkVideoProgress();}catch(error){this.fail(error);}}},20);
+ }
+ profileMetric(name,value,detail={}){
+  if(this.closed||!Number.isFinite(value)||value<0)return;
+  const at=performance.now(),slot=Math.floor(at/5000);
+  let bucket=this.profileBuckets[this.profileBuckets.length-1];
+  if(!bucket||bucket.slot!==slot){bucket={slot,metrics:{}};this.profileBuckets.push(bucket);if(this.profileBuckets.length>12)this.profileBuckets.shift();}
+  const metric=bucket.metrics[name]||(bucket.metrics[name]={count:0,total:0,max:0,maxAtMs:0,mediaTime:0});
+  metric.count++;metric.total+=value;
+  if(value>=metric.max){metric.max=value;metric.maxAtMs=at-this.profileStart;metric.mediaTime=this.currentTime;}
+  // Bounded event history correlates slow work; thresholds select detail only,
+  // and are not claims that a particular duration causes a playback failure.
+  if(name==='demuxMs'||(name==='decoderWaitMs'&&value>=10)||(name==='renderCallbackGapMs'&&value>=80)||(name==='canvasDrawMs'&&value>=16)){
+   this.profileEvents.push({metric:name,value,atMs:at-this.profileStart,mediaTime:this.currentTime,...detail});
+   if(this.profileEvents.length>60)this.profileEvents.shift();
+  }
+ }
+ performanceProfile(){
+  const now=performance.now(),metrics={};
+  for(const bucket of this.profileBuckets){if((bucket.slot+1)*5000<=now-60000)continue;for(const [name,m] of Object.entries(bucket.metrics)){
+   const out=metrics[name]||(metrics[name]={count:0,total:0,max:0,maxAtMs:0,mediaTime:0});out.count+=m.count;out.total+=m.total;
+   if(m.max>=out.max){out.max=m.max;out.maxAtMs=m.maxAtMs;out.mediaTime=m.mediaTime;}
+  }}
+  for(const m of Object.values(metrics)){m.mean=m.total/m.count;delete m.total;}
+  return {windowSeconds:60,elapsedMs:now-this.profileStart,visibility:this.profileDocument?.visibilityState||'unknown',metrics,
+   videoQueueDepth:this.decoders.get('video')?.decodeQueueSize||0,framesQueued:this.frames.length,
+   events:this.profileEvents.filter(e=>e.atMs>=now-this.profileStart-60000).map(e=>({...e}))};
  }
  clock(){return this.audioContext?.state==='running'?this.audioContext.currentTime:performance.now()/1000;}
  audible(){return !this.muted&&this.hasAudio&&this.audioContext?.state==='running';}
@@ -260,7 +289,9 @@ class CanvasPlayer {
  }
  async decodeSegment(segment,kind,serial,prepared=null,allowEmpty=false){
   const {init,bytes,fetchMs=0}=prepared||await this.prepareSegment(segment,serial);if(serial!==this.serial||this.closed)return;
-  const demuxStart=performance.now();let extracted;try{if(prepared?.samples)extracted=prepared.samples;else{extracted=demux(bytes,init);if(prepared)prepared.samples=extracted;}}catch(error){throw Error('HLS '+kind+' segment at '+segment.start.toFixed(2)+'s: '+error.message);}
+  const demuxStart=performance.now(),reusedDemux=!!prepared?.samples;let extracted;try{if(prepared?.samples)extracted=prepared.samples;else{extracted=demux(bytes,init);if(prepared)prepared.samples=extracted;}}catch(error){throw Error('HLS '+kind+' segment at '+segment.start.toFixed(2)+'s: '+error.message);}
+  const demuxMs=performance.now()-demuxStart;if(!reusedDemux)this.profileMetric('demuxMs',demuxMs,{segmentStart:segment.start,bytes:bytes.length});
+
   const samples=extracted.filter(s=>s.track&&(kind==='all'||(kind==='audio'?!!s.track.audio:!!s.track.video))).sort((a,b)=>(a.dts??a.cts)/a.timescale-(b.dts??b.cts)/b.timescale);
   if(!samples.length){if(allowEmpty)return;throw Error('Selected HLS track has no samples');}
   // Preserve inter-track offsets; normalize each fragment onto its playlist timeline.
@@ -276,7 +307,7 @@ class CanvasPlayer {
   // HLS segments must keep the same decoder overlap/filter-bank state.
   if(segment.discontinuity&&(kind==='audio'||kind==='all'))this.configs.delete('audio');
   const mapping=timeline.offset;
-  const diagnostic={audioTiming:extracted.packedAudio?(packedFallback?'sample-count':'id3-pts'):'container-pts',mappedEnd:timeline.end,fetchMs,demuxMs:performance.now()-demuxStart,kind,start:segment.start,duration:segment.duration,sourceStart:origin,mappedStart:origin+mapping,reset:!!reset,video:0,audio:0};
+  const diagnostic={audioTiming:extracted.packedAudio?(packedFallback?'sample-count':'id3-pts'):'container-pts',mappedEnd:timeline.end,fetchMs,demuxMs,kind,start:segment.start,duration:segment.duration,sourceStart:origin,mappedStart:origin+mapping,reset:!!reset,video:0,audio:0};
   for(const sample of samples)diagnostic[sample.track.video?'video':'audio']++;
   this.segmentDiagnostics.push(diagnostic);if(this.segmentDiagnostics.length>8)this.segmentDiagnostics.shift();
   // Audio must keep filling its look-ahead while video waits for Canvas space.
@@ -310,7 +341,8 @@ class CanvasPlayer {
    }
    try{decoder.decode(new Chunk({type:type==='audio'||sample.is_sync?'key':'delta',timestamp,duration,data:sample.data}));}
    catch(error){if(type==='video'&&this.audible()&&this.running){this.resetVideo('decode-error');continue;}throw error;}
-   const queuedAt=performance.now();
+   const queuedAt=performance.now(),queueBefore=decoder.decodeQueueSize;
+   if(type==='video')this.profileMetric('videoQueueDepth',queueBefore);
    while(decoder.state==='configured'&&decoder.decodeQueueSize>12){
     if(serial!==this.serial||this.closed)return;
     if(type==='video'&&this.audible()&&this.running&&performance.now()-queuedAt>1500){
@@ -318,6 +350,7 @@ class CanvasPlayer {
     }
     await sleep(5);
    }
+   if(type==='video'&&queueBefore>12)this.profileMetric('decoderWaitMs',performance.now()-queuedAt,{queueBefore});
   }
   };
   await Promise.all([consume(samples.filter(s=>s.track.video)),consume(samples.filter(s=>s.track.audio))]);
@@ -429,6 +462,9 @@ class CanvasPlayer {
  recordPlayback(type,position){this.playbackEvents.push({type,position,audioLead:this.audioContext&&this.audioTail!==null?Math.max(0,this.audioTail-this.audioContext.currentTime):0,videoLead:Math.max(0,this.videoEnd-position)});if(this.playbackEvents.length>12)this.playbackEvents.shift();}
  paint(){
   if(this.closed)return;
+  const profileNow=performance.now(),visible=this.profileDocument?.visibilityState!=='hidden';
+  if(!this.paused&&this.running&&visible&&this.lastProfilePaintAt)this.profileMetric('renderCallbackGapMs',profileNow-this.lastProfilePaintAt);
+  this.lastProfilePaintAt=visible?profileNow:0;
   if(!this.paused){
    if(this.canStart()&&!this.running)this.startClock();
    const now=this.currentTime,raw=this.position+this.clock()-this.anchor,end=this.mediaEnd();
@@ -436,7 +472,7 @@ class CanvasPlayer {
    const held=this.running&&this.audible()&&raw>this.videoEnd+.05;
    if(held&&!this.videoStarved){this.stats.videoHiccups++;this.recordPlayback('video-hold-audio-continues',now);}this.videoStarved=held;let frame=null;
    while(this.frames.length&&this.frames[0].timestamp/1e6<=now+0.015){if(frame){frame.close();this.stats.dropped++;}frame=this.frames.shift();}
-   if(frame){try{if(this.canvas.width!==frame.displayWidth||this.canvas.height!==frame.displayHeight){this.canvas.width=frame.displayWidth;this.canvas.height=frame.displayHeight;}this.ctx.drawImage(frame,0,0,this.canvas.width,this.canvas.height);this.stats.drawn++;this.lastVideoDrawAt=performance.now();}catch(error){this.fail(error);}finally{frame.close();}}
+   if(frame){try{if(this.canvas.width!==frame.displayWidth||this.canvas.height!==frame.displayHeight){this.canvas.width=frame.displayWidth;this.canvas.height=frame.displayHeight;}const drawStart=performance.now();this.ctx.drawImage(frame,0,0,this.canvas.width,this.canvas.height);this.profileMetric('canvasDrawMs',performance.now()-drawStart);this.stats.drawn++;this.lastVideoDrawAt=performance.now();}catch(error){this.fail(error);}finally{frame.close();}}
    this.scheduleAudio(now);
    if(this.finished&&now>=this.duration-0.02){this.pause();this.position=this.duration;this.ended=true;}
   }
@@ -447,7 +483,7 @@ class CanvasPlayer {
   for(const decoder of this.decoders.values())if(decoder.state!=='closed')decoder.close();this.decoders.clear();this.configs.clear();
   this.stopAudio();this.segmentCache.clear();
  }
- destroy(){if(this.closed)return;this.closed=true;this.serial++;this.abort?.abort();cancelAnimationFrame(this.animation);clearInterval(this.audioTimer);this.release();this.initializers.clear();const cleanup=()=>{if(this.ownsAudioContext)this.audioContext?.close();else{this.gain?.disconnect();this.low?.disconnect();this.high?.disconnect();}};if(this.gain&&this.audioContext?.state==='running')setTimeout(cleanup,12);else cleanup();}
+ destroy(){if(this.closed)return;this.profileDocument?.removeEventListener?.('visibilitychange',this.profileVisibilityReset);this.closed=true;this.serial++;this.abort?.abort();cancelAnimationFrame(this.animation);clearInterval(this.audioTimer);this.release();this.initializers.clear();const cleanup=()=>{if(this.ownsAudioContext)this.audioContext?.close();else{this.gain?.disconnect();this.low?.disconnect();this.high?.disconnect();}};if(this.gain&&this.audioContext?.state==='running')setTimeout(cleanup,12);else cleanup();}
 }
 self.ScreenLinkCanvas={CanvasPlayer,playlist,demux,chooseVariant};
 })();
