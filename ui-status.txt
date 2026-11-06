@@ -1,25 +1,5 @@
 Source 9385894b358ffad1d76c9f12eeed4839636c3c8c
-e_16.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/lipo /Applications/Xcode_16.4.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/Xcode/Agents/XCTRunner.app/XCTRunner -output /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Products/Debug-iphonesimulator/ScreenLinkDashboardUITests-Runner.app/ScreenLinkDashboardUITests-Runner -extract arm64
-
-Copy /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Products/Debug-iphonesimulator/ScreenLinkDashboardUITests-Runner.app/PkgInfo /Applications/Xcode_16.4.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/Xcode/Agents/XCTRunner.app/PkgInfo (in target 'ScreenLinkDashboardUITests' from project 'ScreenLinkPreview')
-    cd /Users/runner/work/screentesla/screentesla/tools
-    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -resolve-src-symlinks /Applications/Xcode_16.4.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/Xcode/Agents/XCTRunner.app/PkgInfo /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Products/Debug-iphonesimulator/ScreenLinkDashboardUITests-Runner.app
-
-Copy /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Products/Debug-iphonesimulator/ScreenLinkDashboardUITests-Runner.app/Frameworks/libXCTestSwiftSupport.dylib /Applications/Xcode_16.4.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/usr/lib/libXCTestSwiftSupport.dylib (in target 'ScreenLinkDashboardUITests' from project 'ScreenLinkPreview')
-    cd /Users/runner/work/screentesla/screentesla/tools
-    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -exclude Headers -exclude PrivateHeaders -exclude Modules -exclude \*.tbd -resolve-src-symlinks /Applications/Xcode_16.4.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/usr/lib/libXCTestSwiftSupport.dylib /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Products/Debug-iphonesimulator/ScreenLinkDashboardUITests-Runner.app/Frameworks
-
-Copy /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Products/Debug-iphonesimulator/ScreenLinkDashboardUITests-Runner.app/Frameworks/XCUnit.framework /Applications/Xcode_16.4.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/PrivateFrameworks/XCUnit.framework (in target 'ScreenLinkDashboardUITests' from project 'ScreenLinkPreview')
-    cd /Users/runner/work/screentesla/screentesla/tools
-    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -exclude Headers -exclude PrivateHeaders -exclude Modules -exclude \*.tbd -resolve-src-symlinks /Applications/Xcode_16.4.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/PrivateFrameworks/XCUnit.framework /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Products/Debug-iphonesimulator/ScreenLinkDashboardUITests-Runner.app/Frameworks
-
-Copy /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Products/Debug-iphonesimulator/ScreenLinkDashboardUITests-Runner.app/Frameworks/XCUIAutomation.framework /Applications/Xcode_16.4.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/Frameworks/XCUIAutomation.framework (in target 'ScreenLinkDashboardUITests' from project 'ScreenLinkPreview')
-    cd /Users/runner/work/screentesla/screentesla/tools
-    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -exclude Headers -exclude PrivateHeaders -exclude Modules -exclude \*.tbd -resolve-src-symlinks /Applications/Xcode_16.4.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/Frameworks/XCUIAutomation.framework /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Products/Debug-iphonesimulator/ScreenLinkDashboardUITests-Runner.app/Frameworks
-
-Copy /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Products/Debug-iphonesimulator/ScreenLinkDashboardUITests-Runner.app/Frameworks/XCTestSupport.framework /Applications/Xcode_16.4.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/PrivateFrameworks/XCTestSupport.framework (in target 'ScreenLinkDashboardUITests' from project 'ScreenLinkPreview')
-    cd /Users/runner/work/screentesla/screentesla/tools
-    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -exclude Headers -exclude PrivateHeaders -exclude Modules -exclude \*.tbd -resolve-src-symlinks /Applications/Xcode_16.4.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/PrivateFrameworks/XCTestSupport.framework /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Products/Debug-iphonesimulator/ScreenLinkDashboardUITests-Runner.app/Frameworks
+ude Modules -exclude \*.tbd -resolve-src-symlinks /Applications/Xcode_16.4.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/PrivateFrameworks/XCTestSupport.framework /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Products/Debug-iphonesimulator/ScreenLinkDashboardUITests-Runner.app/Frameworks
 
 Copy /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Products/Debug-iphonesimulator/ScreenLinkDashboardUITests-Runner.app/Frameworks/XCTestCore.framework /Applications/Xcode_16.4.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/PrivateFrameworks/XCTestCore.framework (in target 'ScreenLinkDashboardUITests' from project 'ScreenLinkPreview')
     cd /Users/runner/work/screentesla/screentesla/tools
@@ -110,3 +90,72 @@ Test Case '-[ScreenLinkDashboardUITests.DashboardUITests testDashboardControlsAn
     t =    21.02s     Check for interrupting elements affecting "home.scroll" ScrollView
     t =    21.04s     Synthesize event
     t =    21.47s     Wait for local.screenlink.airplaylab to idle
+    t =    23.58s Checking existence of `"home.disconnect" Button`
+    t =    23.70s Added attachment named 'dashboard-large-type'
+    t =    23.70s Setting device orientation to Landscape Left
+    t =    23.71s     Device orientation changed to Landscape Left
+    t =    23.81s     Interface orientation changed to Landscape Right
+    t =    23.81s     Wait for local.screenlink.airplaylab to idle
+    t =    24.25s Added attachment named 'dashboard-landscape'
+    t =    24.25s Setting device orientation to Portrait
+    t =    24.25s     Device orientation changed to Portrait
+    t =    24.32s     Interface orientation changed to Portrait
+    t =    24.32s     Wait for local.screenlink.airplaylab to idle
+    t =    24.63s Tear Down
+Test Case '-[ScreenLinkDashboardUITests.DashboardUITests testDashboardControlsAndLayout]' passed (24.909 seconds).
+Test Case '-[ScreenLinkDashboardUITests.DashboardUITests testProductionControllerCancelsPendingStartAndWidgetRoutes]' started.
+    t =     0.00s Start Test at 2026-11-06 05:36:28.297
+    t =     0.07s Set Up
+    t =     0.07s Open local.screenlink.airplaylab
+    t =     0.07s     Launch local.screenlink.airplaylab
+    t =     0.07s         Terminate local.screenlink.airplaylab:20258
+    t =     2.46s         Setting up automation session
+    t =     4.05s         Wait for local.screenlink.airplaylab to idle
+    t =     5.54s Waiting 10.0s for "home.start" Button to exist
+    t =     6.60s     Checking `Expect predicate `existsNoRetry == 1` for object "home.start" Button`
+    t =     6.60s         Checking existence of `"home.start" Button`
+    t =     6.66s Tap "home.start" Button
+    t =     6.66s     Wait for local.screenlink.airplaylab to idle
+    t =     6.66s     Find the "home.start" Button
+    t =     6.71s     Check for interrupting elements affecting "home.start" Button
+    t =     6.75s     Synthesize event
+    t =     7.16s     Wait for local.screenlink.airplaylab to idle
+    t =     7.16s Find the "home.disconnect" Button
+    t =     7.21s Find the "home.disconnect" Button
+    t =     7.24s Tap "home.disconnect" Button
+    t =     7.24s     Wait for local.screenlink.airplaylab to idle
+    t =     7.24s     Find the "home.disconnect" Button
+    t =     7.27s     Check for interrupting elements affecting "home.disconnect" Button
+    t =     7.30s     Synthesize event
+    t =     7.60s     Wait for local.screenlink.airplaylab to idle
+    t =     8.67s Checking `Expect predicate `label == "Disconnected"` for object "home.status" StaticText`
+    t =     8.67s     Find the "home.status" StaticText
+    t =    10.72s Find the "integration.state" StaticText
+    t =    10.75s Tap "integration.widgetStart" Button
+    t =    10.75s     Wait for local.screenlink.airplaylab to idle
+    t =    10.75s     Find the "integration.widgetStart" Button
+    t =    10.77s     Check for interrupting elements affecting "integration.widgetStart" Button
+    t =    10.82s     Synthesize event
+    t =    11.15s     Wait for local.screenlink.airplaylab to idle
+    t =    12.49s Checking `Expect predicate `label CONTAINS "pip=1"` for object "integration.state" StaticText`
+    t =    12.49s     Find the "integration.state" StaticText
+    t =    12.51s Tap "integration.widgetPeer" Button
+    t =    12.51s     Wait for local.screenlink.airplaylab to idle
+    t =    12.51s     Find the "integration.widgetPeer" Button
+    t =    12.54s     Check for interrupting elements affecting "integration.widgetPeer" Button
+    t =    12.56s     Synthesize event
+    t =    12.85s     Wait for local.screenlink.airplaylab to idle
+    t =    14.17s Tap "integration.widgetStop" Button
+    t =    14.17s     Wait for local.screenlink.airplaylab to idle
+    t =    14.17s     Find the "integration.widgetStop" Button
+    t =    14.20s     Check for interrupting elements affecting "integration.widgetStop" Button
+    t =    14.21s     Synthesize event
+    t =    14.50s     Wait for local.screenlink.airplaylab to idle
+    t =    15.89s Checking `Expect predicate `label CONTAINS "peers=1"` for object "integration.state" StaticText`
+    t =    15.89s     Find the "integration.state" StaticText
+    t =    17.01s Checking `Expect predicate `label == "Disconnected"` for object "home.status" StaticText`
+    t =    17.01s     Find the "home.status" StaticText
+    t =    17.03s Terminate local.screenlink.airplaylab:20660
+    t =    18.08s Open local.screenlink.airplaylab
+    t =    18.08s     Launch local.screenlink.airplaylab
+    t =    18.58s         Setting up automation session
