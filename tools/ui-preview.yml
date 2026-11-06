@@ -36,6 +36,9 @@ targets:
         CFBundleVersion: '60'
         UILaunchScreen: {}
         NSSupportsLiveActivities: true
+        CFBundleURLTypes:
+        - CFBundleURLName: ScreenLink
+          CFBundleURLSchemes: [screenlink]
         NSLocalNetworkUsageDescription: Cloud UI test fixture.
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true

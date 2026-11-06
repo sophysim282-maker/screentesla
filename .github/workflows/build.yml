@@ -68,6 +68,7 @@ jobs:
           brew install xcodegen
           xcodegen generate --spec tools/ui-preview.yml --project tools
       - name: Publish original brand previews for visual inspection
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -75,8 +76,16 @@ jobs:
           import base64,json,pathlib,subprocess,os
           repo=os.environ['GITHUB_REPOSITORY'];sha=os.environ['GITHUB_SHA']
           def api(path,data):
-              r=subprocess.run(['gh','api','--method','POST','repos/'+repo+'/'+path,'--input','-'],input=json.dumps(data),text=True,capture_output=True,check=True)
-              return json.loads(r.stdout)
+              import time
+              if path=='git/commits':
+                  data['author']={'name':'ScreenLink CI','email':'screenlink-ci@users.noreply.github.com'}
+                  data['committer']=data['author']
+              for attempt in range(4):
+                  r=subprocess.run(['gh','api','--method','POST','repos/'+repo+'/'+path,'--input','-'],input=json.dumps(data),text=True,capture_output=True)
+                  if r.returncode==0:return json.loads(r.stdout)
+                  print('Preview publication retry:',path,r.stderr[-600:])
+                  time.sleep(2)
+              raise RuntimeError('Preview publication failed; screenshots remain in the Actions artifact')
           entries=[]
           for name in ['ScreenLink-icon-preview.png','ScreenLink-cover-preview.png']:
               file=pathlib.Path('build')/name
@@ -126,6 +135,7 @@ jobs:
             build/dashboard-ui.log
           retention-days: 7
       - name: Publish non-sensitive simulator and brand previews for review
+        continue-on-error: true
         if: success()
         env:
           GH_TOKEN: ${{ github.token }}
@@ -134,8 +144,16 @@ jobs:
           import base64,json,pathlib,subprocess,os
           repo=os.environ['GITHUB_REPOSITORY'];sha=os.environ['GITHUB_SHA']
           def api(path,data):
-              r=subprocess.run(['gh','api','--method','POST','repos/'+repo+'/'+path,'--input','-'],input=json.dumps(data),text=True,capture_output=True,check=True)
-              return json.loads(r.stdout)
+              import time
+              if path=='git/commits':
+                  data['author']={'name':'ScreenLink CI','email':'screenlink-ci@users.noreply.github.com'}
+                  data['committer']=data['author']
+              for attempt in range(4):
+                  r=subprocess.run(['gh','api','--method','POST','repos/'+repo+'/'+path,'--input','-'],input=json.dumps(data),text=True,capture_output=True)
+                  if r.returncode==0:return json.loads(r.stdout)
+                  print('Preview publication retry:',path,r.stderr[-600:])
+                  time.sleep(2)
+              raise RuntimeError('Preview publication failed; screenshots remain in the Actions artifact')
           entries=[]
           for file in pathlib.Path('build/previews').glob('*.png'):
               b=api('git/blobs',{'content':base64.b64encode(file.read_bytes()).decode(),'encoding':'base64'})
