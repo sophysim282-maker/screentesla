@@ -89,7 +89,7 @@ private struct ControlsView: View {
             Spacer(minLength: 0)
             if family == .systemMedium {
                 HStack(spacing: 12) {
-                    Link(destination: startURL) { Label("Start + PiP", systemImage: "play.fill").font(.subheadline.bold()).padding(10).frame(maxWidth: .infinity).background(.teal, in: RoundedRectangle(cornerRadius: 12)) }
+                    Link(destination: startURL) { Label("Start + PiP", systemImage: "play.fill").font(.subheadline.bold()).padding(10).frame(maxWidth: .infinity).background(Color(red: 0.02, green: 0.38, blue: 0.4), in: RoundedRectangle(cornerRadius: 12)) }
                     Link(destination: URL(string: "screenlink://disconnect-all")!) { Label("Disconnect All", systemImage: "power").font(.subheadline.bold()).padding(10).frame(maxWidth: .infinity).background(.white.opacity(0.12), in: RoundedRectangle(cornerRadius: 12)) }
                 }.foregroundStyle(.white)
             } else {
