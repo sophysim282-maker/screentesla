@@ -34,7 +34,8 @@
 @end
 @interface SLPiP : NSObject
 @property(nonatomic,weak) id delegate;
-@property(nonatomic) BOOL pictureInPictureActive,canStartPictureInPictureAutomaticallyFromInline;
+@property(nonatomic,getter=isPictureInPictureActive) BOOL pictureInPictureActive;
+@property(nonatomic) BOOL canStartPictureInPictureAutomaticallyFromInline;
 - (void)stopPictureInPicture;
 @end
 @implementation SLPiP
