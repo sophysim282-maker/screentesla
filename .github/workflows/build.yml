@@ -103,13 +103,18 @@ jobs:
       - name: Boot iPhone simulator and test actual dashboard component and widget gallery
         run: |
           set -euo pipefail
+          mkdir -p build
+          echo "Preparing simulator and production-controller UI test harness" > build/dashboard-ui.log
+          GH_TOKEN="${{ github.token }}" python3 tools/report_ui_status.py &
+          status_reporter=$!
+          trap 'kill "$status_reporter" 2>/dev/null || true' EXIT
           simulator_id="$(xcrun simctl list devices available -j | python3 -c 'import json,sys;d=json.load(sys.stdin);print(next(x["udid"] for rows in d["devices"].values() for x in rows if x["name"].startswith("iPhone")))')"
           xcrun simctl boot "$simulator_id" || true
-          python3 - "$simulator_id" <<'PY'
+          python3 - "$simulator_id" <<'PY' 2>&1 | tee -a build/dashboard-ui.log
           import subprocess,sys
           subprocess.run(['xcrun','simctl','bootstatus',sys.argv[1],'-b'],check=True,timeout=240)
           PY
-          xcodebuild -project tools/ScreenLinkPreview.xcodeproj -scheme ScreenLinkPreview -destination "platform=iOS Simulator,id=$simulator_id" -derivedDataPath build/PreviewDerived -resultBundlePath build/Preview.xcresult CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO test | tee build/dashboard-ui.log
+          xcodebuild -project tools/ScreenLinkPreview.xcodeproj -scheme ScreenLinkPreview -destination "platform=iOS Simulator,id=$simulator_id" -derivedDataPath build/PreviewDerived -resultBundlePath build/Preview.xcresult CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO test 2>&1 | tee -a build/dashboard-ui.log
       - name: Export visual previews
         if: always()
         run: |
