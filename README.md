@@ -1,0 +1,1 @@
+ScreenLink build60 visual previews. Original source 38bbf3af9498963709a4e2fbd6a136f722caf67d. Dashboard screenshots use the real shared UIKit component in an isolated simulator harness; displayed connection state is a test fixture, not a phone connection. Widget gallery status is in the Actions UI log.
