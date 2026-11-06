@@ -5,7 +5,7 @@
 NSString *const NEVPNStatusDidChangeNotification=@"FakeVPNStatus";
 static NSArray *savedManagers;static NSMutableArray *loads;static NSUInteger starts,stops,otherStops;
 @implementation NEVPNConnection
-- (void)stopVPNTunnel {stops++;self.status=NEVPNStatusDisconnected;}
+- (void)stopVPNTunnel {stops++;if(self.status!=NEVPNStatusDisconnected){self.status=NEVPNStatusDisconnecting;dispatch_after(dispatch_time(DISPATCH_TIME_NOW,(int64_t)(.1*NSEC_PER_SEC)),dispatch_get_main_queue(),^{self.status=NEVPNStatusDisconnected;});}}
 - (BOOL)startVPNTunnelAndReturnError:(NSError **)error {starts++;self.status=NEVPNStatusConnecting;return YES;}
 @end
 @implementation NETunnelProviderSession
@@ -34,12 +34,12 @@ int main(void){@autoreleasepool{
  __block NSUInteger callbacks=0;[vpn connectRouteProbe:^(BOOL ok){callbacks++;}];assert(loads.count==1);
  __block BOOL finished=NO,confirmed=NO;[vpn disconnectWithCompletion:^(BOOL ok){finished=YES;confirmed=ok;}];assert(vpn.disconnecting&&loads.count==2&&callbacks==1);
  deliver(0);assert(starts==0); // preferences load from cancelled start cannot start anything
- deliver(1);drain(.6);assert(finished&&confirmed&&!vpn.disconnecting&&otherStops==0&&other.connection.status==NEVPNStatusConnected);
+ deliver(1);drain(.8);assert(finished&&confirmed&&!vpn.disconnecting&&otherStops==0&&other.connection.status==NEVPNStatusConnected);
  // A late system Connected notification after disconnect is stopped again.
- ours.connection.status=NEVPNStatusConnected;[NSNotificationCenter.defaultCenter postNotificationName:NEVPNStatusDidChangeNotification object:ours.connection];drain(.05); // manager may not be cached if original load cancelled
+ ours.connection.status=NEVPNStatusConnected;[NSNotificationCenter.defaultCenter postNotificationName:NEVPNStatusDidChangeNotification object:ours.connection];drain(.15); // manager may not be cached if original load cancelled
  assert(otherStops==0&&ours.connection.status==NEVPNStatusDisconnected);
  // Enter connected alias-mode transition, then disconnect during its delayed retry.
- ours.connection.status=NEVPNStatusConnected;[vpn connectRouteProbe:^(BOOL ok){callbacks++;}];deliver(2);assert(ours.connection.status==NEVPNStatusDisconnected); // alias transition stopped existing VPN
+ ours.connection.status=NEVPNStatusConnected;[vpn connectRouteProbe:^(BOOL ok){callbacks++;}];assert(ours.connection.status==NEVPNStatusDisconnecting&&loads.count==2); // alias transition stopped existing VPN
  finished=NO;[vpn disconnectWithCompletion:^(BOOL ok){finished=YES;confirmed=ok;}];deliver(3);drain(1.2);assert(finished&&confirmed&&starts==0&&otherStops==0);
  assert(savedManagers.count==2);puts("VPN teardown passed: cancelled preferences callback, alias retry generation, confirmed own-VPN stop, unrelated VPN preservation, saved configurations retained and no delayed reconnect.");
 }return 0;}

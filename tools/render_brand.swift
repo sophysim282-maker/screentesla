@@ -22,7 +22,7 @@ func scene(_ rect: NSRect) {
  NSGraphicsContext.restoreGraphicsState()
 }
 func render(_ width: Int,_ height: Int,_ icon: Bool,_ path: String) {
- let rep=NSBitmapImageRep(bitmapDataPlanes:nil,pixelsWide:width,pixelsHigh:height,bitsPerSample:8,samplesPerPixel:3,hasAlpha:false,isPlanar:false,colorSpaceName:.deviceRGB,bytesPerRow:0,bitsPerPixel:0)!
+ let rep=NSBitmapImageRep(bitmapDataPlanes:nil,pixelsWide:width,pixelsHigh:height,bitsPerSample:8,samplesPerPixel:4,hasAlpha:true,isPlanar:false,colorSpaceName:.deviceRGB,bytesPerRow:0,bitsPerPixel:0)!
  let context=NSGraphicsContext(bitmapImageRep:rep)!;NSGraphicsContext.saveGraphicsState();NSGraphicsContext.current=context
  let logical=icon ? NSSize(width:1024,height:1024) : NSSize(width:1800,height:900)
  context.cgContext.scaleBy(x:CGFloat(width)/logical.width,y:CGFloat(height)/logical.height)
@@ -59,7 +59,12 @@ func render(_ width: Int,_ height: Int,_ icon: Bool,_ path: String) {
  }
  context.flushGraphics();NSGraphicsContext.restoreGraphicsState()
  let url=base.appendingPathComponent(path);try! fm.createDirectory(at:url.deletingLastPathComponent(),withIntermediateDirectories:true)
- try! rep.representation(using:.png,properties:[:])!.write(to:url)
+ // Render in the 32-bit format supported by AppKit, then export RGB without
+ // an alpha channel so every App Store/iPhone icon slot is genuinely opaque.
+ let opaque=NSBitmapImageRep(bitmapDataPlanes:nil,pixelsWide:width,pixelsHigh:height,bitsPerSample:8,samplesPerPixel:3,hasAlpha:false,isPlanar:false,colorSpaceName:.deviceRGB,bytesPerRow:0,bitsPerPixel:0)!
+ let source=rep.bitmapData!,target=opaque.bitmapData!
+ for y in 0..<height {for x in 0..<width {let from=y*rep.bytesPerRow+x*4,to=y*opaque.bytesPerRow+x*3;target[to]=source[from];target[to+1]=source[from+1];target[to+2]=source[from+2]}}
+ try! opaque.representation(using:.png,properties:[:])!.write(to:url)
 }
 let catalog="App/BrandAssets.xcassets";let icons=catalog+"/AppIcon.appiconset"
 try fm.createDirectory(atPath:icons,withIntermediateDirectories:true)
