@@ -18,14 +18,14 @@ const server=http.createServer((req,res)=>{
    const Native=VideoDecoder;window.videoFault=false;window.reorderFault=false;
    window.VideoDecoder=class{
     static isConfigSupported(c){return Native.isConfigSupported(c);}
-    constructor(callbacks){this.retired=false;this.held=new Set();this.native=new Native({output:frame=>{
+    constructor(callbacks){this.callbacks=callbacks;this.retired=false;this.held=new Set();this.native=new Native({output:frame=>{
      if(this.retired){frame.close();return;}
      if(window.videoFault||window.reorderFault){this.held.add(frame);setTimeout(()=>{if(!this.held.delete(frame))return;if(this.retired)frame.close();else callbacks.output(frame);},window.videoFault?2600:((frame.timestamp%3)*35));}
      else callbacks.output(frame);
     },error:callbacks.error});}
     configure(c){this.native.configure(c);}get state(){return this.native.state;}
     get decodeQueueSize(){return this.native.decodeQueueSize+(window.videoFault?32:0);}
-    decode(c){this.native.decode(c);if(window.injectError){window.injectError=false;setTimeout(()=>{if(!this.retired){this.native.close();callbacks.error(new DOMException('Injected asynchronous video failure','EncodingError'));}},5);}}flush(){return window.videoFault?new Promise(()=>{}):this.native.flush();}
+    decode(c){this.native.decode(c);if(window.injectError){window.injectError=false;setTimeout(()=>{if(!this.retired){this.native.close();this.callbacks.error(new DOMException('Injected asynchronous video failure','EncodingError'));}},5);}}flush(){return window.videoFault?new Promise(()=>{}):this.native.flush();}
     close(){this.retired=true;for(const frame of this.held)frame.close();this.held.clear();this.native.close();}
    };
   });
