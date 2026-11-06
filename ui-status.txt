@@ -1,8 +1,5 @@
 Source 47c1292a8e3ab87aa33e92dfcbc15b2c15675ca3
-inkDashboardUITests.xctest/Frameworks --strip-bitcode --scan-executable /Applications/Xcode_16.4.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/usr/lib/libXCTestSwiftSupport.dylib --strip-bitcode-tool /Applications/Xcode_16.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/bitcode_strip --emit-dependency-info /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ScreenLinkPreview.build/Debug-iphonesimulator/ScreenLinkDashboardUITests.build/SwiftStdLibToolInputDependencies.dep --filter-for-swift-os
-Ignoring --strip-bitcode because --sign was not passed
-
-AppIntentsSSUTraining (in target 'ScreenLinkDashboardUITests' from project 'ScreenLinkPreview')
+ target 'ScreenLinkDashboardUITests' from project 'ScreenLinkPreview')
     cd /Users/runner/work/screentesla/screentesla/tools
     /Applications/Xcode_16.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/appintentsnltrainingprocessor --infoplist-path /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Products/Debug-iphonesimulator/ScreenLinkDashboardUITests-Runner.app/PlugIns/ScreenLinkDashboardUITests.xctest/Info.plist --temp-dir-path /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ScreenLinkPreview.build/Debug-iphonesimulator/ScreenLinkDashboardUITests.build/ssu --bundle-id local.screenlink.preview.uitests --product-path /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Products/Debug-iphonesimulator/ScreenLinkDashboardUITests-Runner.app/PlugIns/ScreenLinkDashboardUITests.xctest --extracted-metadata-path /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Products/Debug-iphonesimulator/ScreenLinkDashboardUITests-Runner.app/PlugIns/ScreenLinkDashboardUITests.xctest/Metadata.appintents --metadata-file-list /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ScreenLinkPreview.build/Debug-iphonesimulator/ScreenLinkDashboardUITests.build/ScreenLinkDashboardUITests.DependencyMetadataFileList --archive-ssu-assets
 2026-11-06 05:32:20.653 appintentsnltrainingprocessor[12613:39406] Parsing options for appintentsnltrainingprocessor
@@ -64,3 +61,13 @@ Touch /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Prod
     cd /Users/runner/work/screentesla/screentesla/tools
     /usr/bin/touch -c /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Products/Debug-iphonesimulator/ScreenLinkDashboardUITests-Runner.app/PlugIns/ScreenLinkDashboardUITests.xctest
 
+2026-11-06 05:32:59.427394+0000 ScreenLinkDashboardUITests-Runner[13621:42119] [Default] Running tests...
+    t =      nans Interface orientation changed to Portrait
+Test Suite 'All tests' started at 2026-11-06 05:33:07.757.
+Test Suite 'ScreenLinkDashboardUITests.xctest' started at 2026-11-06 05:33:07.758.
+Test Suite 'DashboardUITests' started at 2026-11-06 05:33:07.758.
+Test Case '-[ScreenLinkDashboardUITests.DashboardUITests testDashboardControlsAndLayout]' started.
+    t =     0.00s Start Test at 2026-11-06 05:33:07.759
+    t =     0.72s Set Up
+    t =     0.74s Open local.screenlink.airplaylab
+    t =     0.74s     Launch local.screenlink.airplaylab
