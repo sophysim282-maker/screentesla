@@ -146,7 +146,7 @@ static void SLActivityFinish(void) {
  [self showHome];
 }
 - (void)showHome {
- [self loadViewIfNeeded];self.developerScroll.hidden=YES;self.dashboard.hidden=NO;
+ [self loadViewIfNeeded];if(!self.dashboard.hidden&&self.previewSlot.superview==self.dashboard.previewHost){[self updateHome];return;}self.developerScroll.hidden=YES;self.dashboard.hidden=NO;
  [NSLayoutConstraint deactivateConstraints:self.previewConstraints?:@[]];[self.developerStack removeArrangedSubview:self.previewSlot];[self.previewSlot removeFromSuperview];
  self.previewSlot.translatesAutoresizingMaskIntoConstraints=NO;[self.dashboard.previewHost addSubview:self.previewSlot];
  self.previewConstraints=@[[self.previewSlot.topAnchor constraintEqualToAnchor:self.dashboard.previewHost.topAnchor],[self.previewSlot.bottomAnchor constraintEqualToAnchor:self.dashboard.previewHost.bottomAnchor],[self.previewSlot.leadingAnchor constraintEqualToAnchor:self.dashboard.previewHost.leadingAnchor],[self.previewSlot.trailingAnchor constraintEqualToAnchor:self.dashboard.previewHost.trailingAnchor]];[NSLayoutConstraint activateConstraints:self.previewConstraints];[self updateHome];
@@ -464,12 +464,15 @@ static void SLActivityFinish(void) {
 @end
 @implementation AppDelegate
 - (BOOL)application:(UIApplication *)app didFinishLaunchingWithOptions:(NSDictionary *)options {
- self.window=[[UIWindow alloc]initWithFrame:UIScreen.mainScreen.bounds];self.window.rootViewController=[Controller new];[self.window makeKeyAndVisible];self.pendingWidgetAction=SLRouteForURL(options[UIApplicationLaunchOptionsURLKey]);return YES;
+ SLWidgetRoute launchAction=SLRouteForURL(options[UIApplicationLaunchOptionsURLKey]);
+ if(launchAction==SLWidgetRouteDisconnect){[NSUserDefaults.standardUserDefaults setBool:YES forKey:@"manualDisconnected"];[NSUserDefaults.standardUserDefaults setBool:NO forKey:@"receiverArmed"];[NSUserDefaults.standardUserDefaults setBool:NO forKey:@"resumeYouTubeOnReturn"];}
+ self.window=[[UIWindow alloc]initWithFrame:UIScreen.mainScreen.bounds];self.window.rootViewController=[Controller new];[self.window makeKeyAndVisible];self.pendingWidgetAction=launchAction;return YES;
 }
 - (void)cancelPendingWidgetAction {self.widgetGeneration++;self.pendingWidgetAction=SLWidgetRouteNone;}
 - (BOOL)application:(UIApplication *)app openURL:(NSURL *)url options:(NSDictionary<UIApplicationOpenURLOptionsKey,id> *)options {
  SLWidgetRoute action=SLRouteForURL(url);if(action==SLWidgetRouteNone)return NO;
  self.widgetGeneration++;self.pendingWidgetAction=action;
+ if(action==SLWidgetRouteDisconnect){self.pendingWidgetAction=SLWidgetRouteNone;[(Controller *)self.window.rootViewController disconnectAll];return YES;}
  if(app.applicationState==UIApplicationStateActive)[self consumeWidgetStart];return YES;
 }
 - (void)applicationDidBecomeActive:(UIApplication *)application {[self consumeWidgetStart];}

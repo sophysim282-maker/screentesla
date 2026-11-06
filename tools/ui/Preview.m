@@ -1,7 +1,7 @@
 #import <UIKit/UIKit.h>
 #import "ScreenLinkHomeView.h"
 #import <objc/runtime.h>
-extern NSUInteger SLFixtureReceiverStarts,SLFixturePiPStarts,SLFixturePeerStops;
+extern NSUInteger SLFixtureReceiverStarts,SLFixturePiPStarts,SLFixturePeerStops,SLFixtureVPNRequests;
 @interface UIViewController (ProductionFixture)
 - (void)rtcPrototype;
 @end
@@ -43,10 +43,11 @@ static void fixtureBrowse(id self,SEL command,NSString *type,NSString *domain) {
   Method browser=class_getInstanceMethod(NSNetServiceBrowser.class,@selector(searchForServicesOfType:inDomain:));method_setImplementation(browser,(IMP)fixtureBrowse);
   NSMutableDictionary *launch=[options mutableCopy]?:[NSMutableDictionary dictionary];
   if([NSProcessInfo.processInfo.arguments containsObject:@"--launch-start"])launch[UIApplicationLaunchOptionsURLKey]=[NSURL URLWithString:@"screenlink://start-youtube"];
+  if([NSProcessInfo.processInfo.arguments containsObject:@"--launch-stop"]){[NSUserDefaults.standardUserDefaults setBool:YES forKey:@"receiverArmed"];[NSUserDefaults.standardUserDefaults setBool:YES forKey:@"resumeYouTubeOnReturn"];launch[UIApplicationLaunchOptionsURLKey]=[NSURL URLWithString:@"screenlink://disconnect-all"];}
   [super application:application didFinishLaunchingWithOptions:launch];
   self.fixtureControls=[NSMutableArray array];
   self.fixtureMeter=[[UILabel alloc]initWithFrame:CGRectMake(6,self.window.bounds.size.height-24,180,20)];self.fixtureMeter.font=[UIFont systemFontOfSize:8];self.fixtureMeter.accessibilityIdentifier=@"integration.state";[self.window addSubview:self.fixtureMeter];[self.fixtureControls addObject:self.fixtureMeter];
-  self.fixtureTimer=[NSTimer scheduledTimerWithTimeInterval:.1 repeats:YES block:^(NSTimer *timer){self.fixtureMeter.text=[NSString stringWithFormat:@"receiver=%lu;pip=%lu;peers=%lu",(unsigned long)SLFixtureReceiverStarts,(unsigned long)SLFixturePiPStarts,(unsigned long)SLFixturePeerStops];}];
+  self.fixtureTimer=[NSTimer scheduledTimerWithTimeInterval:.1 repeats:YES block:^(NSTimer *timer){self.fixtureMeter.text=[NSString stringWithFormat:@"receiver=%lu;pip=%lu;peers=%lu;vpnRequests=%lu",(unsigned long)SLFixtureReceiverStarts,(unsigned long)SLFixturePiPStarts,(unsigned long)SLFixturePeerStops,(unsigned long)SLFixtureVPNRequests];}];
   for(NSString *name in @[@"Start",@"Stop",@"Peer"]){UIButton *b=[UIButton buttonWithType:UIButtonTypeSystem];b.frame=CGRectMake([name isEqual:@"Start"]?120:([name isEqual:@"Stop"]?190:260),self.window.bounds.size.height-34,65,28);b.titleLabel.font=[UIFont systemFontOfSize:10];[b setTitle:[@"Widget " stringByAppendingString:name] forState:UIControlStateNormal];b.accessibilityIdentifier=[@"integration.widget" stringByAppendingString:name];[b addTarget:self action:[name isEqual:@"Start"]?@selector(fixtureStart):([name isEqual:@"Stop"]?@selector(fixtureStop):@selector(fixturePeer)) forControlEvents:UIControlEventTouchUpInside];[self.window addSubview:b];[self.fixtureControls addObject:b];}
   return YES;
  }

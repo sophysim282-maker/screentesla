@@ -7,7 +7,7 @@
 #import "LocalVPN.h"
 #import "RTCPrototypeController.h"
 #import "SLMediaController.h"
-NSUInteger SLFixtureReceiverStarts=0,SLFixturePiPStarts=0,SLFixturePeerStops=0;
+NSUInteger SLFixtureReceiverStarts=0,SLFixturePiPStarts=0,SLFixturePeerStops=0,SLFixtureVPNRequests=0;
 UIViewController *SLFixtureRetainedPeer;
 @interface Receiver ()
 @property(nonatomic,readwrite,getter=isRunning) BOOL running;
@@ -29,7 +29,7 @@ UIViewController *SLFixtureRetainedPeer;
 @end
 @implementation LocalVPN
 - (void)connectRouteProbe:(void(^)(BOOL))completion {
- self.cancelled=NO;
+ self.cancelled=NO;SLFixtureVPNRequests++;
  dispatch_after(dispatch_time(DISPATCH_TIME_NOW,NSEC_PER_SEC),dispatch_get_main_queue(),^{
   if(!self.cancelled)self.connected=YES;
   // Intentionally deliver stale success after cancel to exercise Controller's own fence.

@@ -30,7 +30,7 @@ final class DashboardUITests: XCTestCase {
   let stopped=NSPredicate(format:"label == %@", "Disconnected")
   expectation(for:stopped,evaluatedWith:app.staticTexts["home.status"]);waitForExpectations(timeout:12)
   sleep(2)
-  XCTAssertEqual(app.staticTexts["integration.state"].label,"receiver=0;pip=0;peers=0","Late VPN success must not restart the production controller")
+  XCTAssertTrue(app.staticTexts["integration.state"].label.hasPrefix("receiver=0;pip=0;peers=0"),"Late VPN success must not restart the production controller")
   app.buttons["integration.widgetStart"].tap()
   let pip=NSPredicate(format:"label CONTAINS %@", "pip=1")
   expectation(for:pip,evaluatedWith:app.staticTexts["integration.state"]);waitForExpectations(timeout:12)
@@ -41,6 +41,9 @@ final class DashboardUITests: XCTestCase {
   expectation(for:stopped,evaluatedWith:app.staticTexts["home.status"]);waitForExpectations(timeout:12)
   app.terminate();app.launchArguments=["--controller-tests","--manual-disconnected","--launch-start"];app.launch()
   expectation(for:pip,evaluatedWith:app.staticTexts["integration.state"]);waitForExpectations(timeout:15)
+  app.terminate();app.launchArguments=["--controller-tests","--launch-stop"];app.launch()
+  expectation(for:stopped,evaluatedWith:app.staticTexts["home.status"]);waitForExpectations(timeout:12)
+  sleep(2);XCTAssertEqual(app.staticTexts["integration.state"].label,"receiver=0;pip=0;peers=0;vpnRequests=0","Cold widget Stop must suppress automatic setup before app activation")
   print("PRODUCTION_CONTROLLER_INTENT_TESTS_PASSED: cancelled late VPN callback, Disconnect during Start, warm widget Start/Stop and cold widget PiP Start after manual disconnect.")
  }
  func testWidgetGalleryInspection() {
