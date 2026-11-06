@@ -13,6 +13,9 @@
 #import "SLMediaController.h"
 #import <ReplayKit/ReplayKit.h>
 // Swift class has an explicit Objective-C runtime name; no generated header.
+@protocol SLSessionDisconnectAPI
+- (void)stopForDisconnectAll;
+@end
 @protocol SLPendingWidgetAPI
 - (void)cancelPendingWidgetAction;
 @end
@@ -182,13 +185,19 @@ static void SLActivityFinish(void) {
   dispatch_after(dispatch_time(DISPATCH_TIME_NOW,(int64_t)(.25*NSEC_PER_SEC)),dispatch_get_main_queue(),^{[self stopOwnBroadcast:remaining-1 completion:completion];});
  });}] resume];
 }
+- (void)stopPresentedSessions:(UIViewController *)controller {
+ if(!controller)return;
+ for(UIViewController *child in controller.childViewControllers)[self stopPresentedSessions:child];
+ [self stopPresentedSessions:controller.presentedViewController];
+ if([controller respondsToSelector:@selector(stopForDisconnectAll)])[(id<SLSessionDisconnectAPI>)controller stopForDisconnectAll];
+}
 - (void)disconnectAll {
  [self loadViewIfNeeded];if(self.disconnectFlow.running)return;
  id delegate=UIApplication.sharedApplication.delegate;if([delegate respondsToSelector:@selector(cancelPendingWidgetAction)])[(id<SLPendingWidgetAPI>)delegate cancelPendingWidgetAction];
  self.userDisconnected=YES;self.disconnectNeedsAttention=NO;self.homeFailure=nil;[NSUserDefaults.standardUserDefaults setBool:YES forKey:@"manualDisconnected"];
  self.disconnectSession=[NSURLSession sessionWithConfiguration:NSURLSessionConfiguration.ephemeralSessionConfiguration];
  [self.disconnectFlow runStopSources:^{
-  self.quickStartPending=NO;self.broadcastChecking=NO;[self stop];[self.broadcastTimer invalidate];self.broadcastTimer=nil;
+  self.quickStartPending=NO;self.broadcastChecking=NO;[self stopPresentedSessions:self.presentedViewController];[self stop];[self.broadcastTimer invalidate];self.broadcastTimer=nil;
   self.networkProbe.delegate=nil;[self.networkProbe stop];self.networkProbe=nil;
   [self dismissViewControllerAnimated:YES completion:nil];[self showHome];[self updateHome];
  } broadcast:^(void(^reply)(BOOL)){[self stopOwnBroadcast:20 completion:reply];}

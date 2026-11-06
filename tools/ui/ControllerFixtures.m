@@ -7,7 +7,8 @@
 #import "LocalVPN.h"
 #import "RTCPrototypeController.h"
 #import "SLMediaController.h"
-NSUInteger SLFixtureReceiverStarts=0,SLFixturePiPStarts=0;
+NSUInteger SLFixtureReceiverStarts=0,SLFixturePiPStarts=0,SLFixturePeerStops=0;
+UIViewController *SLFixtureRetainedPeer;
 @interface Receiver ()
 @property(nonatomic,readwrite,getter=isRunning) BOOL running;
 @property(nonatomic,copy,readwrite) NSString *token;
@@ -63,5 +64,10 @@ NSUInteger SLFixtureReceiverStarts=0,SLFixturePiPStarts=0;
 - (void)startFloating {self.active=YES;}
 - (void)reset {self.active=NO;}
 @end
-@implementation RTCPrototypeController @end
-@implementation SLMediaController @end
+@implementation RTCPrototypeController
+- (void)viewDidLoad {[super viewDidLoad];self.view.backgroundColor=UIColor.systemBackgroundColor;SLFixtureRetainedPeer=self;}
+- (void)stopForDisconnectAll {SLFixturePeerStops++;}
+@end
+@implementation SLMediaController
+- (void)stopForDisconnectAll {SLFixturePeerStops++;}
+@end

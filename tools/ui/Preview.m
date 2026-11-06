@@ -1,7 +1,10 @@
 #import <UIKit/UIKit.h>
 #import "ScreenLinkHomeView.h"
 #import <objc/runtime.h>
-extern NSUInteger SLFixtureReceiverStarts,SLFixturePiPStarts;
+extern NSUInteger SLFixtureReceiverStarts,SLFixturePiPStarts,SLFixturePeerStops;
+@interface UIViewController (ProductionFixture)
+- (void)rtcPrototype;
+@end
 @interface ScreenLinkTestDelegate:UIResponder<UIApplicationDelegate>
 @property(nonatomic,strong) UIWindow *window;
 @end
@@ -24,6 +27,7 @@ static void fixtureBrowse(id self,SEL command,NSString *type,NSString *domain) {
 @interface PreviewDelegate:ScreenLinkTestDelegate
 @property(nonatomic,strong) UILabel *fixtureMeter;
 @property(nonatomic,strong) NSTimer *fixtureTimer;
+@property(nonatomic,strong) NSMutableArray<UIView *> *fixtureControls;
 @end
 @implementation PreviewDelegate
 - (void)sendFixtureURL:(NSString *)host {
@@ -31,6 +35,7 @@ static void fixtureBrowse(id self,SEL command,NSString *type,NSString *domain) {
 }
 - (void)fixtureStart {[self sendFixtureURL:@"start-youtube"];}
 - (void)fixtureStop {[self sendFixtureURL:@"disconnect-all"];}
+- (void)fixturePeer {[self.window.rootViewController rtcPrototype];dispatch_after(dispatch_time(DISPATCH_TIME_NOW,(int64_t)(.5*NSEC_PER_SEC)),dispatch_get_main_queue(),^{for(UIView *v in self.fixtureControls)[self.window bringSubviewToFront:v];});}
 - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)options {
  if([NSProcessInfo.processInfo.arguments containsObject:@"--controller-tests"]){
   [NSUserDefaults.standardUserDefaults setBool:[NSProcessInfo.processInfo.arguments containsObject:@"--manual-disconnected"] forKey:@"manualDisconnected"];
@@ -39,9 +44,10 @@ static void fixtureBrowse(id self,SEL command,NSString *type,NSString *domain) {
   NSMutableDictionary *launch=[options mutableCopy]?:[NSMutableDictionary dictionary];
   if([NSProcessInfo.processInfo.arguments containsObject:@"--launch-start"])launch[UIApplicationLaunchOptionsURLKey]=[NSURL URLWithString:@"screenlink://start-youtube"];
   [super application:application didFinishLaunchingWithOptions:launch];
-  self.fixtureMeter=[[UILabel alloc]initWithFrame:CGRectMake(6,self.window.bounds.size.height-24,180,20)];self.fixtureMeter.font=[UIFont systemFontOfSize:8];self.fixtureMeter.accessibilityIdentifier=@"integration.state";[self.window addSubview:self.fixtureMeter];
-  self.fixtureTimer=[NSTimer scheduledTimerWithTimeInterval:.1 repeats:YES block:^(NSTimer *timer){self.fixtureMeter.text=[NSString stringWithFormat:@"receiver=%lu;pip=%lu",(unsigned long)SLFixtureReceiverStarts,(unsigned long)SLFixturePiPStarts];}];
-  for(NSString *name in @[@"Start",@"Stop"]){UIButton *b=[UIButton buttonWithType:UIButtonTypeSystem];b.frame=CGRectMake([name isEqual:@"Start"]?190:260,self.window.bounds.size.height-34,65,28);b.titleLabel.font=[UIFont systemFontOfSize:10];[b setTitle:[@"Widget " stringByAppendingString:name] forState:UIControlStateNormal];b.accessibilityIdentifier=[@"integration.widget" stringByAppendingString:name];[b addTarget:self action:[name isEqual:@"Start"]?@selector(fixtureStart):@selector(fixtureStop) forControlEvents:UIControlEventTouchUpInside];[self.window addSubview:b];}
+  self.fixtureControls=[NSMutableArray array];
+  self.fixtureMeter=[[UILabel alloc]initWithFrame:CGRectMake(6,self.window.bounds.size.height-24,180,20)];self.fixtureMeter.font=[UIFont systemFontOfSize:8];self.fixtureMeter.accessibilityIdentifier=@"integration.state";[self.window addSubview:self.fixtureMeter];[self.fixtureControls addObject:self.fixtureMeter];
+  self.fixtureTimer=[NSTimer scheduledTimerWithTimeInterval:.1 repeats:YES block:^(NSTimer *timer){self.fixtureMeter.text=[NSString stringWithFormat:@"receiver=%lu;pip=%lu;peers=%lu",(unsigned long)SLFixtureReceiverStarts,(unsigned long)SLFixturePiPStarts,(unsigned long)SLFixturePeerStops];}];
+  for(NSString *name in @[@"Start",@"Stop",@"Peer"]){UIButton *b=[UIButton buttonWithType:UIButtonTypeSystem];b.frame=CGRectMake([name isEqual:@"Start"]?120:([name isEqual:@"Stop"]?190:260),self.window.bounds.size.height-34,65,28);b.titleLabel.font=[UIFont systemFontOfSize:10];[b setTitle:[@"Widget " stringByAppendingString:name] forState:UIControlStateNormal];b.accessibilityIdentifier=[@"integration.widget" stringByAppendingString:name];[b addTarget:self action:[name isEqual:@"Start"]?@selector(fixtureStart):([name isEqual:@"Stop"]?@selector(fixtureStop):@selector(fixturePeer)) forControlEvents:UIControlEventTouchUpInside];[self.window addSubview:b];[self.fixtureControls addObject:b];}
   return YES;
  }
  self.window=[[UIWindow alloc]initWithFrame:UIScreen.mainScreen.bounds];self.window.rootViewController=[PreviewController new];
