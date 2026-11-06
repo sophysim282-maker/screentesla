@@ -1,0 +1,73 @@
+name: Diagnose actual build60 WidgetKit registration
+on:
+  push:
+    branches: [ci/build59-maintenance]
+    paths: ['.github/workflows/diagnose-widget60.yml', 'tools/diagnostic-widget60/**']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  package:
+    runs-on: macos-15
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/download-artifact@v4
+      with:
+        name: ScreenLink-0.20.23-build60-GENERIC-NO-HTTPS
+        repository: sophysim282-maker/screentesla
+        run-id: 42169531355
+        github-token: ${{ github.token }}
+        path: raw
+    - run: python3 tools/diagnostic-widget60/inspect.py
+    - name: Apple WidgetKit documentation
+      run: |
+        curl --fail --location --max-time 30 https://developer.apple.com/documentation/widgetkit/debugging-widgets.md || true
+        curl --fail --location --max-time 30 https://developer.apple.com/documentation/widgetkit/creating-a-widget-extension.md || true
+  simulator:
+    runs-on: macos-15
+    timeout-minutes: 25
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        path: diagnostics
+    - uses: actions/checkout@v4
+      with:
+        ref: 38bbf3af9498963709a4e2fbd6a136f722caf67d
+        path: source
+    - name: Build production widget in simulator host
+      working-directory: source
+      run: |
+        set -euo pipefail
+        mkdir -p build
+        cp ../diagnostics/tools/diagnostic-widget60/GalleryTests.swift tools/ui/DashboardUITests.swift
+        swift tools/render_brand.swift
+        brew install xcodegen
+        xcodegen generate --spec tools/ui-preview.yml --project tools
+        xcrun simctl list runtimes
+        simulator_id="$(xcrun simctl list devices available -j | python3 -c 'import json,sys;d=json.load(sys.stdin);print(next(x["udid"] for rows in d["devices"].values() for x in rows if x["name"].startswith("iPhone")))' )"
+        echo "SIMULATOR_ID=$simulator_id" >> "$GITHUB_ENV"
+        xcrun simctl boot "$simulator_id" || true
+        python3 - "$simulator_id" <<'PY'
+        import subprocess,sys
+        subprocess.run(['xcrun','simctl','bootstatus',sys.argv[1],'-b'],check=True,timeout=300)
+        PY
+        xcodebuild -project tools/ScreenLinkPreview.xcodeproj -scheme ScreenLinkPreview -destination "platform=iOS Simulator,id=$simulator_id" -derivedDataPath build/PreviewDerived -resultBundlePath build/Widget.xcresult CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO test 2>&1 | tee build/gallery.log
+    - name: Collect real WidgetKit runtime and registration evidence
+      if: always()
+      working-directory: source
+      run: |
+        mkdir -p build/evidence
+        xcrun simctl listapps "$SIMULATOR_ID" > build/evidence/installed-apps.plist || true
+        xcrun simctl spawn "$SIMULATOR_ID" log show --style compact --last 12m --predicate 'process CONTAINS[c] "widget" OR process == "chronod" OR eventMessage CONTAINS[c] "screenlink" OR eventMessage CONTAINS[c] "ScreenLink"' > build/evidence/widget-runtime.log 2>&1 || true
+        xcrun simctl spawn "$SIMULATOR_ID" pluginkit -m -A -D -vv -p com.apple.widgetkit-extension > build/evidence/plugin-registry.log 2>&1 || true
+        find "$HOME/Library/Developer/CoreSimulator/Devices/$SIMULATOR_ID/data" -iname '*ScreenLink*.ips' -exec cp {} build/evidence/ \; || true
+        if [[ -d build/Widget.xcresult ]]; then xcrun xcresulttool export attachments --path build/Widget.xcresult --output-path build/evidence/screenshots; fi
+        tail -250 build/evidence/widget-runtime.log
+    - uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: build60-real-widget-registration-evidence
+        path: |
+          source/build/evidence
+          source/build/gallery.log
+        retention-days: 7
