@@ -287,3 +287,7 @@ Build settings from command line:
 Writing result bundle at path:
 	/Users/runner/work/screentesla/screentesla/build/Preview.xcresult
 
+--- xcodebuild: WARNING: Using the first of multiple matching destinations:
+{ platform:iOS Simulator, arch:arm64, id:15FAB4A1-2F41-4DFB-B3E0-FB0C9936253D, OS:18.5, name:iPhone 16 Pro }
+{ platform:iOS Simulator, arch:x86_64, id:15FAB4A1-2F41-4DFB-B3E0-FB0C9936253D, OS:18.5, name:iPhone 16 Pro }
+ComputePackagePrebuildTargetDependencyGraph
