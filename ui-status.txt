@@ -1,27 +1,5 @@
 Source 9385894b358ffad1d76c9f12eeed4839636c3c8c
-ude Modules -exclude \*.tbd -resolve-src-symlinks /Applications/Xcode_16.4.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/PrivateFrameworks/XCTestSupport.framework /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Products/Debug-iphonesimulator/ScreenLinkDashboardUITests-Runner.app/Frameworks
-
-Copy /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Products/Debug-iphonesimulator/ScreenLinkDashboardUITests-Runner.app/Frameworks/XCTestCore.framework /Applications/Xcode_16.4.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/PrivateFrameworks/XCTestCore.framework (in target 'ScreenLinkDashboardUITests' from project 'ScreenLinkPreview')
-    cd /Users/runner/work/screentesla/screentesla/tools
-    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -exclude Headers -exclude PrivateHeaders -exclude Modules -exclude \*.tbd -resolve-src-symlinks /Applications/Xcode_16.4.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/PrivateFrameworks/XCTestCore.framework /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Products/Debug-iphonesimulator/ScreenLinkDashboardUITests-Runner.app/Frameworks
-
-Copy /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Products/Debug-iphonesimulator/ScreenLinkDashboardUITests-Runner.app/Frameworks/XCTest.framework /Applications/Xcode_16.4.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/Frameworks/XCTest.framework (in target 'ScreenLinkDashboardUITests' from project 'ScreenLinkPreview')
-    cd /Users/runner/work/screentesla/screentesla/tools
-    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -exclude Headers -exclude PrivateHeaders -exclude Modules -exclude \*.tbd -resolve-src-symlinks /Applications/Xcode_16.4.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/Frameworks/XCTest.framework /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Products/Debug-iphonesimulator/ScreenLinkDashboardUITests-Runner.app/Frameworks
-
-Copy /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Products/Debug-iphonesimulator/ScreenLinkDashboardUITests-Runner.app/Frameworks/XCTAutomationSupport.framework /Applications/Xcode_16.4.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/PrivateFrameworks/XCTAutomationSupport.framework (in target 'ScreenLinkDashboardUITests' from project 'ScreenLinkPreview')
-    cd /Users/runner/work/screentesla/screentesla/tools
-    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -exclude Headers -exclude PrivateHeaders -exclude Modules -exclude \*.tbd -resolve-src-symlinks /Applications/Xcode_16.4.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/PrivateFrameworks/XCTAutomationSupport.framework /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Products/Debug-iphonesimulator/ScreenLinkDashboardUITests-Runner.app/Frameworks
-
-Copy /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Products/Debug-iphonesimulator/ScreenLinkDashboardUITests-Runner.app/Frameworks/Testing.framework /Applications/Xcode_16.4.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/Frameworks/Testing.framework (in target 'ScreenLinkDashboardUITests' from project 'ScreenLinkPreview')
-    cd /Users/runner/work/screentesla/screentesla/tools
-    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -exclude Headers -exclude PrivateHeaders -exclude Modules -exclude \*.tbd -resolve-src-symlinks /Applications/Xcode_16.4.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/Frameworks/Testing.framework /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Products/Debug-iphonesimulator/ScreenLinkDashboardUITests-Runner.app/Frameworks
-
-RegisterExecutionPolicyException /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Products/Debug-iphonesimulator/ScreenLinkDashboardUITests-Runner.app/PlugIns/ScreenLinkDashboardUITests.xctest (in target 'ScreenLinkDashboardUITests' from project 'ScreenLinkPreview')
-    cd /Users/runner/work/screentesla/screentesla/tools
-    builtin-RegisterExecutionPolicyException /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Products/Debug-iphonesimulator/ScreenLinkDashboardUITests-Runner.app/PlugIns/ScreenLinkDashboardUITests.xctest
-
-Touch /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Products/Debug-iphonesimulator/ScreenLinkDashboardUITests-Runner.app/PlugIns/ScreenLinkDashboardUITests.xctest (in target 'ScreenLinkDashboardUITests' from project 'ScreenLinkPreview')
+kDashboardUITests' from project 'ScreenLinkPreview')
     cd /Users/runner/work/screentesla/screentesla/tools
     /usr/bin/touch -c /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Products/Debug-iphonesimulator/ScreenLinkDashboardUITests-Runner.app/PlugIns/ScreenLinkDashboardUITests.xctest
 
@@ -159,3 +137,66 @@ Test Case '-[ScreenLinkDashboardUITests.DashboardUITests testProductionControlle
     t =    18.08s Open local.screenlink.airplaylab
     t =    18.08s     Launch local.screenlink.airplaylab
     t =    18.58s         Setting up automation session
+    t =    19.42s         Wait for local.screenlink.airplaylab to idle
+    t =    21.80s Checking `Expect predicate `label CONTAINS "pip=1"` for object "integration.state" StaticText`
+    t =    21.80s     Find the "integration.state" StaticText
+    t =    21.83s Terminate local.screenlink.airplaylab:21132
+    t =    22.90s Open local.screenlink.airplaylab
+    t =    22.90s     Launch local.screenlink.airplaylab
+    t =    23.44s         Setting up automation session
+    t =    24.42s         Wait for local.screenlink.airplaylab to idle
+    t =    26.62s Checking `Expect predicate `label == "Disconnected"` for object "home.status" StaticText`
+    t =    26.62s     Find the "home.status" StaticText
+    t =    28.65s Find the "integration.state" StaticText
+PRODUCTION_CONTROLLER_INTENT_TESTS_PASSED: cancelled late VPN callback, Disconnect during Start, warm widget Start/Stop and cold widget PiP Start after manual disconnect.
+    t =    28.68s Tear Down
+Test Case '-[ScreenLinkDashboardUITests.DashboardUITests testProductionControllerCancelsPendingStartAndWidgetRoutes]' passed (28.996 seconds).
+Test Case '-[ScreenLinkDashboardUITests.DashboardUITests testWidgetGalleryInspection]' started.
+    t =     0.00s Start Test at 2026-11-06 05:36:57.293
+    t =     0.02s Set Up
+    t =     0.02s Setting device orientation to Portrait
+    t =     0.03s     Wait for local.screenlink.airplaylab to idle
+    t =     0.03s Open local.screenlink.airplaylab
+    t =     0.03s     Launch local.screenlink.airplaylab
+    t =     0.03s         Terminate local.screenlink.airplaylab:21471
+    t =     1.48s         Setting up automation session
+    t =     2.51s         Wait for local.screenlink.airplaylab to idle
+    t =     3.67s Pressing Home button
+    t =     4.15s Pressing Home button
+    t =     4.78s Waiting 5.0s for "ScreenLink" Icon to exist
+    t =     5.87s     Checking `Expect predicate `existsNoRetry == 1` for object "ScreenLink" Icon`
+    t =     5.87s         Checking existence of `"ScreenLink" Icon`
+    t =     6.16s Press "ScreenLink" Icon for 1.5 seconds
+    t =     6.16s     Wait for com.apple.springboard to idle
+    t =     6.17s     Find the "ScreenLink" Icon
+    t =     6.24s     Check for interrupting elements affecting "ScreenLink" Icon
+    t =     6.36s     Synthesize event
+    t =     6.37s         Failed: Not hittable: Icon, {{0.0, 0.0}, {0.0, 0.0}}, identifier: 'ScreenLink', label: 'ScreenLink'
+    t =     6.37s         Requesting snapshot of accessibility hierarchy for app with pid 2210
+    t =     6.54s     Wait for com.apple.springboard to idle
+    t =     7.55s     Retrying `Press "ScreenLink" Icon for 1.5 seconds` (attempt #2)
+    t =     7.55s         Wait for com.apple.springboard to idle
+    t =     7.55s         Find the "ScreenLink" Icon
+    t =     7.62s         Check for interrupting elements affecting "ScreenLink" Icon
+    t =     7.67s         Synthesize event
+    t =     7.67s             Failed: Not hittable: Icon, {{0.0, 0.0}, {0.0, 0.0}}, identifier: 'ScreenLink', label: 'ScreenLink'
+    t =     7.67s             Requesting snapshot of accessibility hierarchy for app with pid 2210
+    t =     7.79s         Wait for com.apple.springboard to idle
+    t =     8.80s     Retrying `Press "ScreenLink" Icon for 1.5 seconds` (attempt #3)
+    t =     8.80s         Wait for com.apple.springboard to idle
+    t =     8.80s         Find the "ScreenLink" Icon
+    t =     8.86s         Check for interrupting elements affecting "ScreenLink" Icon
+    t =     8.90s         Synthesize event
+    t =     8.91s             Failed: Not hittable: Icon, {{0.0, 0.0}, {0.0, 0.0}}, identifier: 'ScreenLink', label: 'ScreenLink'
+    t =     8.91s             Requesting snapshot of accessibility hierarchy for app with pid 2210
+    t =     9.03s         Wait for com.apple.springboard to idle
+    t =     9.03s     Requesting snapshot of accessibility hierarchy for app with pid 2210
+/Users/runner/work/screentesla/screentesla/tools/ui/DashboardUITests.swift:57: error: -[ScreenLinkDashboardUITests.DashboardUITests testWidgetGalleryInspection] : Failed to synthesize event: Not hittable: Icon, {{0.0, 0.0}, {0.0, 0.0}}, identifier: 'ScreenLink', label: 'ScreenLink'
+    t =    10.11s Tear Down
+Test Case '-[ScreenLinkDashboardUITests.DashboardUITests testWidgetGalleryInspection]' failed (10.333 seconds).
+Test Suite 'DashboardUITests' failed at 2026-11-06 05:37:07.626.
+	 Executed 3 tests, with 1 failure (0 unexpected) in 64.238 (64.240) seconds
+Test Suite 'ScreenLinkDashboardUITests.xctest' failed at 2026-11-06 05:37:07.627.
+	 Executed 3 tests, with 1 failure (0 unexpected) in 64.238 (64.241) seconds
+Test Suite 'All tests' failed at 2026-11-06 05:37:07.627.
+	 Executed 3 tests, with 1 failure (0 unexpected) in 64.238 (64.242) seconds
