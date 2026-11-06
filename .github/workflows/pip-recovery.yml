@@ -1,0 +1,31 @@
+name: Native PiP foreground recovery
+on:
+  push:
+    branches: [release/build63]
+permissions:
+  contents: read
+jobs:
+  pip:
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare native test harness
+        run: |
+          brew install xcodegen
+          python3 tools/prepare_pip_tests.py
+          xcodegen generate --spec build/pip-tests.yml --project build
+      - name: Test production PiP recovery with failed media notification
+        run: |
+          set -euo pipefail
+          simulator_id="$(xcrun simctl list devices available -j | python3 -c 'import json,sys;d=json.load(sys.stdin);print(next(x["udid"] for rows in d["devices"].values() for x in rows if x["name"].startswith("iPhone")))')"
+          xcrun simctl boot "$simulator_id" || true
+          xcrun simctl bootstatus "$simulator_id" -b
+          xcodebuild -project build/PiPRecovery.xcodeproj -scheme PiPRecovery -destination "platform=iOS Simulator,id=$simulator_id" -derivedDataPath build/PiPDerived CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO test > build/pip-test.log 2>&1 || { tail -100 build/pip-test.log; exit 1; }
+          tail -30 build/pip-test.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-pip-recovery-log
+          path: build/pip-test.log
+          retention-days: 7

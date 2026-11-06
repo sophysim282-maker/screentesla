@@ -20,6 +20,7 @@ UIViewController *SLFixtureRetainedPeer;
 - (void)prepareMediaOnly {self.mediaOnly=YES;}
 - (void)authorizeNextLocalViewer {}
 - (void)refreshDiscovery {}
+- (BOOL)resumeListenersIfNeeded {return self.running;}
 - (BOOL)videoIsLive {return self.running;}
 - (NSDictionary *)nativeMediaState {return @{@"active":@(self.running),@"epoch":@"fixture",@"url":@"/media/resource/fixture",@"paused":@NO};}
 @end
@@ -54,6 +55,7 @@ UIViewController *SLFixtureRetainedPeer;
 @implementation YouTubePiP
 - (void)updateState:(NSDictionary *)state {}
 - (void)startFloating {SLFixturePiPStarts++;self.active=YES;if(self.activityChanged)self.activityChanged(YES);}
+- (void)resumeAfterForeground {[self startFloating];}
 - (void)reset {self.active=NO;}
 @end
 @interface FloatingPreview ()

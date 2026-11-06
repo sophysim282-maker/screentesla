@@ -35,5 +35,7 @@ typedef NS_ENUM(NSInteger, SLVideoProfile) { SLVideoFast=0, SLVideoBalanced=1, S
 - (void)authorizeNextLocalViewer;
 - (BOOL)start;
 - (void)refreshDiscovery;
+/// Rebind dead listeners on foreground without clearing media or viewer authorization.
+- (BOOL)resumeListenersIfNeeded;
 - (void)stop;
 @end

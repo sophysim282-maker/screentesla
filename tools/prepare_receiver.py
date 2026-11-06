@@ -196,3 +196,27 @@ if 'sl_reverse_feed' not in s:
                     }
 ''', 1)
     p.write_text(s)
+
+# Preserve real listener liveness after fatal accept/select exits and join the
+# terminated thread before rebinding the same RAOP object on foreground resume.
+p = vendor / 'lib' / 'httpd.c'
+s = p.read_text()
+if 'ScreenLink listener resume repair' not in s:
+    s = s.replace('    if (fd == -1) {\n        /* FIXME: Error happened */\n        return -1;\n    }', '''    if (fd == -1) {
+#if !defined(WIN32)
+        if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK || errno == ECONNABORTED) return 0;
+#endif
+        return -1;
+    }''', 1)
+    s = s.replace('''        } else if (ret == -1) {
+            logger_log(httpd->logger, LOGGER_ERR, "httpd error in select");''', '''        } else if (ret == -1) {
+#if !defined(WIN32)
+            if (errno == EINTR) continue;
+#endif
+            logger_log(httpd->logger, LOGGER_ERR, "httpd error in select");''', 1)
+    assert 'running = httpd->running || !httpd->joined;' in s
+    s = s.replace('running = httpd->running || !httpd->joined;', 'running = httpd->running;', 1)
+    assert 'if (!httpd->running || httpd->joined)' in s
+    s = s.replace('if (!httpd->running || httpd->joined)', 'if (httpd->joined)', 1)
+    s += '\n/* ScreenLink listener resume repair: real liveness and join-before-rebind. */\n'
+    p.write_text(s)

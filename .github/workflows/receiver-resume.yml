@@ -1,0 +1,26 @@
+name: Receiver listener resume regression
+on:
+  push:
+    branches: [release/build63]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native-listeners:
+    runs-on: macos-15-intel
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare actual patched receiver core
+        run: |
+          python3 tools/prepare_receiver.py
+          mkdir -p build
+      - name: AirPlay thread death and same-port recovery
+        run: |
+          cc -std=c11 -Wall -Wextra -Wno-unused-parameter -IApp -IVendor/RPiPlay/lib tools/test_httpd_resume.c Vendor/RPiPlay/lib/netutils.c Vendor/RPiPlay/lib/logger.c Vendor/RPiPlay/lib/http_request.c Vendor/RPiPlay/lib/http_response.c Vendor/RPiPlay/lib/llhttp/api.c Vendor/RPiPlay/lib/llhttp/http.c Vendor/RPiPlay/lib/llhttp/llhttp.c -pthread -o build/test-httpd-resume
+          build/test-httpd-resume
+      - name: Exact production local listener fault recovery
+        run: |
+          python3 tools/create_listener_resume_fixture.py
+          xcrun --sdk macosx clang -fobjc-arc -fblocks -Wall -Wextra -Wno-unused-parameter build/receiver-listener-fixture.m -framework Foundation -o build/test-local-listener-resume
+          build/test-local-listener-resume

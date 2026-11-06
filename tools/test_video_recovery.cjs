@@ -41,13 +41,13 @@ const server=http.createServer((req,res)=>{
   await page.waitForFunction(()=>p.stats.drawn>recoveredDrawn+20&&p.currentTime>7,null,{timeout:15000});
   await page.evaluate(()=>{const until=performance.now()+90;while(performance.now()<until){};});
   await page.waitForTimeout(100);
-  const result=await page.evaluate(()=>({profile:p.performanceProfile(),stats:p.stats,time:p.currentTime,videoEnd:p.videoEnd,audioEnd:p.audioEnd,sameAudio:p.decoders.get('audio')===audioDecoder,sameSerial:p.serial===startSerial,width:p.canvas.width,height:p.canvas.height,queued:p.frames.map(f=>f.timestamp/1e6),failure:window.failure}));
+  const result=await page.evaluate(()=>({profile:p.performanceProfile(),stats:p.stats,time:p.currentTime,videoEnd:p.videoEnd,audioEnd:p.audioEnd,sameAudio:p.decoders.get('audio')===audioDecoder,sameSerial:p.serial===startSerial,width:p.canvas.width,height:p.canvas.height,queued:p.frames.map(f=>f.timestamp/1e6),lastDrawn:p.lastDrawnVideoTimestamp/1e6,failure:window.failure}));
   assert(result.profile.metrics.demuxMs.count>0,'Actual segment demux must be measured');
   assert(result.profile.metrics.decoderWaitMs.max>1000,'Injected decoder backpressure must appear in profile');
   assert(result.profile.metrics.renderCallbackGapMs.max>=70,'Injected main-thread stall must appear in callback gaps');
   assert(result.profile.metrics.canvasDrawMs.count>0,'Canvas draw calls must be measured');
   assert(result.profile.events.length<=60,'Profile event history must remain bounded');
-  assert.equal(result.width,1920);assert.equal(result.height,1080);assert(result.sameAudio&&result.sameSerial);assert(result.stats.videoQueueTimeouts>0);assert(result.stats.maxFrames<=49);assert(result.queued.every(t=>t>=result.time-.15),'Stale frames survived catch-up');assert(!result.failure,result.failure);assert.deepEqual(errors,[]);
+  assert.equal(result.width,1920);assert.equal(result.height,1080);assert(result.sameAudio&&result.sameSerial);assert(result.stats.videoQueueTimeouts>0);assert(result.stats.maxFrames<=49);assert(result.queued.every(t=>t>result.lastDrawn),'Already drawn frames survived monotonic admission');assert(!result.failure,result.failure);assert.deepEqual(errors,[]);
   await page.evaluate(()=>{window.beforeError=p.stats.videoRecoveries;window.injectError=true;});
   await page.waitForFunction(()=>p.stats.videoRecoveries>beforeError&&p.stats.drawn>recoveredDrawn+40,null,{timeout:15000});
   await page.waitForFunction(()=>p.currentTime>14&&p.stats.drawn>100,null,{timeout:20000});
@@ -55,7 +55,7 @@ const server=http.createServer((req,res)=>{
   console.log('BUILD59_VIDEO_RECOVERY_PASSED',JSON.stringify(result));
   await page.evaluate(async()=>{reorderFault=true;await p.seek(8);await p.play();});
   await page.waitForFunction(()=>p.serial>startSerial&&p.currentTime>9&&p.stats.drawn>120,null,{timeout:15000});
-  assert(await page.evaluate(()=>!p.error&&p.frames.every(f=>f.timestamp/1e6>=p.currentTime-.15)),'Late old decoder callbacks crossed seek generation');
+  assert(await page.evaluate(()=>!p.error&&p.frames.every(f=>f.timestamp>p.lastDrawnVideoTimestamp)),'Late old decoder callbacks crossed seek generation');
   await page.evaluate(()=>p.destroy());
  }finally{await browser?.close();server.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});

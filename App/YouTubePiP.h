@@ -5,5 +5,6 @@
 @property(nonatomic,readonly) BOOL active;
 - (void)updateState:(NSDictionary *)state;
 - (void)startFloating;
+- (void)resumeAfterForeground;
 - (void)reset;
 @end

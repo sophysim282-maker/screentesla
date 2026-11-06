@@ -150,7 +150,7 @@ assert w.get('CFBundlePackageType')=='XPC!'
 widget_binary=(widget/w['CFBundleExecutable']).read_bytes()
 for kind in [b'ScreenLink.Controls',b'start-youtube',b'disconnect-all']:
     assert kind in widget_binary, 'Widget control route/configuration missing: '+str(kind)
-assert parent['CFBundleVersion']=='62' and parent['CFBundleShortVersionString']=='0.20.25'
+assert parent['CFBundleVersion']=='63' and parent['CFBundleShortVersionString']=='0.20.26'
 assert parent.get('CFBundleIcons',{}).get('CFBundlePrimaryIcon',{}).get('CFBundleIconName')=='AppIcon'
 assert (app/'Assets.car').is_file() and (app/'ScreenLinkCover.png').is_file()
 assert parent['NSSupportsLiveActivities']
