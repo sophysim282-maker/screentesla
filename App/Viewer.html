@@ -126,6 +126,7 @@ async function pollStatus(){
    const response=await request(endpoint('/status.json'));
    if(response.status===403){expired=true;startViewer();status.textContent='This viewer link expired. Copy the current link from ScreenLink.';document.body.classList.add('stale');return;}
    if(!response.ok)throw Error();const state=await response.json(),now=performance.now();
+   if(state.mediaActive){location.href=endpoint('/video');return;}
    const count=mode==='h264'?state.h264Frames:state.jpegFrames;
    if(lastSource && count>=lastSource.frames)sourceFPS=Math.round((count-lastSource.frames)*1000/(now-lastSource.time));else sourceFPS=0;
    lastSource={frames:count,time:now};

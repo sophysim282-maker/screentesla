@@ -5,3 +5,30 @@ build/
 *.xcodeproj/
 __pycache__/
 .DS_Store
+
+# Recreated from the integrity-pinned hls.js npm package during builds.
+App/HLSPlayer.js
+App/HLSPlayer-LICENSE.txt
+
+App/MP4Demux.js
+App/MP4Demux-LICENSE.txt
+App/TSDemux.js
+App/TSDemux-LICENSE.txt
+
+App/WebRTC-ThirdParty.txt
+
+node_modules/
+
+# Private local HTTPS identity must never enter source control.
+PrivateTLS/
+**/PrivateTLS/
+*.key
+*.p12
+*.pfx
+fullchain.pem
+
+# Cloud-rendered brand assets are recreated before project generation.
+App/BrandAssets.xcassets/
+App/ScreenLinkCover.png
+tools/ScreenLinkPreview.xcodeproj/
+tools/ui/*-Info.plist
