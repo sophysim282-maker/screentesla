@@ -1,8 +1,5 @@
 Source 47c1292a8e3ab87aa33e92dfcbc15b2c15675ca3
-s
-    write-file /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ScreenLinkPreview.build/Debug-iphonesimulator/ScreenLinkPreviewWidgets.build/Objects-normal/arm64/ScreenLinkPreviewWidgets-OutputFileMap.json
-
-WriteAuxiliaryFile /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ScreenLinkPreview.build/Debug-iphonesimulator/ScreenLinkPreview.build/ScreenLinkPreview-all-non-framework-target-headers.hmap (in target 'ScreenLinkPreview' from project 'ScreenLinkPreview')
+Preview-all-non-framework-target-headers.hmap (in target 'ScreenLinkPreview' from project 'ScreenLinkPreview')
     cd /Users/runner/work/screentesla/screentesla/tools
     write-file /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ScreenLinkPreview.build/Debug-iphonesimulator/ScreenLinkPreview.build/ScreenLinkPreview-all-non-framework-target-headers.hmap
 
@@ -50,5 +47,10 @@ SwiftDriver ScreenLinkPreviewWidgets normal arm64 com.apple.xcode.tools.swift.co
 SwiftEmitModule normal arm64 Emitting\ module\ for\ ScreenLinkPreviewWidgets (in target 'ScreenLinkPreviewWidgets' from project 'ScreenLinkPreview')
 
 EmitSwiftModule normal arm64 (in target 'ScreenLinkPreviewWidgets' from project 'ScreenLinkPreview')
+    cd /Users/runner/work/screentesla/screentesla/tools
+    
+
+SwiftCompile normal arm64 Compiling\ ScreenLinkWidgets.swift /Users/runner/work/screentesla/screentesla/Widgets/ScreenLinkWidgets.swift (in target 'ScreenLinkPreviewWidgets' from project 'ScreenLinkPreview')
+SwiftCompile normal arm64 /Users/runner/work/screentesla/screentesla/Widgets/ScreenLinkWidgets.swift (in target 'ScreenLinkPreviewWidgets' from project 'ScreenLinkPreview')
     cd /Users/runner/work/screentesla/screentesla/tools
     
