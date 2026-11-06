@@ -1,2 +1,118 @@
 Source 9385894b358ffad1d76c9f12eeed4839636c3c8c
 Preparing simulator and production-controller UI test harness
+Monitoring boot status for iPhone 16 Pro (4A57FB15-6E7C-49CC-BE93-450B18BD286E).
+[2026-11-06 05:28:44 +0000] Status=2, isTerminal=NO, Elapsed=00:44.
+	Waiting on Data Migration
+		Reason:Running plugin com.apple.-0LaunchServicesMigrator (00LaunchServicesMigrator.migrator, user-agnostic)
+		Migration Elapsed:00:33 seconds
+
+[2026-11-06 05:28:49 +0000] Status=2, isTerminal=NO, Elapsed=00:49.
+	Waiting on Data Migration
+		Reason:Running plugin com.apple.managedconfiguration.migrator (MCProfile.migrator, user-agnostic)
+		Migration Elapsed:00:35 seconds
+
+[2026-11-06 05:28:51 +0000] Status=2, isTerminal=NO, Elapsed=00:50.
+	Waiting on Data Migration
+		Reason:Running plugin com.apple.managedconfiguration.migrator (MCProfile.migrator, user-agnostic)
+		Migration Elapsed:00:38 seconds
+
+[2026-11-06 05:28:52 +0000] Status=2, isTerminal=NO, Elapsed=00:51.
+	Waiting on Data Migration
+		Reason:Running plugin com.apple.managedconfiguration.migrator (MCProfile.migrator, user-agnostic)
+		Migration Elapsed:00:40 seconds
+
+[2026-11-06 05:28:52 +0000] Status=2, isTerminal=NO, Elapsed=00:52.
+	Waiting on Data Migration
+		Reason:Running plugin com.apple.managedconfiguration.migrator (MCProfile.migrator, user-agnostic)
+		Migration Elapsed:00:41 seconds
+
+[2026-11-06 05:28:53 +0000] Status=2, isTerminal=NO, Elapsed=00:53.
+	Waiting on Data Migration
+		Reason:Running plugin com.apple.managedconfiguration.migrator (MCProfile.migrator, user-agnostic)
+		Migration Elapsed:00:42 seconds
+
+[2026-11-06 05:28:54 +0000] Status=2, isTerminal=NO, Elapsed=00:54.
+	Waiting on Data Migration
+		Reason:Running plugin com.apple.managedconfiguration.migrator (MCProfile.migrator, user-agnostic)
+		Migration Elapsed:00:43 seconds
+
+[2026-11-06 05:28:55 +0000] Status=2, isTerminal=NO, Elapsed=00:55.
+	Waiting on Data Migration
+		Reason:Running plugin com.apple.managedconfiguration.migrator (MCProfile.migrator, user-agnostic)
+		Migration Elapsed:00:43 seconds
+
+[2026-11-06 05:28:57 +0000] Status=2, isTerminal=NO, Elapsed=00:56.
+	Waiting on Data Migration
+		Reason:Running plugin com.apple.addressbook.migrator (AddressBookLegacy.migrator)
+		Migration Elapsed:00:45 seconds
+
+[2026-11-06 05:28:57 +0000] Status=2, isTerminal=NO, Elapsed=00:57.
+	Waiting on Data Migration
+		Reason:Running plugin com.apple.locationd.migrator (CoreLocationMigrator.migrator)
+		Migration Elapsed:00:46 seconds
+
+[2026-11-06 05:28:58 +0000] Status=2, isTerminal=NO, Elapsed=00:58.
+	Waiting on Data Migration
+		Reason:Running plugin com.apple.PreferencesMigrator (PreferencesMigrator.migrator)
+		Migration Elapsed:00:47 seconds
+
+[2026-11-06 05:28:59 +0000] Status=2, isTerminal=NO, Elapsed=00:58.
+	Waiting on Data Migration
+		Reason:Running plugin com.apple.PreferencesMigrator (PreferencesMigrator.migrator)
+		Migration Elapsed:00:48 seconds
+
+[2026-11-06 05:29:01 +0000] Status=4, isTerminal=NO, Elapsed=01:01.
+	Waiting on System App
+
+[2026-11-06 05:29:02 +0000] Status=4, isTerminal=NO, Elapsed=01:02.
+	Waiting on System App
+
+[2026-11-06 05:29:03 +0000] Status=4, isTerminal=NO, Elapsed=01:03.
+	Waiting on System App
+
+[2026-11-06 05:29:08 +0000] Status=4294967295, isTerminal=YES, Elapsed=01:08.
+	Finished
+
+Command line invocation:
+    /Applications/Xcode_16.4.app/Contents/Developer/usr/bin/xcodebuild -project tools/ScreenLinkPreview.xcodeproj -scheme ScreenLinkPreview -destination "platform=iOS Simulator,id=4A57FB15-6E7C-49CC-BE93-450B18BD286E" -derivedDataPath build/PreviewDerived -resultBundlePath build/Preview.xcresult CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO test
+
+Build settings from command line:
+    CODE_SIGNING_ALLOWED = NO
+    CODE_SIGNING_REQUIRED = NO
+
+Writing result bundle at path:
+	/Users/runner/work/screentesla/screentesla/build/Preview.xcresult
+
+--- xcodebuild: WARNING: Using the first of multiple matching destinations:
+{ platform:iOS Simulator, arch:arm64, id:4A57FB15-6E7C-49CC-BE93-450B18BD286E, OS:18.5, name:iPhone 16 Pro }
+{ platform:iOS Simulator, arch:x86_64, id:4A57FB15-6E7C-49CC-BE93-450B18BD286E, OS:18.5, name:iPhone 16 Pro }
+ComputePackagePrebuildTargetDependencyGraph
+
+Prepare packages
+
+CreateBuildRequest
+
+SendProjectDescription
+
+CreateBuildOperation
+
+ComputeTargetDependencyGraph
+note: Building targets in dependency order
+note: Target dependency graph (3 targets)
+    Target 'ScreenLinkDashboardUITests' in project 'ScreenLinkPreview'
+        ➜ Explicit dependency on target 'ScreenLinkPreview' in project 'ScreenLinkPreview'
+    Target 'ScreenLinkPreview' in project 'ScreenLinkPreview'
+        ➜ Explicit dependency on target 'ScreenLinkPreviewWidgets' in project 'ScreenLinkPreview'
+    Target 'ScreenLinkPreviewWidgets' in project 'ScreenLinkPreview' (no dependencies)
+
+GatherProvisioningInputs
+
+CreateBuildDescription
+
+ExecuteExternalTool /Applications/Xcode_16.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc --version
+
+ExecuteExternalTool /Applications/Xcode_16.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang -v -E -dM -arch arm64 -isysroot /Applications/Xcode_16.4.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator18.5.sdk -x objective-c -c /dev/null
+
+ExecuteExternalTool /Applications/Xcode_16.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang -v -E -dM -isysroot /Applications/Xcode_16.4.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator18.5.sdk -x c -c /dev/null
+
+ExecuteExternalTool /Applications/Xcode_16.4.app/Contents/Developer/usr/bin/actool --print-asset-tag-combinations --output-format xml1 /Users/runner/work/screentesla/screentesla/App/BrandAssets.xcassets
