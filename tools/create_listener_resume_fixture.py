@@ -54,7 +54,11 @@ static void wait_served(int n){for(int i=0;i<200&&atomic_load(&served)<n;i++)usl
 int main(void){@autoreleasepool{
  Receiver *r=[Receiver new];assert([r startListener:0 context:NULL]);
  struct sockaddr_in a={0};socklen_t len=sizeof a;assert(getsockname(r->_socket,(struct sockaddr *)&a,&len)==0);unsigned short port=ntohs(a.sin_port);
- int original=r->_socket;assert(![r listenerNeedsRepair:NO]);
+ int original=r->_socket;int option=-1,defunct=-1;socklen_t optionLength=sizeof option;int get=getsockopt(original,SOL_SOCKET,SO_ACCEPTCONN,&option,&optionLength);int probeErr=errno;
+#ifdef SO_ISDEFUNCT
+ optionLength=sizeof defunct;int dg=getsockopt(original,SOL_SOCKET,SO_ISDEFUNCT,&defunct,&optionLength);printf("DEFUNCT rc=%d value=%d errno=%d\\n",dg,defunct,errno);
+#endif
+ printf("INITIAL fd=%d accepting=%d serial=%lu gen=%lu optionrc=%d listening=%d errno=%d\\n",original,r->_httpAccepting,(unsigned long)r->_httpListenSerial,(unsigned long)r->_generation,get,option,probeErr);fflush(stdout);assert(![r listenerNeedsRepair:NO]);
  atomic_store(&next_error,EINTR);int first=client(port);wait_served(1);close(first);assert(r->_socket==original);assert(![r listenerNeedsRepair:NO]);
  atomic_store(&next_error,EBADF);int broken=client(port);for(int i=0;i<200&&! [r listenerNeedsRepair:NO];i++)usleep(10000);
  assert([r listenerNeedsRepair:NO]);for(int i=0;i<200&&r->_socket>=0;i++)usleep(10000);assert(r->_socket==-1);close(broken);
