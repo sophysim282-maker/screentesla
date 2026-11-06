@@ -141,7 +141,7 @@ jobs:
           retention-days: 7
       - name: Publish non-sensitive simulator and brand previews for review
         continue-on-error: true
-        if: success()
+        if: always()
         env:
           GH_TOKEN: ${{ github.token }}
         run: |

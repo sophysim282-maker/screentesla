@@ -47,27 +47,46 @@ final class DashboardUITests: XCTestCase {
   print("PRODUCTION_CONTROLLER_INTENT_TESTS_PASSED: cancelled late VPN callback, Disconnect during Start, warm widget Start/Stop and cold widget PiP Start after manual disconnect.")
  }
  func testWidgetGalleryInspection() {
-  let app=XCUIApplication();app.launch();XCUIDevice.shared.press(.home)
+  XCUIDevice.shared.orientation = .portrait
+  let app=XCUIApplication();app.launch()
+  XCUIDevice.shared.press(.home);XCUIDevice.shared.press(.home)
   let spring=XCUIApplication(bundleIdentifier:"com.apple.springboard")
+  // Enter editing on the actual Home Screen, never type into App Library search.
   let icon=spring.icons["ScreenLink"].firstMatch
-  guard icon.waitForExistence(timeout:10) else {print("WIDGET_GALLERY_NOT_VERIFIED: app icon not located on this simulator page");capture("widget-gallery-unavailable");return}
-  icon.press(forDuration:1.5)
-  let edit=spring.buttons["Edit Home Screen"]
-  if edit.waitForExistence(timeout:3) {edit.tap()}
-  let add=spring.buttons["Add Widget"]
-  if add.waitForExistence(timeout:3) {add.tap()}
-  else {
-   let menu=spring.buttons["Edit"].firstMatch
-   if menu.exists {menu.tap();let option=spring.buttons["Add Widget"].firstMatch;if option.waitForExistence(timeout:3){option.tap()}}
+  if icon.waitForExistence(timeout:5) {
+   icon.press(forDuration:1.5)
+   let addHome=spring.buttons["Add to Home Screen"]
+   if addHome.waitForExistence(timeout:2) {addHome.tap();XCUIDevice.shared.press(.home)}
+   else {
+    let editHome=spring.buttons["Edit Home Screen"]
+    if editHome.waitForExistence(timeout:2){editHome.tap()}else{XCUIDevice.shared.press(.home)}
+   }
   }
-  let search=spring.searchFields.firstMatch
-  guard search.waitForExistence(timeout:5) else {print("WIDGET_GALLERY_NOT_VERIFIED: add-widget search unavailable");capture("widget-gallery-inspection");return}
-  search.tap();search.typeText("ScreenLink")
+  var edit=spring.buttons["Edit"].firstMatch
+  if !edit.waitForExistence(timeout:2) {
+   spring.coordinate(withNormalizedOffset:CGVector(dx:0.96,dy:0.45)).press(forDuration:2)
+  }
+  edit=spring.buttons["Edit"].firstMatch
+  if edit.waitForExistence(timeout:3){edit.tap()}
+  var added=false
+  for title in ["Add Widget","Add Widgets","Add"] {
+   let button=spring.buttons[title].firstMatch
+   if button.waitForExistence(timeout:2)&&button.isHittable {button.tap();added=true;break}
+  }
+  capture("widget-gallery-entry")
+  print("WIDGET_GALLERY_ENTRY_TREE: "+spring.debugDescription)
+  let searches=spring.searchFields.allElementsBoundByIndex
+  guard added,let search=searches.first(where: {!($0.placeholderValue ?? "").contains("App Library")}) else {
+   print("WIDGET_GALLERY_NOT_VERIFIED: correct gallery search was not available");capture("widget-gallery-unavailable");return
+  }
+  guard search.isHittable else {print("WIDGET_GALLERY_NOT_VERIFIED: gallery search is not hittable");return}
+  search.tap()
+  search.typeText("ScreenLink")
   let found=spring.staticTexts.containing(NSPredicate(format:"label CONTAINS[c] %@", "ScreenLink")).firstMatch
-  if found.waitForExistence(timeout:5) {
+  if found.waitForExistence(timeout:8) {
    found.tap();let controls=spring.staticTexts["ScreenLink Controls"].firstMatch
    if controls.waitForExistence(timeout:5){print("WIDGET_GALLERY_SCREENLINK_CONTROLS_VERIFIED")}else{print("WIDGET_GALLERY_APP_FOUND_CONTROLS_NOT_VERIFIED")}
    capture("widget-gallery-screenlink")
-  } else {print("WIDGET_GALLERY_NOT_VERIFIED: "+spring.debugDescription);capture("widget-gallery-inspection")}
+  }else{print("WIDGET_GALLERY_NOT_VERIFIED: "+spring.debugDescription);capture("widget-gallery-inspection")}
  }
 }
