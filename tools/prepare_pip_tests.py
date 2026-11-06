@@ -1,0 +1,8 @@
+import json,pathlib
+root=pathlib.Path('build');root.mkdir(exist_ok=True)
+(root/'PiPHost.m').write_text('#import <UIKit/UIKit.h>\n@interface ProbeDelegate : UIResponder <UIApplicationDelegate>\n@property(nonatomic,strong) UIWindow *window;\n@end\n@implementation ProbeDelegate\n- (BOOL)application:(UIApplication *)a didFinishLaunchingWithOptions:(NSDictionary *)o { self.window=[[UIWindow alloc] initWithFrame:UIScreen.mainScreen.bounds];self.window.rootViewController=[UIViewController new];[self.window makeKeyAndVisible];return YES;}\n@end\nint main(int argc,char **argv){@autoreleasepool{return UIApplicationMain(argc,argv,nil,@"ProbeDelegate");}}\n')
+spec={'name':'PiPRecovery','options':{'deploymentTarget':{'iOS':'17.0'}},'targets':{
+ 'PiPHost':{'type':'application','platform':'iOS','sources':['PiPHost.m'],'settings':{'base':{'PRODUCT_BUNDLE_IDENTIFIER':'local.screenlink.pipprobe','GENERATE_INFOPLIST_FILE':True,'CLANG_ENABLE_OBJC_ARC':True}},'info':{'path':'PiPHostInfo.plist','properties':{'UILaunchScreen':{}}}},
+ 'PiPRecoveryTests':{'type':'bundle.unit-test','platform':'iOS','sources':['../App/YouTubePiP.m','../tools/ui/PiPRecoveryTests.m'],'dependencies':[{'target':'PiPHost'},{'sdk':'AVKit.framework'},{'sdk':'AVFoundation.framework'}],'settings':{'base':{'PRODUCT_BUNDLE_IDENTIFIER':'local.screenlink.pipprobe.tests','CLANG_ENABLE_OBJC_ARC':True,'HEADER_SEARCH_PATHS':['$(SRCROOT)/../App'],'GENERATE_INFOPLIST_FILE':True,'TEST_HOST':'$(BUILT_PRODUCTS_DIR)/PiPHost.app/PiPHost','BUNDLE_LOADER':'$(TEST_HOST)'}}}},
+ 'schemes':{'PiPRecovery':{'build':{'targets':{'PiPHost':'all'}},'test':{'targets':['PiPRecoveryTests']}}}}
+(root/'pip-tests.yml').write_text(json.dumps(spec))
