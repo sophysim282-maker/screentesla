@@ -90,3 +90,10 @@ Monitoring boot status for iPhone 16 Pro (4A57FB15-6E7C-49CC-BE93-450B18BD286E).
 [2026-11-06 05:41:59 +0000] Status=4294967295, isTerminal=YES, Elapsed=01:19.
 	Finished
 
+Command line invocation:
+    /Applications/Xcode_16.4.app/Contents/Developer/usr/bin/xcodebuild -project tools/ScreenLinkPreview.xcodeproj -scheme ScreenLinkPreview -destination "platform=iOS Simulator,id=4A57FB15-6E7C-49CC-BE93-450B18BD286E" -derivedDataPath build/PreviewDerived -resultBundlePath build/Preview.xcresult CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO test
+
+Build settings from command line:
+    CODE_SIGNING_ALLOWED = NO
+    CODE_SIGNING_REQUIRED = NO
+
