@@ -176,7 +176,7 @@ jobs:
           print('PREVIEW_BRANCH='+ref)
           PY
   build:
-    needs: [recovery, video-recovery, dashboard]
+    needs: [recovery, video-recovery]
     runs-on: macos-15-intel
     timeout-minutes: 35
     steps:
