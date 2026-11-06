@@ -126,11 +126,11 @@ class CanvasPlayer {
   this.audioContext=audioContext;this.ownsAudioContext=!audioContext;this.audioTail=null;
   this.bufferSeconds=Math.max(0,Math.min(2,Number(bufferSeconds)||0));this.bufferReadyAt=0;this.preparedVideoEnd=0;
   this.quality=quality;this.offeredHeights=[];this.selectedHeight=0;this.onerror=onerror;this.paused=true;this.muted=true;this.duration=0;this.readyState=0;this.ended=false;this.error=null;this.closed=false;
-  this.frames=[];this.audio=[];this.nodes=new Set();this.timelines=new Map();this.segmentDiagnostics=[];this.segmentCache=new Map();this.playbackEvents=[];this.audioEnd=0;this.lastAudioSampleRate=0;this.hasAudio=false;this.videoStarved=false;this.position=0;this.videoEnd=0;this.anchor=0;this.running=false;this.serial=0;this.videoNeedsKey=false;this.videoRecoveryAt=-Infinity;this.videoGeneration=0;this.videoRecoveryWindow=0;this.videoRecoveryCount=0;this.videoRetryAfter=0;this.decoders=new Map();this.configs=new Map();this.initializers=new Map();
+  this.frames=[];this.audio=[];this.nodes=new Set();this.timelines=new Map();this.segmentDiagnostics=[];this.segmentCache=new Map();this.playbackEvents=[];this.audioEnd=0;this.lastAudioSampleRate=0;this.hasAudio=false;this.videoStarved=false;this.position=0;this.videoEnd=0;this.anchor=0;this.running=false;this.serial=0;this.videoNeedsKey=false;this.videoRecoveryAt=-Infinity;this.lastVideoDrawAt=performance.now();this.videoGeneration=0;this.videoRecoveryWindow=0;this.videoRecoveryCount=0;this.videoRetryAfter=0;this.decoders=new Map();this.configs=new Map();this.initializers=new Map();
   this.stats={drawn:0,dropped:0,decoded:0,audioDecoded:0,maxFrames:0,maxAudio:0,audioScheduled:0,audioLate:0,audioJoined:0,audioRestored:0,bufferWaitMs:0,rebufferCount:0,timestampResets:0,directAudioCopies:0,audioGapMs:0,maxAudioNodes:0,videoHiccups:0,audioUnderruns:0,staleAudioDropped:0,maxSegmentCache:0,audioDecoderFlushes:0,videoRecoveries:0,staleVideoDropped:0,videoQueueTimeouts:0};
   this.animation=requestAnimationFrame(()=>this.paint());
   // Audio look-ahead must not depend on Canvas animation callbacks.
-  this.audioTimer=setInterval(()=>{if(!this.closed&&!this.paused&&this.running){try{this.scheduleAudio(this.currentTime);}catch(error){this.fail(error);}}},20);
+  this.audioTimer=setInterval(()=>{if(!this.closed&&!this.paused&&this.running){try{this.scheduleAudio(this.currentTime);this.checkVideoProgress();}catch(error){this.fail(error);}}},20);
  }
  clock(){return this.audioContext?.state==='running'?this.audioContext.currentTime:performance.now()/1000;}
  audible(){return !this.muted&&this.hasAudio&&this.audioContext?.state==='running';}
@@ -233,6 +233,16 @@ class CanvasPlayer {
   }
   if(kind==='video')this.readyState=2;
  }
+ checkVideoProgress(){
+  // Detect a decoder that accepts input but stops producing frames. Preserve
+  // the audio clock and recover at a real source keyframe, never a fake frame.
+  if(!this.audible()||!this.running||this.paused||this.finished||this.frames.length||!this.decoders.has('video')){
+   this.lastVideoDrawAt=performance.now();return;
+  }
+  if(this.preparedVideoEnd>this.currentTime+.25&&performance.now()-this.lastVideoDrawAt>3000){
+   this.lastVideoDrawAt=performance.now();this.resetVideo('output-stall');
+  }
+ }
  resetVideo(reason){
   this.videoGeneration++;const now=performance.now();
   if(now-this.videoRecoveryWindow>10000){this.videoRecoveryWindow=now;this.videoRecoveryCount=0;}
@@ -312,12 +322,9 @@ class CanvasPlayer {
   };
   await Promise.all([consume(samples.filter(s=>s.track.video)),consume(samples.filter(s=>s.track.audio))]);
   if(serial!==this.serial||this.closed)return;
-  for(const type of new Set(samples.map(s=>s.track.video?'video':'audio'))){const decoder=this.decoders.get(type);if(type==='video'&&decoder?.state==='configured'){
-   let timer;
-   try{await Promise.race([decoder.flush(),new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('Video flush deadline')),2000);})]);}
-   catch(error){if(serial!==this.serial||this.closed)return;if(this.audible()&&this.running){this.resetVideo('flush-timeout');}else throw error;}
-   finally{clearTimeout(timer);}
-  }}
+  // Keep reference/reorder state across continuous HLS segments. A flush
+  // here would require the next segment to begin with a key chunk.
+
  }
  async preparedSegment(segment,serial,owners){
   while(serial===this.serial&&!this.closed&&!this.segmentCache.has(segment)&&this.segmentCache.size>=6)await sleep(10);
@@ -346,8 +353,19 @@ class CanvasPlayer {
      pending=index+1<segments.length?fetchAt(index+1):null;
      try{await this.decodeSegment(segment,kind,serial,result.data,allowEmpty);}finally{this.releaseSegment(segment,entry,kind);}
     }
-    // Flush audio only at the end of its rendition, never at ordinary HLS boundaries.
-    if(kind==='audio'&&serial===this.serial&&!this.closed){const decoder=this.decoders.get('audio');if(decoder?.state==='configured'){await decoder.flush();this.stats.audioDecoderFlushes++;}}
+    // Drain only at end of rendition, including final reordered video frames.
+    if(serial===this.serial&&!this.closed){
+     const decoder=this.decoders.get(kind);
+     if(decoder?.state==='configured'){
+      if(kind==='audio'){await decoder.flush();this.stats.audioDecoderFlushes++;}
+      else {
+       let timer;
+       try{await Promise.race([decoder.flush(),new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('Video end flush deadline')),2000);})]);}
+       catch(error){if(serial!==this.serial||this.closed)return;if(this.audible()&&this.running)this.resetVideo('end-flush-timeout');else throw error;}
+       finally{clearTimeout(timer);}
+      }
+     }
+    }
    };
    if(this.audioList)await Promise.all([consume(this.videoList,'video',['video']),consume(this.audioList,'audio',['audio'])]);
    else await Promise.all([consume(this.videoList,'video',['video','audio'],true),consume(this.videoList,'audio',['video','audio'],true)]);
@@ -418,7 +436,7 @@ class CanvasPlayer {
    const held=this.running&&this.audible()&&raw>this.videoEnd+.05;
    if(held&&!this.videoStarved){this.stats.videoHiccups++;this.recordPlayback('video-hold-audio-continues',now);}this.videoStarved=held;let frame=null;
    while(this.frames.length&&this.frames[0].timestamp/1e6<=now+0.015){if(frame){frame.close();this.stats.dropped++;}frame=this.frames.shift();}
-   if(frame){try{if(this.canvas.width!==frame.displayWidth||this.canvas.height!==frame.displayHeight){this.canvas.width=frame.displayWidth;this.canvas.height=frame.displayHeight;}this.ctx.drawImage(frame,0,0,this.canvas.width,this.canvas.height);this.stats.drawn++;}catch(error){this.fail(error);}finally{frame.close();}}
+   if(frame){try{if(this.canvas.width!==frame.displayWidth||this.canvas.height!==frame.displayHeight){this.canvas.width=frame.displayWidth;this.canvas.height=frame.displayHeight;}this.ctx.drawImage(frame,0,0,this.canvas.width,this.canvas.height);this.stats.drawn++;this.lastVideoDrawAt=performance.now();}catch(error){this.fail(error);}finally{frame.close();}}
    this.scheduleAudio(now);
    if(this.finished&&now>=this.duration-0.02){this.pause();this.position=this.duration;this.ended=true;}
   }
