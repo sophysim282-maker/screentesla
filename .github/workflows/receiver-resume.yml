@@ -24,3 +24,7 @@ jobs:
           python3 tools/create_listener_resume_fixture.py
           xcrun --sdk macosx clang -fobjc-arc -fblocks -Wall -Wextra -Wno-unused-parameter build/receiver-listener-fixture.m -framework Foundation -o build/test-local-listener-resume
           build/test-local-listener-resume
+      - name: Native media coalesced-playlist race
+        run: |
+          xcrun --sdk macosx clang -fobjc-arc -fblocks -IApp -IVendor/RPiPlay/lib tools/test_media_cast.m App/MediaCast.m App/BoundedDownload.m App/HLSPlaylist.m Vendor/RPiPlay/lib/http_request.c Vendor/RPiPlay/lib/http_response.c Vendor/RPiPlay/lib/llhttp/api.c Vendor/RPiPlay/lib/llhttp/http.c Vendor/RPiPlay/lib/llhttp/llhttp.c -framework Foundation -o build/test-media-cast
+          for attempt in 1 2 3; do build/test-media-cast; done

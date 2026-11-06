@@ -108,7 +108,8 @@ static BOOL sendBytes(int fd,NSData *data){const char *p=data.bytes;NSUInteger n
 }
 - (void)requestURL:(NSString *)url{
     [_ready lock];
-    if(!_active || _pending[url]){[_ready unlock];return;}
+    NSDictionary *cached=_cache[url];BOOL fresh=cached&&[cached[@"code"] integerValue]==200&&(stablePlaylist(cached[@"data"])||NSProcessInfo.processInfo.systemUptime-[cached[@"time"] doubleValue]<2);
+    if(!_active || _pending[url] || fresh){[_ready unlock];return;}
     NSUInteger request=++_requestID;_pending[url]=@(request);NSString *session=_appleSession;[_ready unlock];
     NSDictionary *headers=@{@"X-Playback-Session-Id":session,@"User-Agent":@"AppleCoreMedia/1.0.0.11B554a (Apple TV; U; CPU OS 7_0_4 like Mac OS X; en_us"};
     NSDictionary *params=@{@"FCUP_Response_ClientInfo":@1,@"FCUP_Response_ClientRef":@40030004,@"FCUP_Response_RequestID":@(request),@"FCUP_Response_URL":url,@"sessionID":@1,@"FCUP_Response_Headers":headers};
