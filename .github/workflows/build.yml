@@ -3,23 +3,213 @@ on:
   pull_request:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, feature/youtube-airplay-010]
 permissions:
   contents: read
 jobs:
-  build:
+  recovery:
+    runs-on: macos-15-intel
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Disconnect orchestration, VPN cancellation and widget routes
+        run: |
+          mkdir -p build
+          xcrun --sdk macosx clang -fobjc-arc -fblocks -IApp tools/test_disconnect_flow.m App/SLDisconnectFlow.m -framework Foundation -o build/test-disconnect-flow
+          build/test-disconnect-flow
+          xcrun --sdk macosx clang -fobjc-arc -fblocks -Itools/vpn-fixture -IApp tools/test_vpn_teardown.m App/LocalVPN.m -framework Foundation -o build/test-vpn-teardown
+          build/test-vpn-teardown
+          xcrun --sdk macosx clang -fobjc-arc -IShared tools/test_widget_routes.m -framework Foundation -o build/test-widget-routes
+          build/test-widget-routes
+      - name: Discovery daemon lifecycle with injected DNS callbacks
+        run: |
+          mkdir -p build
+          xcrun --sdk macosx clang -fobjc-arc -fblocks -Itools/fixtures -IApp tools/test_discovery_recovery.m App/VPNDiscovery.m -framework Foundation -o build/test-discovery-recovery
+          build/test-discovery-recovery
+      - name: Playlist registry lifecycle with native HTTP/FCUP
+        run: |
+          python3 tools/prepare_receiver.py
+          xcrun --sdk macosx clang -fobjc-arc -fblocks -IApp -IVendor/RPiPlay/lib tools/test_media_cast.m App/MediaCast.m App/BoundedDownload.m App/HLSPlaylist.m Vendor/RPiPlay/lib/http_request.c Vendor/RPiPlay/lib/http_response.c Vendor/RPiPlay/lib/llhttp/api.c Vendor/RPiPlay/lib/llhttp/http.c Vendor/RPiPlay/lib/llhttp/llhttp.c -framework Foundation -o build/test-media-cast
+          build/test-media-cast
+  video-recovery:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-save playwright@1.55.0
+      - run: npx playwright install --with-deps chromium
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: Install official Chrome with AAC support
+        run: |
+          curl --fail --location --retry 3 https://storage.googleapis.com/chrome-for-testing-public/140.0.7339.207/linux64/chrome-linux64.zip -o /tmp/chrome140.zip
+          unzip -q /tmp/chrome140.zip -d /tmp/screenlink-chrome140
+          echo "SCREENLINK_CHROME_BIN=/tmp/screenlink-chrome140/chrome-linux64/chrome" >> "$GITHUB_ENV"
+      - name: Real 1080p decode under stall and reordered output with continuous audio
+        run: |
+          python3 tools/fetch_canvas.py
+          mkdir -p build/stress
+          ffmpeg -v error -f lavfi -i testsrc2=size=1920x1080:rate=30 -f lavfi -i sine=frequency=440:sample_rate=48000 -t 20 -c:v libx264 -preset ultrafast -g 30 -bf 2 -c:a aac -hls_time 2 -hls_playlist_type vod -hls_segment_filename build/stress/part%02d.ts build/stress/master.m3u8
+          node --require ./tools/test_browser_engine.cjs tools/test_video_recovery.cjs App build/stress
+          node --require ./tools/test_browser_engine.cjs tools/test_cache_migration.cjs App
+  dashboard:
     runs-on: macos-15
+    timeout-minutes: 25
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Render original cover and icon
+        run: |
+          mkdir -p build
+          swift tools/render_brand.swift
+          brew install xcodegen
+          xcodegen generate --spec tools/ui-preview.yml --project tools
+      - name: Publish original brand previews for visual inspection
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import base64,json,pathlib,subprocess,os
+          repo=os.environ['GITHUB_REPOSITORY'];sha=os.environ['GITHUB_SHA']
+          def api(path,data):
+              import time
+              if path=='git/commits':
+                  data['author']={'name':'ScreenLink CI','email':'screenlink-ci@users.noreply.github.com'}
+                  data['committer']=data['author']
+              for attempt in range(4):
+                  r=subprocess.run(['gh','api','--method','POST','repos/'+repo+'/'+path,'--input','-'],input=json.dumps(data),text=True,capture_output=True)
+                  if r.returncode==0:return json.loads(r.stdout)
+                  print('Preview publication retry:',path,r.stderr[-600:])
+                  time.sleep(2)
+              raise RuntimeError('Preview publication failed; screenshots remain in the Actions artifact')
+          entries=[]
+          for name in ['ScreenLink-icon-preview.png','ScreenLink-cover-preview.png']:
+              file=pathlib.Path('build')/name
+              b=api('git/blobs',{'content':base64.b64encode(file.read_bytes()).decode(),'encoding':'base64'})
+              entries.append({'path':name,'mode':'100644','type':'blob','sha':b['sha']})
+              thumb=pathlib.Path('build')/(name+'.jpg')
+              subprocess.run(['sips','-s','format','jpeg','-s','formatOptions','80','-Z','800',str(file),'--out',str(thumb)],check=True,capture_output=True)
+              preview=json.dumps({'mime':'image/jpeg','base64':base64.b64encode(thumb.read_bytes()).decode()})
+              encoded=api('git/blobs',{'content':preview,'encoding':'utf-8'})
+              entries.append({'path':name+'.preview.json','mode':'100644','type':'blob','sha':encoded['sha']})
+          tree=api('git/trees',{'tree':entries});commit=api('git/commits',{'message':'Build60 original brand previews for '+sha,'tree':tree['sha']})
+          ref='previews/brand-build60-'+sha[:12]+'-'+os.environ['GITHUB_RUN_ID'];api('git/refs',{'ref':'refs/heads/'+ref,'sha':commit['sha']})
+          print('BRAND_PREVIEW_BRANCH='+ref)
+          PY
+      - name: Boot iPhone simulator and test actual dashboard component and widget gallery
+        run: |
+          set -euo pipefail
+          mkdir -p build
+          echo "Preparing simulator and production-controller UI test harness" > build/dashboard-ui.log
+          GH_TOKEN="${{ github.token }}" python3 tools/report_ui_status.py &
+          status_reporter=$!
+          trap 'kill "$status_reporter" 2>/dev/null || true' EXIT
+          simulator_id="$(xcrun simctl list devices available -j | python3 -c 'import json,sys;d=json.load(sys.stdin);print(next(x["udid"] for rows in d["devices"].values() for x in rows if x["name"].startswith("iPhone")))')"
+          xcrun simctl boot "$simulator_id" || true
+          python3 - "$simulator_id" <<'PY' 2>&1 | tee -a build/dashboard-ui.log
+          import subprocess,sys
+          subprocess.run(['xcrun','simctl','bootstatus',sys.argv[1],'-b'],check=True,timeout=240)
+          PY
+          xcodebuild -project tools/ScreenLinkPreview.xcodeproj -scheme ScreenLinkPreview -destination "platform=iOS Simulator,id=$simulator_id" -derivedDataPath build/PreviewDerived -resultBundlePath build/Preview.xcresult CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO test 2>&1 | tee -a build/dashboard-ui.log
+      - name: Export visual previews
+        if: always()
+        run: |
+          mkdir -p build/previews build/preview-attachments
+          cp build/ScreenLink-icon-preview.png build/ScreenLink-cover-preview.png build/previews/ || true
+          if [[ -d build/Preview.xcresult ]]; then
+            xcrun xcresulttool export attachments --path build/Preview.xcresult --output-path build/preview-attachments
+            python3 - <<'PY'
+          import pathlib,shutil,json
+          root=pathlib.Path('build/preview-attachments')
+          for file in root.rglob('*.png'):shutil.copy2(file,pathlib.Path('build/previews')/file.name)
+          for file in root.rglob('*.json'):
+              if file.stat().st_size<200000:print(file.read_text())
+          PY
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ScreenLink-build60-visual-previews
+          path: |
+            build/previews
+            build/preview-attachments
+            build/dashboard-ui.log
+          retention-days: 7
+      - name: Publish non-sensitive simulator and brand previews for review
+        continue-on-error: true
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import base64,json,pathlib,subprocess,os
+          repo=os.environ['GITHUB_REPOSITORY'];sha=os.environ['GITHUB_SHA']
+          def api(path,data):
+              import time
+              if path=='git/commits':
+                  data['author']={'name':'ScreenLink CI','email':'screenlink-ci@users.noreply.github.com'}
+                  data['committer']=data['author']
+              for attempt in range(4):
+                  r=subprocess.run(['gh','api','--method','POST','repos/'+repo+'/'+path,'--input','-'],input=json.dumps(data),text=True,capture_output=True)
+                  if r.returncode==0:return json.loads(r.stdout)
+                  print('Preview publication retry:',path,r.stderr[-600:])
+                  time.sleep(2)
+              raise RuntimeError('Preview publication failed; screenshots remain in the Actions artifact')
+          entries=[]
+          for file in pathlib.Path('build/previews').glob('*.png'):
+              b=api('git/blobs',{'content':base64.b64encode(file.read_bytes()).decode(),'encoding':'base64'})
+              entries.append({'path':file.name,'mode':'100644','type':'blob','sha':b['sha']})
+              thumb=file.with_suffix('.jpg')
+              subprocess.run(['sips','-s','format','jpeg','-s','formatOptions','80','-Z','1600',str(file),'--out',str(thumb)],check=True,capture_output=True)
+              preview=json.dumps({'mime':'image/jpeg','base64':base64.b64encode(thumb.read_bytes()).decode()})
+              encoded=api('git/blobs',{'content':preview,'encoding':'utf-8'})
+              entries.append({'path':file.name+'.preview.json','mode':'100644','type':'blob','sha':encoded['sha']})
+          text='ScreenLink build60 visual previews. Original source '+sha+'. Dashboard screenshots use the real shared UIKit component in an isolated simulator harness; displayed connection state is a test fixture, not a phone connection. Widget gallery status is in the Actions UI log.'
+          b=api('git/blobs',{'content':text,'encoding':'utf-8'});entries.append({'path':'README.md','mode':'100644','type':'blob','sha':b['sha']})
+          tree=api('git/trees',{'tree':entries});commit=api('git/commits',{'message':'Build60 UI and brand previews for '+sha,'tree':tree['sha']})
+          ref='previews/build60-'+sha[:12]+'-'+os.environ['GITHUB_RUN_ID']
+          api('git/refs',{'ref':'refs/heads/'+ref,'sha':commit['sha']})
+          print('PREVIEW_BRANCH='+ref)
+          PY
+  build:
+    needs: [recovery, video-recovery]
+    runs-on: macos-15-intel
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
       - name: Install build prerequisites
-        run: brew install xcodegen autoconf automake libtool
+        run: brew install xcodegen autoconf automake libtool openssl@3
       - name: Build
+        id: native-build
         run: bash tools/build.sh
+      - name: Native-to-Chromium local TCP fallback (UDP excluded)
+        run: |
+          npm install --no-save playwright@1.55.0
+          chrome_platform=mac-arm64
+          if [[ "$(uname -m)" == x86_64 ]]; then chrome_platform=mac-x64; fi
+          curl --fail --location --retry 3 "https://storage.googleapis.com/chrome-for-testing-public/140.0.7339.207/$chrome_platform/chrome-$chrome_platform.zip" -o build/chrome140.zip
+          unzip -q build/chrome140.zip -d build/chrome140
+          export SCREENLINK_CHROME_BIN="$PWD/build/chrome140/chrome-$chrome_platform/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing"
+          export NODE_OPTIONS="--require=$PWD/tools/test_browser_engine.cjs"
+          rtc_mac="$PWD/Vendor/WebRTC.xcframework/macos-x86_64_arm64"
+          xcrun --sdk macosx clang -fobjc-arc -fblocks -IRTC -F"$rtc_mac" tools/test_rtc_tcp_browser.m RTC/SLPingPeer.m RTC/SLTestVideo.m build/local-stun.o -framework CoreVideo -framework Foundation -framework WebRTC -Wl,-rpath,"$rtc_mac" -o build/test-rtc-tcp-browser
+          build/test-rtc-tcp-browser tools/test_rtc_tcp_browser.cjs
+      - name: Public HTTPS transport check (no credentials)
+        run: curl --head --connect-timeout 8 --max-time 15 https://tesla4khmer.com/api/public/screenlink
+      - name: Production signaling integration (real native SDP and ping)
+        if: ${{ !cancelled() && steps.native-build.outcome == 'success' }}
+        run: |
+          build/test-rtc-peer --live
+          build/test-rtc-media --live
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ScreenLink-AirPlay-Lab
+          name: ScreenLink-0.20.23-build60-GENERIC-NO-HTTPS
           path: |
             build/*.ipa
             build/xcodebuild.log
+

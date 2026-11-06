@@ -1,0 +1,38 @@
+name: Thirty-minute dual-stream endurance
+on:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: screenlink-endurance-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  endurance:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-save playwright@1.58.2
+      - run: npx playwright install --with-deps chromium
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: Prepare original media and moving screen fixtures
+        run: |
+          mkdir -p build
+          ffmpeg -v error -f lavfi -i testsrc2=size=640x360:rate=60 -t 12 -c:v libx264 -preset ultrafast -tune zerolatency -x264-params aud=1:keyint=120:scenecut=0 -f h264 build/source.h264
+          cc tools/test_fmp4.c -o build/mux
+          build/mux build/source.h264 build/live.mp4
+          python3 tools/fetch_hls.py
+          python3 tools/create_quality_fixtures.py build/quality
+      - name: Run 1800 actual seconds of simultaneous SCTP Maps and HD HLS
+        env:
+          SCREENLINK_ENDURANCE_SECONDS: '1800'
+        run: node tools/test_youtube_rtc_browser.cjs build/quality --quality --maps --recovery --endurance --screen-fixture=build/live.mp4
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ScreenLink-30-minute-endurance
+          path: build/endurance-report.json
