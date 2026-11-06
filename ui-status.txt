@@ -1,134 +1,43 @@
 Source 47c1292a8e3ab87aa33e92dfcbc15b2c15675ca3
-ates.noindex/ExplicitPrecompiledModules/_ctype-E4IABKXYR09KK8PGLC2KJ1VKI.scan
-    cd /Users/runner/work/screentesla/screentesla/tools
-    builtin-precompileModule /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ExplicitPrecompiledModules/_ctype-E4IABKXYR09KK8PGLC2KJ1VKI.scan
+er/work/screentesla/screentesla/build/PreviewDerived/SDKStatCaches.noindex/iphonesimulator18.5-22F76-96ae0914227b19deccb34b33ba7b5dea.sdkstatcache -fmessage-length\=0 -fdiagnostics-show-note-include-stack -fmacro-backtrace-limit\=0 -fno-color-diagnostics -fmodules-prune-interval\=86400 -fmodules-prune-after\=345600 -fbuild-session-file\=/Users/runner/work/screentesla/screentesla/build/PreviewDerived/ModuleCache.noindex/Session.modulevalidation -fmodules-validate-once-per-build-session -Wnon-modular-include-in-framework-module -Werror\=non-modular-include-in-framework-module -Wno-trigraphs -Wno-missing-field-initializers -Wno-missing-prototypes -Werror\=return-type -Wdocumentation -Wunreachable-code -Wquoted-include-in-framework-header -Wno-implicit-atomic-properties -Werror\=deprecated-objc-isa-usage -Wno-objc-interface-ivars -Werror\=objc-root-class -Wno-arc-repeated-use-of-weak -Wimplicit-retain-self -Wduplicate-method-match -Wno-missing-braces -Wparentheses -Wswitch -Wunused-function -Wno-unused-label -Wno-unused-parameter -Wunused-variable -Wunused-value -Wempty-body -Wuninitialized -Wconditional-uninitialized -Wno-unknown-pragmas -Wno-shadow -Wno-four-char-constants -Wno-conversion -Wconstant-conversion -Wint-conversion -Wbool-conversion -Wenum-conversion -Wno-float-conversion -Wnon-literal-null-conversion -Wobjc-literal-conversion -Wshorten-64-to-32 -Wpointer-sign -Wno-newline-eof -Wno-selector -Wno-strict-selector-match -Wundeclared-selector -Wdeprecated-implementations -Wno-implicit-fallthrough -fstrict-aliasing -Wprotocol -Wdeprecated-declarations -Wno-sign-conversion -Winfinite-recursion -Wcomma -Wblock-capture-autoreleasing -Wstrict-prototypes -Wno-semicolon-before-method-body -Wunguarded-availability -index-store-path /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Index.noindex/DataStore @/Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ScreenLinkPreview.build/Debug-iphonesimulator/ScreenLinkPreview.build/Objects-normal/arm64/e6072d4f65d7061329687fe24e3d63a7-common-args.resp -MMD -MT dependencies -MF /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ScreenLinkPreview.build/Debug-iphonesimulator/ScreenLinkPreview.build/Objects-normal/arm64/ControllerFixtures.d --serialize-diagnostics /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ScreenLinkPreview.build/Debug-iphonesimulator/ScreenLinkPreview.build/Objects-normal/arm64/ControllerFixtures.dia -c /Users/runner/work/screentesla/screentesla/tools/ui/ControllerFixtures.m -o /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ScreenLinkPreview.build/Debug-iphonesimulator/ScreenLinkPreview.build/Objects-normal/arm64/ControllerFixtures.o -index-unit-output-path /ScreenLinkPreview.build/Debug-iphonesimulator/ScreenLinkPreview.build/Objects-normal/arm64/ControllerFixtures.o
 
-PrecompileModule /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ExplicitPrecompiledModules/_inttypes-CMKS80817T5WX3ESJKVX1VIVF.scan
+PrecompileModule /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ExplicitPrecompiledModules/os_object-5V9IYOMOC2Q4HU48GZT39A687.scan
     cd /Users/runner/work/screentesla/screentesla/tools
-    builtin-precompileModule /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ExplicitPrecompiledModules/_inttypes-CMKS80817T5WX3ESJKVX1VIVF.scan
+    builtin-precompileModule /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ExplicitPrecompiledModules/os_object-5V9IYOMOC2Q4HU48GZT39A687.scan
 
-PrecompileModule /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ExplicitPrecompiledModules/_time-3TPCCM9Z7X6R9UD7Y35V42CCM.scan
+PrecompileModule /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ExplicitPrecompiledModules/os_object-CCD8EVUZXTWSRAWUOQZNLRTW8.scan
     cd /Users/runner/work/screentesla/screentesla/tools
-    builtin-precompileModule /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ExplicitPrecompiledModules/_time-3TPCCM9Z7X6R9UD7Y35V42CCM.scan
+    builtin-precompileModule /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ExplicitPrecompiledModules/os_object-CCD8EVUZXTWSRAWUOQZNLRTW8.scan
 
-PrecompileModule /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ExplicitPrecompiledModules/__wctype-2DS5FTPHURIYICOF17VCKECCW.scan
+LinkAssetCatalog /Users/runner/work/screentesla/screentesla/App/BrandAssets.xcassets (in target 'ScreenLinkPreview' from project 'ScreenLinkPreview')
     cd /Users/runner/work/screentesla/screentesla/tools
-    builtin-precompileModule /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ExplicitPrecompiledModules/__wctype-2DS5FTPHURIYICOF17VCKECCW.scan
+    builtin-linkAssetCatalog --thinned /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ScreenLinkPreview.build/Debug-iphonesimulator/ScreenLinkPreview.build/assetcatalog_output/thinned --thinned-dependencies /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ScreenLinkPreview.build/Debug-iphonesimulator/ScreenLinkPreview.build/assetcatalog_dependencies_thinned --thinned-info-plist-content /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ScreenLinkPreview.build/Debug-iphonesimulator/ScreenLinkPreview.build/assetcatalog_generated_info.plist_thinned --unthinned /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ScreenLinkPreview.build/Debug-iphonesimulator/ScreenLinkPreview.build/assetcatalog_output/unthinned --unthinned-dependencies /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ScreenLinkPreview.build/Debug-iphonesimulator/ScreenLinkPreview.build/assetcatalog_dependencies_unthinned --unthinned-info-plist-content /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ScreenLinkPreview.build/Debug-iphonesimulator/ScreenLinkPreview.build/assetcatalog_generated_info.plist_unthinned --output /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Products/Debug-iphonesimulator/ScreenLinkPreview.app --plist-output /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ScreenLinkPreview.build/Debug-iphonesimulator/ScreenLinkPreview.build/assetcatalog_generated_info.plist
+note: Emplaced /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Products/Debug-iphonesimulator/ScreenLinkPreview.app/AppIcon76x76@2x~ipad.png (in target 'ScreenLinkPreview' from project 'ScreenLinkPreview')
+note: Emplaced /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Products/Debug-iphonesimulator/ScreenLinkPreview.app/AppIcon60x60@2x.png (in target 'ScreenLinkPreview' from project 'ScreenLinkPreview')
+note: Emplaced /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Products/Debug-iphonesimulator/ScreenLinkPreview.app/Assets.car (in target 'ScreenLinkPreview' from project 'ScreenLinkPreview')
 
-PrecompileModule /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ExplicitPrecompiledModules/_string-3LD53OE9VVD990PDTF45SCW74.scan
+PrecompileModule /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ExplicitPrecompiledModules/os_workgroup-46K3VSUXWZ21WVG20ZYM2I3RH.scan
     cd /Users/runner/work/screentesla/screentesla/tools
-    builtin-precompileModule /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ExplicitPrecompiledModules/_string-3LD53OE9VVD990PDTF45SCW74.scan
+    builtin-precompileModule /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ExplicitPrecompiledModules/os_workgroup-46K3VSUXWZ21WVG20ZYM2I3RH.scan
 
-PrecompileModule /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ExplicitPrecompiledModules/gethostuuid-4REI9AJG7SYQHU8Q3AJ0UPKRM.scan
+SwiftDriver ScreenLinkDashboardUITests normal arm64 com.apple.xcode.tools.swift.compiler (in target 'ScreenLinkDashboardUITests' from project 'ScreenLinkPreview')
     cd /Users/runner/work/screentesla/screentesla/tools
-    builtin-precompileModule /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ExplicitPrecompiledModules/gethostuuid-4REI9AJG7SYQHU8Q3AJ0UPKRM.scan
+    builtin-SwiftDriver -- /Applications/Xcode_16.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc -module-name ScreenLinkDashboardUITests -Onone -enforce-exclusivity\=checked @/Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ScreenLinkPreview.build/Debug-iphonesimulator/ScreenLinkDashboardUITests.build/Objects-normal/arm64/ScreenLinkDashboardUITests.SwiftFileList -DDEBUG -module-alias Testing\=_Testing_Unavailable -plugin-path /Applications/Xcode_16.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing -enable-bare-slash-regex -enable-experimental-feature DebugDescriptionMacro -sdk /Applications/Xcode_16.4.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator18.5.sdk -target arm64-apple-ios17.0-simulator -g -module-cache-path /Users/runner/work/screentesla/screentesla/build/PreviewDerived/ModuleCache.noindex -Xfrontend -serialize-debugging-options -enable-testing -index-store-path /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Index.noindex/DataStore -swift-version 5 -I /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Products/Debug-iphonesimulator -I /Applications/Xcode_16.4.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/usr/lib -F /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Products/Debug-iphonesimulator -F /Applications/Xcode_16.4.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/Frameworks -F /Applications/Xcode_16.4.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator18.5.sdk/Developer/Library/Frameworks -parse-as-library -c -j3 -enable-batch-mode -incremental -Xcc -ivfsstatcache -Xcc /Users/runner/work/screentesla/screentesla/build/PreviewDerived/SDKStatCaches.noindex/iphonesimulator18.5-22F76-96ae0914227b19deccb34b33ba7b5dea.sdkstatcache -output-file-map /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ScreenLinkPreview.build/Debug-iphonesimulator/ScreenLinkDashboardUITests.build/Objects-normal/arm64/ScreenLinkDashboardUITests-OutputFileMap.json -use-frontend-parseable-output -save-temps -no-color-diagnostics -serialize-diagnostics -emit-dependencies -emit-module -emit-module-path /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ScreenLinkPreview.build/Debug-iphonesimulator/ScreenLinkDashboardUITests.build/Objects-normal/arm64/ScreenLinkDashboardUITests.swiftmodule -validate-clang-modules-once -clang-build-session-file /Users/runner/work/screentesla/screentesla/build/PreviewDerived/ModuleCache.noindex/Session.modulevalidation -Xcc -I/Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ScreenLinkPreview.build/Debug-iphonesimulator/ScreenLinkDashboardUITests.build/swift-overrides.hmap -emit-const-values -Xfrontend -const-gather-protocols-file -Xfrontend /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ScreenLinkPreview.build/Debug-iphonesimulator/ScreenLinkDashboardUITests.build/Objects-normal/arm64/ScreenLinkDashboardUITests_const_extract_protocols.json -Xcc -iquote -Xcc /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ScreenLinkPreview.build/Debug-iphonesimulator/ScreenLinkDashboardUITests.build/ScreenLinkDashboardUITests-generated-files.hmap -Xcc -I/Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ScreenLinkPreview.build/Debug-iphonesimulator/ScreenLinkDashboardUITests.build/ScreenLinkDashboardUITests-own-target-headers.hmap -Xcc -I/Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ScreenLinkPreview.build/Debug-iphonesimulator/ScreenLinkDashboardUITests.build/ScreenLinkDashboardUITests-all-target-headers.hmap -Xcc -iquote -Xcc /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ScreenLinkPreview.build/Debug-iphonesimulator/ScreenLinkDashboardUITests.build/ScreenLinkDashboardUITests-project-headers.hmap -Xcc -I/Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Products/Debug-iphonesimulator/include -Xcc -I/Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ScreenLinkPreview.build/Debug-iphonesimulator/ScreenLinkDashboardUITests.build/DerivedSources-normal/arm64 -Xcc -I/Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ScreenLinkPreview.build/Debug-iphonesimulator/ScreenLinkDashboardUITests.build/DerivedSources/arm64 -Xcc -I/Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ScreenLinkPreview.build/Debug-iphonesimulator/ScreenLinkDashboardUITests.build/DerivedSources -Xcc -DDEBUG\=1 -emit-objc-header -emit-objc-header-path /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ScreenLinkPreview.build/Debug-iphonesimulator/ScreenLinkDashboardUITests.build/Objects-normal/arm64/ScreenLinkDashboardUITests-Swift.h -working-directory /Users/runner/work/screentesla/screentesla/tools -experimental-emit-module-separately -disable-cmo
 
-PrecompileModule /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ExplicitPrecompiledModules/_wctype-5G0FZPZ8Y8T21EMGX2PG8CTJR.scan
+PrecompileModule /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ExplicitPrecompiledModules/os_workgroup-8YW6Z9R4CNVTW09WJGNKPXVEH.scan
     cd /Users/runner/work/screentesla/screentesla/tools
-    builtin-precompileModule /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ExplicitPrecompiledModules/_wctype-5G0FZPZ8Y8T21EMGX2PG8CTJR.scan
+    builtin-precompileModule /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ExplicitPrecompiledModules/os_workgroup-8YW6Z9R4CNVTW09WJGNKPXVEH.scan
 
-PrecompileModule /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ExplicitPrecompiledModules/_Builtin_inttypes-14QMHUYPWAAJR9930HPZ79R54.scan
+PrecompileModule /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ExplicitPrecompiledModules/Dispatch-BO0R64NRCL7M4QVB21N2IRMKX.scan
     cd /Users/runner/work/screentesla/screentesla/tools
-    builtin-precompileModule /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ExplicitPrecompiledModules/_Builtin_inttypes-14QMHUYPWAAJR9930HPZ79R54.scan
+    builtin-precompileModule /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ExplicitPrecompiledModules/Dispatch-BO0R64NRCL7M4QVB21N2IRMKX.scan
 
-PrecompileModule /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ExplicitPrecompiledModules/sys_resource-DW0P47JJ6NNSJI79Y8KWAV95X.scan
+PrecompileModule /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ExplicitPrecompiledModules/Dispatch-37REMPFWMADNSOG3YDU15CPCY.scan
     cd /Users/runner/work/screentesla/screentesla/tools
-    builtin-precompileModule /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ExplicitPrecompiledModules/sys_resource-DW0P47JJ6NNSJI79Y8KWAV95X.scan
+    builtin-precompileModule /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ExplicitPrecompiledModules/Dispatch-37REMPFWMADNSOG3YDU15CPCY.scan
 
-PrecompileModule /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ExplicitPrecompiledModules/nl_types-CWQIRJ14HD7HJ0TVGRDZUQ6NI.scan
+SwiftEmitModule normal arm64 Emitting\ module\ for\ ScreenLinkDashboardUITests (in target 'ScreenLinkDashboardUITests' from project 'ScreenLinkPreview')
+
+SwiftCompile normal arm64 /Users/runner/work/screentesla/screentesla/tools/ui/DashboardUITests.swift (in target 'ScreenLinkDashboardUITests' from project 'ScreenLinkPreview')
     cd /Users/runner/work/screentesla/screentesla/tools
-    builtin-precompileModule /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ExplicitPrecompiledModules/nl_types-CWQIRJ14HD7HJ0TVGRDZUQ6NI.scan
-
-PrecompileModule /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ExplicitPrecompiledModules/_stdio-3H2XT7MV5KG5SQWI7K1GOH804.scan
-    cd /Users/runner/work/screentesla/screentesla/tools
-    builtin-precompileModule /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ExplicitPrecompiledModules/_stdio-3H2XT7MV5KG5SQWI7K1GOH804.scan
-
-PrecompileModule /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ExplicitPrecompiledModules/_tgmath-C93QXK1QM850GY5R9T54WMB83.scan
-    cd /Users/runner/work/screentesla/screentesla/tools
-    builtin-precompileModule /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ExplicitPrecompiledModules/_tgmath-C93QXK1QM850GY5R9T54WMB83.scan
-
-PrecompileModule /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ExplicitPrecompiledModules/_inttypes-3FJPJR6VVGC5UX89XQGWQI5EA.scan
-    cd /Users/runner/work/screentesla/screentesla/tools
-    builtin-precompileModule /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ExplicitPrecompiledModules/_inttypes-3FJPJR6VVGC5UX89XQGWQI5EA.scan
-
-PrecompileModule /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ExplicitPrecompiledModules/_wchar-49GVB95LX17ZSFV622UNRIOKR.scan
-    cd /Users/runner/work/screentesla/screentesla/tools
-    builtin-precompileModule /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ExplicitPrecompiledModules/_wchar-49GVB95LX17ZSFV622UNRIOKR.scan
-
-PrecompileModule /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ExplicitPrecompiledModules/_Builtin_tgmath-9M8LPM15BZIFLLYFIJ4NWH0N7.scan
-    cd /Users/runner/work/screentesla/screentesla/tools
-    builtin-precompileModule /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ExplicitPrecompiledModules/_Builtin_tgmath-9M8LPM15BZIFLLYFIJ4NWH0N7.scan
-
-PrecompileModule /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ExplicitPrecompiledModules/_Builtin_inttypes-CSCGXNQ9IBSQ8QKI0ZKEKC30.scan
-    cd /Users/runner/work/screentesla/screentesla/tools
-    builtin-precompileModule /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ExplicitPrecompiledModules/_Builtin_inttypes-CSCGXNQ9IBSQ8QKI0ZKEKC30.scan
-
-PrecompileModule /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ExplicitPrecompiledModules/simd-AEJ0ALA1O9FVZ9HIJ17UBJFPG.scan
-    cd /Users/runner/work/screentesla/screentesla/tools
-    builtin-precompileModule /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ExplicitPrecompiledModules/simd-AEJ0ALA1O9FVZ9HIJ17UBJFPG.scan
-
-PrecompileModule /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ExplicitPrecompiledModules/_complex-8MROFPHMWRKL6U6V9C4Z855RJ.scan
-    cd /Users/runner/work/screentesla/screentesla/tools
-    builtin-precompileModule /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ExplicitPrecompiledModules/_complex-8MROFPHMWRKL6U6V9C4Z855RJ.scan
-
-PrecompileModule /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ExplicitPrecompiledModules/_Builtin_iso646-EA5E2VKLL45ZWUTQH5RFTAI2R.scan
-    cd /Users/runner/work/screentesla/screentesla/tools
-    builtin-precompileModule /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ExplicitPrecompiledModules/_Builtin_iso646-EA5E2VKLL45ZWUTQH5RFTAI2R.scan
-
-PrecompileModule /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ExplicitPrecompiledModules/_tgmath-57S58AV63AA9JS24M10CPY2XC.scan
-    cd /Users/runner/work/screentesla/screentesla/tools
-    builtin-precompileModule /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ExplicitPrecompiledModules/_tgmath-57S58AV63AA9JS24M10CPY2XC.scan
-
-PrecompileModule /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ExplicitPrecompiledModules/ptrauth-9NBIFS6HMJM48Z564MSQ7IBPN.scan
-    cd /Users/runner/work/screentesla/screentesla/tools
-    builtin-precompileModule /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ExplicitPrecompiledModules/ptrauth-9NBIFS6HMJM48Z564MSQ7IBPN.scan
-
-PrecompileModule /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ExplicitPrecompiledModules/_Builtin_tgmath-3BMCZ47NAIKTEZE3P4DKQ59WW.scan
-    cd /Users/runner/work/screentesla/screentesla/tools
-    builtin-precompileModule /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ExplicitPrecompiledModules/_Builtin_tgmath-3BMCZ47NAIKTEZE3P4DKQ59WW.scan
-
-PrecompileModule /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ExplicitPrecompiledModules/_signal-E3JMQQMMAXG0KAK3648CL0LGK.scan
-    cd /Users/runner/work/screentesla/screentesla/tools
-    builtin-precompileModule /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ExplicitPrecompiledModules/_signal-E3JMQQMMAXG0KAK3648CL0LGK.scan
-
-PrecompileModule /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ExplicitPrecompiledModules/sys_time-F028NGV490TTZEZ0DE4AQHUO0.scan
-    cd /Users/runner/work/screentesla/screentesla/tools
-    builtin-precompileModule /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ExplicitPrecompiledModules/sys_time-F028NGV490TTZEZ0DE4AQHUO0.scan
-
-PrecompileModule /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ExplicitPrecompiledModules/pthread-AK3C0S1TSD7M02HUG00ADG2O6.scan
-    cd /Users/runner/work/screentesla/screentesla/tools
-    builtin-precompileModule /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ExplicitPrecompiledModules/pthread-AK3C0S1TSD7M02HUG00ADG2O6.scan
-
-PrecompileModule /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ExplicitPrecompiledModules/sys_resource-EY8Q1OASUCYFCQNYJQ09YYEOO.scan
-    cd /Users/runner/work/screentesla/screentesla/tools
-    builtin-precompileModule /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ExplicitPrecompiledModules/sys_resource-EY8Q1OASUCYFCQNYJQ09YYEOO.scan
-
-PrecompileModule /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ExplicitPrecompiledModules/sys_select-D4UJ66DVF2IKVJCST7F5FVZUT.scan
-    cd /Users/runner/work/screentesla/screentesla/tools
-    builtin-precompileModule /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ExplicitPrecompiledModules/sys_select-D4UJ66DVF2IKVJCST7F5FVZUT.scan
-
-PrecompileModule /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ExplicitPrecompiledModules/sys_wait-6GTW65I4WPZ32M3LP53DKS9VA.scan
-    cd /Users/runner/work/screentesla/screentesla/tools
-    builtin-precompileModule /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ExplicitPrecompiledModules/sys_wait-6GTW65I4WPZ32M3LP53DKS9VA.scan
-
-PrecompileModule /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ExplicitPrecompiledModules/unistd-8S1BA4UOHH6RM8Y1YBUFI44WG.scan
-    cd /Users/runner/work/screentesla/screentesla/tools
-    builtin-precompileModule /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ExplicitPrecompiledModules/unistd-8S1BA4UOHH6RM8Y1YBUFI44WG.scan
-
-PrecompileModule /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ExplicitPrecompiledModules/_stdlib-B4JLI40L9P6QA8ELAEPFH4EM2.scan
-    cd /Users/runner/work/screentesla/screentesla/tools
-    builtin-precompileModule /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ExplicitPrecompiledModules/_stdlib-B4JLI40L9P6QA8ELAEPFH4EM2.scan
-
-SwiftDriverJobDiscovery normal arm64 Compiling ScreenLinkWidgets.swift (in target 'ScreenLinkPreviewWidgets' from project 'ScreenLinkPreview')
-
-PrecompileModule /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ExplicitPrecompiledModules/sys_wait-DJWAFNMPJHD5M9OOMYP96VVTH.scan
-    cd /Users/runner/work/screentesla/screentesla/tools
-    builtin-precompileModule /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ExplicitPrecompiledModules/sys_wait-DJWAFNMPJHD5M9OOMYP96VVTH.scan
-
-PrecompileModule /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ExplicitPrecompiledModules/sys_select-77RIDYGG1PB0VFHMUA8FA2VR2.scan
-    cd /Users/runner/work/screentesla/screentesla/tools
-    builtin-precompileModule /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ExplicitPrecompiledModules/sys_select-77RIDYGG1PB0VFHMUA8FA2VR2.scan
-
-PrecompileModule /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ExplicitPrecompiledModules/Darwin-91HW7CL1XYIKZVO3LGPX4Z9IX.scan
-    cd /Users/runner/work/screentesla/screentesla/tools
-    builtin-precompileModule /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ExplicitPrecompiledModules/Darwin-91HW7CL1XYIKZVO3LGPX4Z9IX.scan
+    
