@@ -1,4 +1,4 @@
-name: Cancel superseded build59 checks
+name: Cancel superseded build60 checks
 on:
   push:
     branches: ['ci/build59-maintenance']
@@ -14,11 +14,11 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
-      - name: Cancel only superseded checks created during this build59 task
+      - name: Cancel only superseded checks created during this build60 task
         run: |
           python3 - <<'PY'
           import json,subprocess
-          superseded={'ab41488b88c4df869a4c46036fbcf5c75f547efc','57500eb057b95aca76bcb85c04c8514847c3f4a9','9011ba8009e5522862289f8b9819dc8c088fb829','c41f7f97e05a4fd4daf68ec099300729eeef1cc2','8ce8bcd6bb844b499921c497dbb584485388ba25','ea13e76b7591b5c7f61e2d45ced2e9dcc8d697f5'}
+          superseded={'526f19fea49488084cfbc1feaf06bdf01799033c','1a67ae541889fbf1a5ebd26aabb4c4f3a05e241b','a6f455228eae90aa7734c4f94c5bf44cd2a4f1d9','05c1b926584fa403d252d67fc0d97b678dda9501'}
           runs=json.loads(subprocess.check_output(['gh','api','repos/sophysim282-maker/screentesla/actions/runs?branch=feature/youtube-airplay-010&per_page=100']))['workflow_runs']
           for run in runs:
               if run['head_sha'] in superseded and run['status'] in {'queued','in_progress','waiting','pending'}:
