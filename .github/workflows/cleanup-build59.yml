@@ -18,7 +18,7 @@ jobs:
         run: |
           python3 - <<'PY'
           import json,subprocess
-          superseded={'526f19fea49488084cfbc1feaf06bdf01799033c','1a67ae541889fbf1a5ebd26aabb4c4f3a05e241b','a6f455228eae90aa7734c4f94c5bf44cd2a4f1d9','05c1b926584fa403d252d67fc0d97b678dda9501','23edf6b49f8f0ab675aea86353c7ea3361dffd50','c3822df5eea44b03375c8fe59bf971cd9a0c1c63','759fe51716441f9a615ba981d5e03f4932caf413','48e98ad1b89d03550d417bc35bf865eb7addaa51'}
+          superseded={'526f19fea49488084cfbc1feaf06bdf01799033c','1a67ae541889fbf1a5ebd26aabb4c4f3a05e241b','a6f455228eae90aa7734c4f94c5bf44cd2a4f1d9','05c1b926584fa403d252d67fc0d97b678dda9501','23edf6b49f8f0ab675aea86353c7ea3361dffd50','c3822df5eea44b03375c8fe59bf971cd9a0c1c63','759fe51716441f9a615ba981d5e03f4932caf413','48e98ad1b89d03550d417bc35bf865eb7addaa51','c775a261192fda5325dc3ae1c8717a9d8d105531'}
           runs=json.loads(subprocess.check_output(['gh','api','repos/sophysim282-maker/screentesla/actions/runs?branch=feature/youtube-airplay-010&per_page=100']))['workflow_runs']
           for run in runs:
               if run['head_sha'] in superseded and run['status'] in {'queued','in_progress','waiting','pending'}:
