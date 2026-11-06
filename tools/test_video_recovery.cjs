@@ -32,13 +32,21 @@ const server=http.createServer((req,res)=>{
   for(const file of ['MP4Demux.js','TSDemux.js','CanvasPlayer.js'])await page.addScriptTag({url:'/'+file});
   await page.evaluate(async()=>{window.p=new ScreenLinkCanvas.CanvasPlayer(document.getElementById('c'),{onerror:e=>window.failure=e.message});await p.load('/master.m3u8');await p.enableAudio();await p.play();});
   try{await page.waitForFunction(()=>p.currentTime>2&&p.stats.drawn>20,null,{timeout:25000});}catch(e){console.log('STARTUP_STATE',await page.evaluate(()=>({failure:window.failure,time:p.currentTime,stats:p.stats,frames:p.frames.length,audio:p.audio.length,hasAudio:p.hasAudio,paused:p.paused,running:p.running,videoEnd:p.videoEnd,audioEnd:p.audioEnd,ready:p.readyState,errors:window.failure})));console.log('PAGE_ERRORS',errors);throw e;}
+  console.log('CLOUD_BASELINE_PROFILE',JSON.stringify(await page.evaluate(()=>p.performanceProfile())));
   const before=await page.evaluate(()=>{window.audioDecoder=p.decoders.get('audio');window.startSerial=p.serial;window.videoFault=true;return {time:p.currentTime,scheduled:p.stats.audioScheduled,drawn:p.stats.drawn};});
   await page.waitForTimeout(3200);
   const during=await page.evaluate(()=>({time:p.currentTime,audio:p.stats.audioScheduled,same:p.decoders.get('audio')===audioDecoder,serial:p.serial,recoveries:p.stats.videoRecoveries,failure:window.failure}));
   assert(during.time>before.time+2.7,'Audio clock stalled during video fault');assert(during.audio>before.scheduled,'Audio scheduling stopped');assert(during.same&&during.serial===1,'Recovery reset audio/transport');assert(during.recoveries>0,'Video watchdog did not run');assert(!during.failure,during.failure);
   await page.evaluate(()=>{videoFault=false;reorderFault=true;window.recoveredDrawn=p.stats.drawn;});
   await page.waitForFunction(()=>p.stats.drawn>recoveredDrawn+20&&p.currentTime>7,null,{timeout:15000});
-  const result=await page.evaluate(()=>({stats:p.stats,time:p.currentTime,videoEnd:p.videoEnd,audioEnd:p.audioEnd,sameAudio:p.decoders.get('audio')===audioDecoder,sameSerial:p.serial===startSerial,width:p.canvas.width,height:p.canvas.height,queued:p.frames.map(f=>f.timestamp/1e6),failure:window.failure}));
+  await page.evaluate(()=>{const until=performance.now()+90;while(performance.now()<until){};});
+  await page.waitForTimeout(100);
+  const result=await page.evaluate(()=>({profile:p.performanceProfile(),stats:p.stats,time:p.currentTime,videoEnd:p.videoEnd,audioEnd:p.audioEnd,sameAudio:p.decoders.get('audio')===audioDecoder,sameSerial:p.serial===startSerial,width:p.canvas.width,height:p.canvas.height,queued:p.frames.map(f=>f.timestamp/1e6),failure:window.failure}));
+  assert(result.profile.metrics.demuxMs.count>0,'Actual segment demux must be measured');
+  assert(result.profile.metrics.decoderWaitMs.max>1000,'Injected decoder backpressure must appear in profile');
+  assert(result.profile.metrics.renderCallbackGapMs.max>=70,'Injected main-thread stall must appear in callback gaps');
+  assert(result.profile.metrics.canvasDrawMs.count>0,'Canvas draw calls must be measured');
+  assert(result.profile.events.length<=60,'Profile event history must remain bounded');
   assert.equal(result.width,1920);assert.equal(result.height,1080);assert(result.sameAudio&&result.sameSerial);assert(result.stats.videoQueueTimeouts>0);assert(result.stats.maxFrames<=49);assert(result.queued.every(t=>t>=result.time-.15),'Stale frames survived catch-up');assert(!result.failure,result.failure);assert.deepEqual(errors,[]);
   await page.evaluate(()=>{window.beforeError=p.stats.videoRecoveries;window.injectError=true;});
   await page.waitForFunction(()=>p.stats.videoRecoveries>beforeError&&p.stats.drawn>recoveredDrawn+40,null,{timeout:15000});
