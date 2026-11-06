@@ -111,11 +111,19 @@
     }
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW,(int64_t)(.2*NSEC_PER_SEC)),dispatch_get_main_queue(),^{[self waitForOwnManagers:managers generation:generation remaining:remaining-1 completion:completion];});
 }
+- (NSTimeInterval)disconnectDeadline {return 12;}
 - (void)disconnectWithCompletion:(void (^)(BOOL))completion {
     if(self.disconnecting){if(completion)completion(NO);return;}
     self.disconnecting=YES;self.stopRequested=YES;self.quietSamples=0;NSUInteger generation=++self.attempt;[self complete:NO];
     NSString *identifier=[self providerIdentifier];
     if(!identifier.length){self.disconnecting=NO;[self report:@"ScreenLink VPN ownership cannot be verified: embedded extension missing. No other VPN was changed."];if(completion)completion(NO);return;}
+    if(self.manager&&[((NETunnelProviderProtocol *)self.manager.protocolConfiguration).providerBundleIdentifier isEqual:identifier])[self.manager.connection stopVPNTunnel];
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW,(int64_t)([self disconnectDeadline]*NSEC_PER_SEC)),dispatch_get_main_queue(),^{
+        if(!self.disconnecting||generation!=self.attempt)return;
+        self.attempt++;self.disconnecting=NO;
+        [self report:@"ScreenLink VPN disconnect confirmation timed out. Automatic restart remains blocked; check iOS Settings → VPN."];
+        if(completion)completion(NO);
+    });
     [self report:@"Disconnecting ScreenLink VPN…"];
     [NETunnelProviderManager loadAllFromPreferencesWithCompletionHandler:^(NSArray<NETunnelProviderManager *> *all,NSError *error){dispatch_async(dispatch_get_main_queue(),^{
         if(generation!=self.attempt)return;

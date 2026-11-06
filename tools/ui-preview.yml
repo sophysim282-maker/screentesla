@@ -10,6 +10,11 @@ targets:
     - path: ../App/ScreenLinkHomeView.m
     - path: ../App/ScreenLinkHomeView.h
     - path: ui/Preview.m
+    - path: ui/ControllerFixtures.m
+    - path: ../App/main.m
+      compilerFlags: -Dmain=ScreenLinkProductionMain -DAppDelegate=ScreenLinkTestDelegate -DController=ScreenLinkTestController
+    - path: ../App/SLDisconnectFlow.m
+    - path: ../Shared/SLWidgetRoute.h
     - path: ../App/ScreenLinkCover.png
     - path: ../App/BrandAssets.xcassets
     settings:
@@ -17,7 +22,10 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: local.screenlink.airplaylab
         PRODUCT_NAME: ScreenLinkPreview
         CLANG_ENABLE_OBJC_ARC: true
-        HEADER_SEARCH_PATHS: $(SRCROOT)/../App
+        HEADER_SEARCH_PATHS:
+        - $(SRCROOT)/../App
+        - $(SRCROOT)/../RTC
+        - $(SRCROOT)/../Shared
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         TARGETED_DEVICE_FAMILY: 1,2
     info:
@@ -28,9 +36,16 @@ targets:
         CFBundleVersion: '60'
         UILaunchScreen: {}
         NSSupportsLiveActivities: true
+        NSLocalNetworkUsageDescription: Cloud UI test fixture.
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
     dependencies:
     - target: ScreenLinkPreviewWidgets
       embed: true
+    - sdk: ReplayKit.framework
+    - sdk: CoreVideo.framework
+    - sdk: AVFoundation.framework
+    - sdk: UIKit.framework
   ScreenLinkPreviewWidgets:
     type: app-extension
     platform: iOS

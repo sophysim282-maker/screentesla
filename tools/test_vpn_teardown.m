@@ -3,7 +3,7 @@
 #import "LocalVPN.h"
 #include <assert.h>
 NSString *const NEVPNStatusDidChangeNotification=@"FakeVPNStatus";
-static NSArray *savedManagers;static NSMutableArray *loads;static NSUInteger starts,stops,otherStops;
+static NSArray *savedManagers;static NSMutableArray *loads;static NSUInteger starts,stops,otherStops;static NSTimeInterval deadline=12;
 @implementation NEVPNConnection
 - (void)stopVPNTunnel {stops++;if(self.status!=NEVPNStatusDisconnected){self.status=NEVPNStatusDisconnecting;dispatch_after(dispatch_time(DISPATCH_TIME_NOW,(int64_t)(.1*NSEC_PER_SEC)),dispatch_get_main_queue(),^{self.status=NEVPNStatusDisconnected;});}}
 - (BOOL)startVPNTunnelAndReturnError:(NSError **)error {starts++;self.status=NEVPNStatusConnecting;return YES;}
@@ -25,6 +25,7 @@ static NSArray *savedManagers;static NSMutableArray *loads;static NSUInteger sta
 @interface TestVPN:LocalVPN @end
 @implementation TestVPN
 - (NSString *)providerIdentifier {return @"test.own";}
+- (NSTimeInterval)disconnectDeadline {return deadline;}
 @end
 static void drain(double seconds){NSDate *end=[NSDate dateWithTimeIntervalSinceNow:seconds];while(end.timeIntervalSinceNow>0)[NSRunLoop.mainRunLoop runUntilDate:[NSDate dateWithTimeIntervalSinceNow:.01]];}
 static NETunnelProviderManager *manager(NSString *identifier,BOOL other){NETunnelProviderManager *m=[NETunnelProviderManager new];m.protocolConfiguration=[NETunnelProviderProtocol new];m.protocolConfiguration.providerBundleIdentifier=identifier;m.protocolConfiguration.providerConfiguration=@{@"routeProbe":@NO};if(other)m.connection=[OtherSession new];m.connection.status=NEVPNStatusConnected;return m;}
@@ -40,6 +41,9 @@ int main(void){@autoreleasepool{
  assert(otherStops==0&&ours.connection.status==NEVPNStatusDisconnected);
  // Enter connected alias-mode transition, then disconnect during its delayed retry.
  ours.connection.status=NEVPNStatusConnected;[vpn connectRouteProbe:^(BOOL ok){callbacks++;}];assert(ours.connection.status==NEVPNStatusDisconnecting&&loads.count==2); // alias transition stopped existing VPN
- finished=NO;[vpn disconnectWithCompletion:^(BOOL ok){finished=YES;confirmed=ok;}];deliver(3);drain(1.2);assert(finished&&confirmed&&starts==0&&otherStops==0);
+ finished=NO;[vpn disconnectWithCompletion:^(BOOL ok){finished=YES;confirmed=ok;}];deliver(2);drain(1.2);assert(finished&&confirmed&&starts==0&&otherStops==0);
+ deadline=.2;finished=NO;NSUInteger completions=0;__block NSUInteger timedCompletions=completions;
+ [vpn disconnectWithCompletion:^(BOOL ok){finished=YES;confirmed=ok;timedCompletions++;}];NSUInteger lateIndex=loads.count-1;drain(.35);
+ assert(finished&&!confirmed&&!vpn.disconnecting&&timedCompletions==1);deliver(lateIndex);drain(.2);assert(timedCompletions==1&&otherStops==0);
  assert(savedManagers.count==2);puts("VPN teardown passed: cancelled preferences callback, alias retry generation, confirmed own-VPN stop, unrelated VPN preservation, saved configurations retained and no delayed reconnect.");
 }return 0;}

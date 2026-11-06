@@ -164,7 +164,7 @@ static void SLActivityFinish(void) {
  else if(self.broadcastArmed){status=@"Screen broadcast selected";detail=@"Manage this screen-sharing mode in Developer.";}
  else if(self.youtubePiP.active){status=@"Floating video active";detail=@"Your floating video is active. Keep the viewer on your hotspot.";}
  else if(self.receiver.isRunning){status=@"Ready for AirPlay";detail=@"Choose ScreenLink in YouTube’s AirPlay menu, then return here once to prepare PiP.";}
- [self.dashboard showStatus:status detail:detail busy:busy sharing:sharing attention:self.disconnectNeedsAttention||self.homeFailure.length>0];
+ [self.dashboard showStatus:status detail:detail busy:busy sharing:sharing disconnecting:self.disconnectFlow.running attention:self.disconnectNeedsAttention||self.homeFailure.length>0];
 }
 - (void)startHome {
  if(![self permitExplicitStart])return;[self startYouTubePiP];[self updateHome];
