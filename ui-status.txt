@@ -1,183 +1,187 @@
 Source c775a261192fda5325dc3ae1c8717a9d8d105531
-reentesla/tools
-    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -exclude Headers -exclude PrivateHeaders -exclude Modules -exclude \*.tbd -resolve-src-symlinks /Applications/Xcode_16.4.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/Frameworks/XCTest.framework /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Products/Debug-iphonesimulator/ScreenLinkDashboardUITests-Runner.app/Frameworks
+value: App Library
+Element subtree:
+ →SearchField, 0x1016717a0, {{836.0, 90.0}, {338.0, 48.0}}, identifier: 'dewey-search-field', placeholderValue: 'App Library', value: App Library
+    Image, 0x101688070, {{937.3, 103.0}, {22.0, 22.0}}, identifier: 'magnifyingglass', label: 'Search'
+Path to element:
+ →Application, 0x103073a90, pid: 3279, label: ' '
+  ↳Window, 0x1030706c0, {{0.0, 0.0}, {402.0, 874.0}}
+   ↳Other, 0x103070370, {{0.0, 0.0}, {402.0, 874.0}}
+    ↳Other, 0x103071b10, {{0.0, 0.0}, {402.0, 874.0}}, identifier: 'Home screen icons'
+     ↳Other, 0x1030721d0, {{0.0, 0.0}, {402.0, 874.0}}
+      ↳Other, 0x1030717b0, {{0.0, 0.0}, {402.0, 874.0}}
+       ↳Other, 0x103071e70, {{804.0, 0.0}, {402.0, 874.0}}
+        ↳Other, 0x10167b5d0, {{804.0, 0.0}, {402.0, 874.0}}
+         ↳Other, 0x1016827e0, {{804.0, 0.0}, {402.0, 874.0}}
+          ↳Other, 0x101683770, {{804.0, 0.0}, {402.0, 162.0}}, identifier: 'dewey-search-bar'
+           ↳SearchField, 0x1016717a0, {{836.0, 90.0}, {338.0, 48.0}}, identifier: 'dewey-search-field', placeholderValue: 'App Library', value: App Library
+Query chain:
+ →Find: Application 'com.apple.springboard'
+  Output: {
+    Application, 0x1017b7690, pid: 3279, label: ' '
+  }
+  ↪︎Find: Descendants matching type SearchField
+    Output: {
+      SearchField, 0x101685c80, {{836.0, 90.0}, {338.0, 48.0}}, identifier: 'dewey-search-field', placeholderValue: 'App Library', value: App Library
+      SearchField, 0x1030f2150, {{32.0, 158.0}, {274.0, 36.0}}, label: 'Search Widgets', placeholderValue: 'Search Widgets', Keyboard Focused, Focused
+    }
+    ↪︎Find: First Match
+      Output: {
+        SearchField, 0x1030a2950, {{836.0, 90.0}, {338.0, 48.0}}, identifier: 'dewey-search-field', placeholderValue: 'App Library', value: App Library
+      }
 
-Copy /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Products/Debug-iphonesimulator/ScreenLinkDashboardUITests-Runner.app/Frameworks/XCTAutomationSupport.framework /Applications/Xcode_16.4.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/PrivateFrameworks/XCTAutomationSupport.framework (in target 'ScreenLinkDashboardUITests' from project 'ScreenLinkPreview')
-    cd /Users/runner/work/screentesla/screentesla/tools
-    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -exclude Headers -exclude PrivateHeaders -exclude Modules -exclude \*.tbd -resolve-src-symlinks /Applications/Xcode_16.4.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/PrivateFrameworks/XCTAutomationSupport.framework /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Products/Debug-iphonesimulator/ScreenLinkDashboardUITests-Runner.app/Frameworks
+    t =    27.66s     Wait for com.apple.springboard to idle
+    t =    28.69s     Retrying `Type 'ScreenLink' into "Search Widgets" SearchField` (attempt #2)
+    t =    28.69s         Wait for com.apple.springboard to idle
+    t =    28.69s         Find the "dewey-search-field" SearchField
+    t =    29.05s Ignoring failure to get hierarchy for remote element in process 12585 (Error getting main window kAXErrorServerNotFound)
+    t =    29.05s Ignoring failure to get hierarchy for remote element in process 12585 (Error getting main window kAXErrorServerNotFound)
+    t =    29.07s         Check for interrupting elements affecting "dewey-search-field" SearchField
+    t =    29.22s Ignoring failure to get hierarchy for remote element in process 12585 (Error getting main window kAXErrorServerNotFound)
+    t =    29.22s Ignoring failure to get hierarchy for remote element in process 12585 (Error getting main window kAXErrorServerNotFound)
+    t =    29.26s         Synthesize event
+    t =    29.28s             Get number of matches for: Elements containing elements matching predicate 'hasKeyboardFocus == 1'
+    t =    29.62s                 Ignoring failure to get hierarchy for remote element in process 12585 (Error getting main window kAXErrorServerNotFound)
+    t =    29.63s                 Ignoring failure to get hierarchy for remote element in process 12585 (Error getting main window kAXErrorServerNotFound)
+    t =    29.63s             Requesting snapshot of accessibility hierarchy for app with pid 3279
+    t =    30.08s             Requesting snapshot of accessibility hierarchy for app with pid 3279
+    t =    30.68s             Requesting snapshot of accessibility hierarchy for app with pid 3279
+    t =    31.31s             Find: Descendants matching type SearchField
+    t =    31.32s             Requesting snapshot of accessibility hierarchy for app with pid 3279
+    t =    31.89s             Requesting snapshot of accessibility hierarchy for app with pid 3279
+    t =    32.75s             Requesting snapshot of accessibility hierarchy for app with pid 3279
+    t =    33.36s             Requesting snapshot of accessibility hierarchy for app with pid 3279
+    t =    33.60s             Find: Descendants matching type SearchField
+    t =    33.60s             Requesting snapshot of accessibility hierarchy for app with pid 3279
+    t =    34.13s             Failed: Neither element nor any descendant has keyboard focus. Event dispatch snapshot: SearchField, {{836.0, 90.0}, {338.0, 48.0}}, identifier: 'dewey-search-field', placeholderValue: 'App Library', value: App Library
+Element debug description:
+Attributes: SearchField, 0x1016940b0, {{836.0, 90.0}, {338.0, 48.0}}, identifier: 'dewey-search-field', placeholderValue: 'App Library', value: App Library
+Element subtree:
+ →SearchField, 0x1016940b0, {{836.0, 90.0}, {338.0, 48.0}}, identifier: 'dewey-search-field', placeholderValue: 'App Library', value: App Library
+    Image, 0x1016941d0, {{937.3, 103.0}, {22.0, 22.0}}, identifier: 'magnifyingglass', label: 'Search'
+Path to element:
+ →Application, 0x101690470, pid: 3279, label: ' '
+  ↳Window, 0x101690590, {{0.0, 0.0}, {402.0, 874.0}}
+   ↳Other, 0x10167fdc0, {{0.0, 0.0}, {402.0, 874.0}}
+    ↳Other, 0x101683bf0, {{0.0, 0.0}, {402.0, 874.0}}, identifier: 'Home screen icons'
+     ↳Other, 0x1016ff7c0, {{0.0, 0.0}, {402.0, 874.0}}
+      ↳Other, 0x1016ff8e0, {{0.0, 0.0}, {402.0, 874.0}}
+       ↳Other, 0x101696710, {{804.0, 0.0}, {402.0, 874.0}}
+        ↳Other, 0x101696830, {{804.0, 0.0}, {402.0, 874.0}}
+         ↳Other, 0x101693c90, {{804.0, 0.0}, {402.0, 874.0}}
+          ↳Other, 0x101693db0, {{804.0, 0.0}, {402.0, 162.0}}, identifier: 'dewey-search-bar'
+           ↳SearchField, 0x1016940b0, {{836.0, 90.0}, {338.0, 48.0}}, identifier: 'dewey-search-field', placeholderValue: 'App Library', value: App Library
+Query chain:
+ →Find: Application 'com.apple.springboard'
+  Output: {
+    Application, 0x101683370, pid: 3279, label: ' '
+  }
+  ↪︎Find: Descendants matching type SearchField
+    Output: {
+      SearchField, 0x1017ba360, {{836.0, 90.0}, {338.0, 48.0}}, identifier: 'dewey-search-field', placeholderValue: 'App Library', value: App Library
+      SearchField, 0x101782ca0, {{32.0, 158.0}, {274.0, 36.0}}, label: 'Search Widgets', placeholderValue: 'Search Widgets', Keyboard Focused, Focused
+    }
+    ↪︎Find: First Match
+      Output: {
+        SearchField, 0x1016c1630, {{836.0, 90.0}, {338.0, 48.0}}, identifier: 'dewey-search-field', placeholderValue: 'App Library', value: App Library
+      }
 
-Copy /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Products/Debug-iphonesimulator/ScreenLinkDashboardUITests-Runner.app/Frameworks/Testing.framework /Applications/Xcode_16.4.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/Frameworks/Testing.framework (in target 'ScreenLinkDashboardUITests' from project 'ScreenLinkPreview')
-    cd /Users/runner/work/screentesla/screentesla/tools
-    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -exclude Headers -exclude PrivateHeaders -exclude Modules -exclude \*.tbd -resolve-src-symlinks /Applications/Xcode_16.4.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/Frameworks/Testing.framework /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Products/Debug-iphonesimulator/ScreenLinkDashboardUITests-Runner.app/Frameworks
+    t =    34.35s         Wait for com.apple.springboard to idle
+    t =    35.39s     Retrying `Type 'ScreenLink' into "Search Widgets" SearchField` (attempt #3)
+    t =    35.39s         Wait for com.apple.springboard to idle
+    t =    35.39s         Find the "dewey-search-field" SearchField
+    t =    35.79s Ignoring failure to get hierarchy for remote element in process 12585 (Error getting main window kAXErrorServerNotFound)
+    t =    35.80s Ignoring failure to get hierarchy for remote element in process 12585 (Error getting main window kAXErrorServerNotFound)
+    t =    35.84s         Check for interrupting elements affecting "dewey-search-field" SearchField
+    t =    36.09s Ignoring failure to get hierarchy for remote element in process 12585 (Error getting main window kAXErrorServerNotFound)
+    t =    36.09s Ignoring failure to get hierarchy for remote element in process 12585 (Error getting main window kAXErrorServerNotFound)
+    t =    36.10s         Synthesize event
+    t =    36.14s             Get number of matches for: Elements containing elements matching predicate 'hasKeyboardFocus == 1'
+    t =    36.59s                 Ignoring failure to get hierarchy for remote element in process 12585 (Error getting main window kAXErrorServerNotFound)
+    t =    36.60s                 Ignoring failure to get hierarchy for remote element in process 12585 (Error getting main window kAXErrorServerNotFound)
+    t =    36.62s             Requesting snapshot of accessibility hierarchy for app with pid 3279
+    t =    37.24s             Requesting snapshot of accessibility hierarchy for app with pid 3279
+    t =    37.80s             Requesting snapshot of accessibility hierarchy for app with pid 3279
+    t =    38.19s             Find: Descendants matching type SearchField
+    t =    38.20s             Requesting snapshot of accessibility hierarchy for app with pid 3279
+    t =    38.63s             Requesting snapshot of accessibility hierarchy for app with pid 3279
+    t =    38.99s             Requesting snapshot of accessibility hierarchy for app with pid 3279
+    t =    39.23s             Requesting snapshot of accessibility hierarchy for app with pid 3279
+    t =    39.53s             Find: Descendants matching type SearchField
+    t =    39.54s             Requesting snapshot of accessibility hierarchy for app with pid 3279
+    t =    39.83s             Failed: Neither element nor any descendant has keyboard focus. Event dispatch snapshot: SearchField, {{836.0, 90.0}, {338.0, 48.0}}, identifier: 'dewey-search-field', placeholderValue: 'App Library', value: App Library
+Element debug description:
+Attributes: SearchField, 0x110914a90, {{836.0, 90.0}, {338.0, 48.0}}, identifier: 'dewey-search-field', placeholderValue: 'App Library', value: App Library
+Element subtree:
+ →SearchField, 0x110914a90, {{836.0, 90.0}, {338.0, 48.0}}, identifier: 'dewey-search-field', placeholderValue: 'App Library', value: App Library
+    Image, 0x110914eb0, {{937.3, 103.0}, {22.0, 22.0}}, identifier: 'magnifyingglass', label: 'Search'
+Path to element:
+ →Application, 0x1016eaed0, pid: 3279, label: ' '
+  ↳Window, 0x10167b5d0, {{0.0, 0.0}, {402.0, 874.0}}
+   ↳Other, 0x1016b7110, {{0.0, 0.0}, {402.0, 874.0}}
+    ↳Other, 0x110944ce0, {{0.0, 0.0}, {402.0, 874.0}}, identifier: 'Home screen icons'
+     ↳Other, 0x1016bf340, {{0.0, 0.0}, {402.0, 874.0}}
+      ↳Other, 0x11090aee0, {{0.0, 0.0}, {402.0, 874.0}}
+       ↳Other, 0x11090c380, {{804.0, 0.0}, {402.0, 874.0}}
+        ↳Other, 0x1109122e0, {{804.0, 0.0}, {402.0, 874.0}}
+         ↳Other, 0x110913e30, {{804.0, 0.0}, {402.0, 874.0}}
+          ↳Other, 0x110914670, {{804.0, 0.0}, {402.0, 162.0}}, identifier: 'dewey-search-bar'
+           ↳SearchField, 0x110914a90, {{836.0, 90.0}, {338.0, 48.0}}, identifier: 'dewey-search-field', placeholderValue: 'App Library', value: App Library
+Query chain:
+ →Find: Application 'com.apple.springboard'
+  Output: {
+    Application, 0x101683370, pid: 3279, label: ' '
+  }
+  ↪︎Find: Descendants matching type SearchField
+    Output: {
+      SearchField, 0x103084d30, {{836.0, 90.0}, {338.0, 48.0}}, identifier: 'dewey-search-field', placeholderValue: 'App Library', value: App Library
+      SearchField, 0x1017ce340, {{32.0, 158.0}, {274.0, 36.0}}, label: 'Search Widgets', placeholderValue: 'Search Widgets', Keyboard Focused, Focused
+    }
+    ↪︎Find: First Match
+      Output: {
+        SearchField, 0x110919a40, {{836.0, 90.0}, {338.0, 48.0}}, identifier: 'dewey-search-field', placeholderValue: 'App Library', value: App Library
+      }
 
-RegisterExecutionPolicyException /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Products/Debug-iphonesimulator/ScreenLinkDashboardUITests-Runner.app/PlugIns/ScreenLinkDashboardUITests.xctest (in target 'ScreenLinkDashboardUITests' from project 'ScreenLinkPreview')
-    cd /Users/runner/work/screentesla/screentesla/tools
-    builtin-RegisterExecutionPolicyException /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Products/Debug-iphonesimulator/ScreenLinkDashboardUITests-Runner.app/PlugIns/ScreenLinkDashboardUITests.xctest
+    t =    40.00s         Wait for com.apple.springboard to idle
+    t =    40.01s     Requesting snapshot of accessibility hierarchy for app with pid 3279
+/Users/runner/work/screentesla/screentesla/tools/ui/DashboardUITests.swift:65: error: -[ScreenLinkDashboardUITests.DashboardUITests testWidgetGalleryInspection] : Failed to synthesize event: Neither element nor any descendant has keyboard focus. Event dispatch snapshot: SearchField, {{836.0, 90.0}, {338.0, 48.0}}, identifier: 'dewey-search-field', placeholderValue: 'App Library', value: App Library
+Element debug description:
+Attributes: SearchField, 0x110914a90, {{836.0, 90.0}, {338.0, 48.0}}, identifier: 'dewey-search-field', placeholderValue: 'App Library', value: App Library
+Element subtree:
+ →SearchField, 0x110914a90, {{836.0, 90.0}, {338.0, 48.0}}, identifier: 'dewey-search-field', placeholderValue: 'App Library', value: App Library
+    Image, 0x110914eb0, {{937.3, 103.0}, {22.0, 22.0}}, identifier: 'magnifyingglass', label: 'Search'
+Path to element:
+ →Application, 0x1016eaed0, pid: 3279, label: ' '
+  ↳Window, 0x10167b5d0, {{0.0, 0.0}, {402.0, 874.0}}
+   ↳Other, 0x1016b7110, {{0.0, 0.0}, {402.0, 874.0}}
+    ↳Other, 0x110944ce0, {{0.0, 0.0}, {402.0, 874.0}}, identifier: 'Home screen icons'
+     ↳Other, 0x1016bf340, {{0.0, 0.0}, {402.0, 874.0}}
+      ↳Other, 0x11090aee0, {{0.0, 0.0}, {402.0, 874.0}}
+       ↳Other, 0x11090c380, {{804.0, 0.0}, {402.0, 874.0}}
+        ↳Other, 0x1109122e0, {{804.0, 0.0}, {402.0, 874.0}}
+         ↳Other, 0x110913e30, {{804.0, 0.0}, {402.0, 874.0}}
+          ↳Other, 0x110914670, {{804.0, 0.0}, {402.0, 162.0}}, identifier: 'dewey-search-bar'
+           ↳SearchField, 0x110914a90, {{836.0, 90.0}, {338.0, 48.0}}, identifier: 'dewey-search-field', placeholderValue: 'App Library', value: App Library
+Query chain:
+ →Find: Application 'com.apple.springboard'
+  Output: {
+    Application, 0x101683370, pid: 3279, label: ' '
+  }
+  ↪︎Find: Descendants matching type SearchField
+    Output: {
+      SearchField, 0x103084d30, {{836.0, 90.0}, {338.0, 48.0}}, identifier: 'dewey-search-field', placeholderValue: 'App Library', value: App Library
+      SearchField, 0x1017ce340, {{32.0, 158.0}, {274.0, 36.0}}, label: 'Search Widgets', placeholderValue: 'Search Widgets', Keyboard Focused, Focused
+    }
+    ↪︎Find: First Match
+      Output: {
+        SearchField, 0x110919a40, {{836.0, 90.0}, {338.0, 48.0}}, identifier: 'dewey-search-field', placeholderValue: 'App Library', value: App Library
+      }
 
-Touch /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Products/Debug-iphonesimulator/ScreenLinkDashboardUITests-Runner.app/PlugIns/ScreenLinkDashboardUITests.xctest (in target 'ScreenLinkDashboardUITests' from project 'ScreenLinkPreview')
-    cd /Users/runner/work/screentesla/screentesla/tools
-    /usr/bin/touch -c /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Products/Debug-iphonesimulator/ScreenLinkDashboardUITests-Runner.app/PlugIns/ScreenLinkDashboardUITests.xctest
-
-2026-11-06 05:26:24.855794+0000 ScreenLinkDashboardUITests-Runner[9950:34094] [Default] Running tests...
-    t =      nans Interface orientation changed to Portrait
-Test Suite 'All tests' started at 2026-11-06 05:26:35.622.
-Test Suite 'ScreenLinkDashboardUITests.xctest' started at 2026-11-06 05:26:35.623.
-Test Suite 'DashboardUITests' started at 2026-11-06 05:26:35.623.
-Test Case '-[ScreenLinkDashboardUITests.DashboardUITests testDashboardControlsAndLayout]' started.
-    t =     0.00s Start Test at 2026-11-06 05:26:35.624
-    t =     0.97s Set Up
-    t =     1.01s Open local.screenlink.airplaylab
-    t =     1.01s     Launch local.screenlink.airplaylab
-    t =     6.86s         Setting up automation session
-    t =     8.11s         Wait for local.screenlink.airplaylab to idle
-    t =     9.76s Waiting 10.0s for "home.start" Button to exist
-    t =    10.77s     Checking `Expect predicate `existsNoRetry == 1` for object "home.start" Button`
-    t =    10.77s         Checking existence of `"home.start" Button`
-    t =    10.86s Find the "home.status" StaticText
-    t =    11.17s Added attachment named 'dashboard-light'
-    t =    11.17s Tap "home.start" Button
-    t =    11.17s     Wait for local.screenlink.airplaylab to idle
-    t =    11.17s     Find the "home.start" Button
-    t =    11.31s     Check for interrupting elements affecting "home.start" Button
-    t =    11.39s     Synthesize event
-    t =    11.90s     Wait for local.screenlink.airplaylab to idle
-    t =    11.90s Find the "home.status" StaticText
-    t =    12.47s Find the "home.disconnect" Button
-    t =    13.03s Tap "home.disconnect" Button
-    t =    13.03s     Wait for local.screenlink.airplaylab to idle
-    t =    13.03s     Find the "home.disconnect" Button
-    t =    13.20s     Check for interrupting elements affecting "home.disconnect" Button
-    t =    13.28s     Synthesize event
-    t =    13.61s     Wait for local.screenlink.airplaylab to idle
-    t =    13.62s Find the "home.status" StaticText
-    t =    13.77s Swipe down ScrollView (First Match)
-    t =    13.77s     Wait for local.screenlink.airplaylab to idle
-    t =    13.78s     Find the ScrollView (First Match)
-    t =    14.00s     Check for interrupting elements affecting "home.scroll" ScrollView
-    t =    14.12s     Synthesize event
-    t =    14.66s     Wait for local.screenlink.airplaylab to idle
-    t =    15.14s Tap "home.developer" Button
-    t =    15.14s     Wait for local.screenlink.airplaylab to idle
-    t =    15.15s     Find the "home.developer" Button
-    t =    15.17s     Check for interrupting elements affecting "home.developer" Button
-    t =    15.20s     Synthesize event
-    t =    15.51s     Wait for local.screenlink.airplaylab to idle
-    t =    15.51s Find the "home.status" StaticText
-    t =    15.55s Terminate local.screenlink.airplaylab:10424
-    t =    17.58s Open local.screenlink.airplaylab
-    t =    17.58s     Launch local.screenlink.airplaylab
-    t =    20.71s         Setting up automation session
-    t =    20.84s         Wait for local.screenlink.airplaylab to idle
-    t =    22.10s Added attachment named 'dashboard-dark'
-    t =    22.10s Terminate local.screenlink.airplaylab:10683
-    t =    23.11s Open local.screenlink.airplaylab
-    t =    23.11s     Launch local.screenlink.airplaylab
-    t =    23.83s         Setting up automation session
-    t =    25.33s         Wait for local.screenlink.airplaylab to idle
-    t =    26.55s Checking existence of `"home.start" Button`
-    t =    26.73s Swipe up ScrollView (First Match)
-    t =    26.73s     Wait for local.screenlink.airplaylab to idle
-    t =    26.73s     Find the ScrollView (First Match)
-    t =    26.84s     Check for interrupting elements affecting "home.scroll" ScrollView
-    t =    26.98s     Synthesize event
-    t =    27.51s     Wait for local.screenlink.airplaylab to idle
-    t =    29.63s Checking existence of `"home.disconnect" Button`
-    t =    29.76s Added attachment named 'dashboard-large-type'
-    t =    29.76s Setting device orientation to Landscape Left
-    t =    29.76s     Device orientation changed to Landscape Left
-    t =    29.86s     Interface orientation changed to Landscape Right
-    t =    29.86s     Wait for local.screenlink.airplaylab to idle
-    t =    30.41s Added attachment named 'dashboard-landscape'
-    t =    30.41s Setting device orientation to Portrait
-    t =    30.42s     Device orientation changed to Portrait
-    t =    30.57s     Interface orientation changed to Portrait
-    t =    30.58s     Wait for local.screenlink.airplaylab to idle
-    t =    30.87s Tear Down
-Test Case '-[ScreenLinkDashboardUITests.DashboardUITests testDashboardControlsAndLayout]' passed (31.176 seconds).
-Test Case '-[ScreenLinkDashboardUITests.DashboardUITests testProductionControllerCancelsPendingStartAndWidgetRoutes]' started.
-    t =     0.00s Start Test at 2026-11-06 05:27:06.800
-    t =     0.04s Set Up
-    t =     0.04s Open local.screenlink.airplaylab
-    t =     0.05s     Launch local.screenlink.airplaylab
-    t =     0.05s         Terminate local.screenlink.airplaylab:10737
-    t =     1.75s         Setting up automation session
-    t =     2.80s         Wait for local.screenlink.airplaylab to idle
-    t =     4.17s Waiting 10.0s for "home.start" Button to exist
-    t =     5.19s     Checking `Expect predicate `existsNoRetry == 1` for object "home.start" Button`
-    t =     5.19s         Checking existence of `"home.start" Button`
-    t =     5.28s Tap "home.start" Button
-    t =     5.28s     Wait for local.screenlink.airplaylab to idle
-    t =     5.29s     Find the "home.start" Button
-    t =     5.32s     Check for interrupting elements affecting "home.start" Button
-    t =     5.42s     Synthesize event
-    t =     5.77s     Wait for local.screenlink.airplaylab to idle
-    t =     5.79s Find the "home.disconnect" Button
-    t =     5.91s Find the "home.disconnect" Button
-    t =     6.10s Tap "home.disconnect" Button
-    t =     6.10s     Wait for local.screenlink.airplaylab to idle
-    t =     6.11s     Find the "home.disconnect" Button
-    t =     6.22s     Check for interrupting elements affecting "home.disconnect" Button
-    t =     6.32s     Synthesize event
-    t =     6.70s     Wait for local.screenlink.airplaylab to idle
-    t =     7.78s Checking `Expect predicate `label == "Disconnected"` for object "home.status" StaticText`
-    t =     7.78s     Find the "home.status" StaticText
-    t =     9.83s Find the "integration.state" StaticText
-    t =     9.87s Tap "integration.widgetStart" Button
-    t =     9.87s     Wait for local.screenlink.airplaylab to idle
-    t =     9.89s     Find the "integration.widgetStart" Button
-    t =     9.93s     Check for interrupting elements affecting "integration.widgetStart" Button
-    t =     9.98s     Synthesize event
-    t =    10.28s     Wait for local.screenlink.airplaylab to idle
-    t =    11.59s Checking `Expect predicate `label CONTAINS "pip=1"` for object "integration.state" StaticText`
-    t =    11.59s     Find the "integration.state" StaticText
-    t =    11.62s Tap "integration.widgetPeer" Button
-    t =    11.62s     Wait for local.screenlink.airplaylab to idle
-    t =    11.63s     Find the "integration.widgetPeer" Button
-    t =    11.64s     Check for interrupting elements affecting "integration.widgetPeer" Button
-    t =    11.67s     Synthesize event
-    t =    11.96s     Wait for local.screenlink.airplaylab to idle
-    t =    13.29s Tap "integration.widgetStop" Button
-    t =    13.29s     Wait for local.screenlink.airplaylab to idle
-    t =    13.29s     Find the "integration.widgetStop" Button
-    t =    13.31s     Check for interrupting elements affecting "integration.widgetStop" Button
-    t =    13.32s     Synthesize event
-    t =    13.62s     Wait for local.screenlink.airplaylab to idle
-    t =    14.99s Checking `Expect predicate `label CONTAINS "peers=1"` for object "integration.state" StaticText`
-    t =    14.99s     Find the "integration.state" StaticText
-    t =    16.07s Checking `Expect predicate `label == "Disconnected"` for object "home.status" StaticText`
-    t =    16.07s     Find the "home.status" StaticText
-    t =    16.09s Terminate local.screenlink.airplaylab:11071
-    t =    17.12s Open local.screenlink.airplaylab
-    t =    17.12s     Launch local.screenlink.airplaylab
-    t =    17.84s         Setting up automation session
-    t =    19.22s         Wait for local.screenlink.airplaylab to idle
-    t =    21.68s Checking `Expect predicate `label CONTAINS "pip=1"` for object "integration.state" StaticText`
-    t =    21.68s     Find the "integration.state" StaticText
-    t =    21.74s Terminate local.screenlink.airplaylab:11880
-    t =    22.80s Open local.screenlink.airplaylab
-    t =    22.80s     Launch local.screenlink.airplaylab
-    t =    26.39s         Setting up automation session
-    t =    27.81s         Wait for local.screenlink.airplaylab to idle
-    t =    30.25s Checking `Expect predicate `label == "Disconnected"` for object "home.status" StaticText`
-    t =    30.25s     Find the "home.status" StaticText
-    t =    32.32s Find the "integration.state" StaticText
-PRODUCTION_CONTROLLER_INTENT_TESTS_PASSED: cancelled late VPN callback, Disconnect during Start, warm widget Start/Stop and cold widget PiP Start after manual disconnect.
-    t =    32.35s Tear Down
-Test Case '-[ScreenLinkDashboardUITests.DashboardUITests testProductionControllerCancelsPendingStartAndWidgetRoutes]' passed (32.577 seconds).
-Test Case '-[ScreenLinkDashboardUITests.DashboardUITests testWidgetGalleryInspection]' started.
-    t =     0.00s Start Test at 2026-11-06 05:27:39.377
-    t =     0.04s Set Up
-    t =     0.04s Open local.screenlink.airplaylab
-    t =     0.04s     Launch local.screenlink.airplaylab
-    t =     0.04s         Terminate local.screenlink.airplaylab:12151
-    t =     1.41s         Setting up automation session
-    t =     2.47s         Wait for local.screenlink.airplaylab to idle
-    t =     3.63s Pressing Home button
-    t =     4.12s Waiting 10.0s for "ScreenLink" Icon to exist
-    t =     5.29s     Checking `Expect predicate `existsNoRetry == 1` for object "ScreenLink" Icon`
-    t =     5.29s         Checking existence of `"ScreenLink" Icon`
-    t =     5.60s Press "ScreenLink" Icon for 1.5 seconds
-    t =     5.60s     Wait for com.apple.springboard to idle
-    t =     5.60s     Find the "ScreenLink" Icon
-    t =     5.65s     Check for interrupting elements affecting "ScreenLink" Icon
-    t =     5.72s     Synthesize event
+    t =    46.35s Tear Down
+Test Case '-[ScreenLinkDashboardUITests.DashboardUITests testWidgetGalleryInspection]' failed (56.395 seconds).
+Test Suite 'DashboardUITests' failed at 2026-11-06 05:28:35.774.
+	 Executed 3 tests, with 1 failure (0 unexpected) in 120.148 (120.151) seconds
+Test Suite 'ScreenLinkDashboardUITests.xctest' failed at 2026-11-06 05:28:35.775.
+	 Executed 3 tests, with 1 failure (0 unexpected) in 120.148 (120.152) seconds
+Test Suite 'All tests' failed at 2026-11-06 05:28:35.775.
+	 Executed 3 tests, with 1 failure (0 unexpected) in 120.148 (120.153) seconds
