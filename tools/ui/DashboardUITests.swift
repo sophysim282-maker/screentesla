@@ -52,22 +52,25 @@ final class DashboardUITests: XCTestCase {
   XCUIDevice.shared.press(.home);XCUIDevice.shared.press(.home)
   let spring=XCUIApplication(bundleIdentifier:"com.apple.springboard")
   // Enter editing on the actual Home Screen, never type into App Library search.
+  let library=spring.searchFields.matching(NSPredicate(format:"placeholderValue CONTAINS[c] %@", "App Library")).firstMatch
+  if library.exists&&library.isHittable {spring.swipeRight();sleep(1)}
+  print("WIDGET_GALLERY_HOME_TREE: "+spring.debugDescription)
   let icon=spring.icons["ScreenLink"].firstMatch
-  if icon.waitForExistence(timeout:5) {
+  if icon.waitForExistence(timeout:5)&&icon.isHittable {
    icon.press(forDuration:1.5)
    let addHome=spring.buttons["Add to Home Screen"]
-   if addHome.waitForExistence(timeout:2) {addHome.tap();XCUIDevice.shared.press(.home)}
+   if addHome.waitForExistence(timeout:2)&&addHome.isHittable {addHome.tap();XCUIDevice.shared.press(.home)}
    else {
     let editHome=spring.buttons["Edit Home Screen"]
-    if editHome.waitForExistence(timeout:2){editHome.tap()}else{XCUIDevice.shared.press(.home)}
+    if editHome.waitForExistence(timeout:2)&&editHome.isHittable{editHome.tap()}else{XCUIDevice.shared.press(.home)}
    }
   }
   var edit=spring.buttons["Edit"].firstMatch
-  if !edit.waitForExistence(timeout:2) {
+  if !edit.waitForExistence(timeout:2)||!edit.isHittable {
    spring.coordinate(withNormalizedOffset:CGVector(dx:0.96,dy:0.45)).press(forDuration:2)
   }
   edit=spring.buttons["Edit"].firstMatch
-  if edit.waitForExistence(timeout:3){edit.tap()}
+  if edit.waitForExistence(timeout:3)&&edit.isHittable{edit.tap()}
   var added=false
   for title in ["Add Widget","Add Widgets","Add"] {
    let button=spring.buttons[title].firstMatch
@@ -80,7 +83,7 @@ final class DashboardUITests: XCTestCase {
    print("WIDGET_GALLERY_NOT_VERIFIED: correct gallery search was not available");capture("widget-gallery-unavailable");return
   }
   guard search.isHittable else {print("WIDGET_GALLERY_NOT_VERIFIED: gallery search is not hittable");return}
-  search.tap()
+  search.tap();sleep(1)
   search.typeText("ScreenLink")
   let found=spring.staticTexts.containing(NSPredicate(format:"label CONTAINS[c] %@", "ScreenLink")).firstMatch
   if found.waitForExistence(timeout:8) {
