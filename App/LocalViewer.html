@@ -1,0 +1,21 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ScreenLink · Local connection</title>
+<style>body{margin:32px;background:#080e17;color:#edf4ff;font:20px system-ui}button{font:inherit;padding:12px}p{max-width:700px}</style>
+<h1>ScreenLink local viewer</h1><p id="status">Connect to request approval on your iPhone.</p>
+<p>Experimental local HTTP playback. This connection is not HTTPS. Your phone screen stays hidden until you choose Show.</p><button id="connect">Connect phone</button>
+<script>
+const status=document.getElementById('status'),button=document.getElementById('connect');let timer,nonce;
+try{nonce=sessionStorage.getItem('screenlink-local-request');}catch{}
+if(!/^[0-9a-f]{32}$/.test(nonce||'')){nonce=Array.from(crypto.getRandomValues(new Uint8Array(16)),n=>n.toString(16).padStart(2,'0')).join('');try{sessionStorage.setItem('screenlink-local-request',nonce);}catch{}}
+async function poll(){
+ const abort=new AbortController(),timeout=setTimeout(()=>abort.abort(),3500);let again=false;
+ try{const response=await fetch('/local-viewer/request',{method:'POST',cache:'no-store',headers:{'Content-Type':'application/json','X-ScreenLink-Viewer':'request'},body:JSON.stringify({nonce}),signal:abort.signal});if(!response.ok)throw Error('HTTP '+response.status);const state=await response.json();
+ if(state.phase==='approved'&&typeof state.token==='string'){location.replace('/split?token='+encodeURIComponent(state.token));return;}
+ if(state.phase==='pending'){status.textContent='On your iPhone, open ScreenLink and tap Approve local viewer. No code is needed.';again=true;}
+ else if(state.phase==='rejected'){status.textContent='Rejected on iPhone. Use Disconnect local viewer on the phone before requesting again.';}
+ else if(state.phase==='busy'){status.textContent='Another local viewer is pending or connected. Use Disconnect local viewer on the phone first.';}
+ else status.textContent='Local approval unavailable. Return to ScreenLink on your iPhone.';
+ }catch(error){const reason=error.name==='AbortError'?'Approval request timed out':(error.message||'Network request failed');status.textContent='Local approval failed: '+reason+'. Copy the iPhone test log before restarting. Keep the experimental VPN and system screen broadcast active.';}
+ finally{clearTimeout(timeout);if(again)timer=setTimeout(poll,1500);else button.disabled=false;}
+}
+button.onclick=()=>{clearTimeout(timer);button.disabled=true;poll();};
+</script></html>
