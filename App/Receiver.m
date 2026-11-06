@@ -54,6 +54,8 @@ _Static_assert(kVTInvalidSessionErr == -12903, "Check decoder error mapping agai
     CIContext *_ci;
     int _socket,_httpsSocket;
     BOOL _running;
+    BOOL _httpAccepting,_httpsAccepting;
+    NSUInteger _httpListenSerial,_httpsListenSerial;
     BOOL _previewPending;
     BOOL _jpegBusy;
     dispatch_queue_t _jpegQueue;
@@ -87,6 +89,8 @@ _Static_assert(kVTInvalidSessionErr == -12903, "Check decoder error mapping agai
 - (void)image:(CVImageBufferRef)pixel;
 - (void)decode:(NSData *)data timestamp:(uint64_t)timestamp;
 - (BOOL)startWeb;
+- (BOOL)listenerNeedsRepair:(BOOL)secure;
+- (BOOL)resumeWebListeners;
 - (BOOL)startListener:(unsigned short)port context:(SSL_CTX *)context;
 - (void)serveClient:(int)client generation:(NSUInteger)generation;
 - (void)streamClient:(int)client generation:(NSUInteger)generation;
@@ -235,7 +239,7 @@ _decodeQueue=dispatch_queue_create("ScreenLink.decode",DISPATCH_QUEUE_SERIAL);_j
     }];
     _foregroundObserver=[NSNotificationCenter.defaultCenter addObserverForName:UIApplicationDidBecomeActiveNotification object:nil queue:NSOperationQueue.mainQueue usingBlock:^(NSNotification *note){
         Receiver *owner=weak;if(!owner)return;
-        if(owner->_running&&owner.discoveryMode==SLDiscoveryPhoneVPN)[owner->_vpnDiscovery recoverOnForeground];
+        if(owner->_running){[owner resumeListenersIfNeeded];if(owner.discoveryMode==SLDiscoveryPhoneVPN)[owner->_vpnDiscovery recoverOnForeground];}
         dispatch_async(owner->_decodeQueue,^{
             owner->_appBackgrounded=NO;owner->_backgroundFailures=0;owner->_nextDecoderAttempt=0;
             if(owner->_running && owner->_waitingForIDR)[owner emit:@"App active again. Decoder recovery will resume at the next H.264 keyframe; the browser may hold its last image until then."];
@@ -422,6 +426,55 @@ static NSArray *txtStrings(const char *bytes,int length) {
     }
     [_vpnDiscovery startWithProfile:self.discoveryProfile];
 }
+- (BOOL)listenerNeedsRepair:(BOOL)secure {
+    @synchronized(self){
+        int server=secure?_httpsSocket:_socket;
+        BOOL accepting=secure?_httpsAccepting:_httpAccepting;
+        if(server<0||!accepting)return YES;
+#if defined(SO_ISDEFUNCT)
+        int defunct=0;socklen_t size=sizeof defunct;
+        if(getsockopt(server,SOL_SOCKET,SO_ISDEFUNCT,&defunct,&size)==0&&defunct)return YES;
+#endif
+        int listening=0;socklen_t length=sizeof listening;
+        return getsockopt(server,SOL_SOCKET,SO_ACCEPTCONN,&listening,&length)!=0||!listening;
+    }
+}
+- (BOOL)resumeWebListeners {
+    BOOL healthy=YES;
+    for(NSNumber *secure in @[@NO,@YES]){
+        BOOL tls=secure.boolValue;
+        if(![self listenerNeedsRepair:tls])continue;
+        @synchronized(self){
+            int server=tls?_httpsSocket:_socket;
+            if(tls){_httpsSocket=-1;_httpsAccepting=NO;}else{_socket=-1;_httpAccepting=NO;}
+            if(server>=0){shutdown(server,SHUT_RDWR);close(server);}
+        }
+        SSL_CTX *context=NULL;
+        if(tls){
+            NSString *directory=[NSBundle.mainBundle.bundlePath stringByAppendingPathComponent:@"PrivateTLS"];
+            context=sl_tls_context([[directory stringByAppendingPathComponent:@"fullchain.pem"] fileSystemRepresentation],[[directory stringByAppendingPathComponent:@"private.key"] fileSystemRepresentation]);
+            if(!context){healthy=NO;[self emit:@"LISTENER RECOVERY: HTTPS identity unavailable; listener could not be restored."];continue;}
+        }
+        BOOL ready=[self startListener:tls?443:8080 context:context];if(context)SSL_CTX_free(context);
+        healthy&=ready;
+        [self emit:[NSString stringWithFormat:@"LISTENER RECOVERY: %@ %@; viewer authorization and media state retained.",tls?@"HTTPS 443":@"HTTP 8080",ready?@"listening again":@"could not bind"]];
+    }
+    return healthy;
+}
+- (BOOL)resumeListenersIfNeeded {
+    if(!_running)return NO;
+    BOOL healthy=YES;
+    if(_raop&&!raop_is_running(_raop)){
+        // Join only the dead AirPlay thread, retaining receiver identity, media,
+        // website credentials and all healthy web listener workers.
+        raop_stop(_raop);unsigned short port=raop_get_port(_raop);
+        int result=raop_start(_raop,&port);
+        BOOL ready=result>0&&raop_is_running(_raop);healthy&=ready;
+        if(ready)raop_set_port(_raop,port);
+        [self emit:ready?@"LISTENER RECOVERY: AirPlay listening again; reselect ScreenLink in YouTube if the sender released AirPlay.":@"LISTENER RECOVERY: AirPlay listener could not restart. Return to ScreenLink and retry."];
+    }
+    return [self resumeWebListeners]&&healthy;
+}
 - (BOOL)startWeb {
     if(![self startListener:8080 context:NULL])return NO;
     NSString *directory=[NSBundle.mainBundle.bundlePath stringByAppendingPathComponent:@"PrivateTLS"];
@@ -435,13 +488,20 @@ static NSArray *txtStrings(const char *bytes,int length) {
     int yes=1;setsockopt(server,SOL_SOCKET,SO_REUSEADDR,&yes,sizeof yes);
     struct sockaddr_in address={0};address.sin_len=sizeof address;address.sin_family=AF_INET;address.sin_port=htons(port);address.sin_addr.s_addr=INADDR_ANY;
     if(bind(server,(struct sockaddr *)&address,sizeof address)<0 || listen(server,8)<0){close(server);return NO;}
-    if(context)_httpsSocket=server;else _socket=server;
-    NSUInteger generation;@synchronized(self){generation=_generation;}
+    NSUInteger generation,listenSerial;
+    @synchronized(self){
+        generation=_generation;
+        if(context){_httpsSocket=server;_httpsAccepting=YES;listenSerial=++_httpsListenSerial;}
+        else{_socket=server;_httpAccepting=YES;listenSerial=++_httpListenSerial;}
+    }
     if(context)SSL_CTX_up_ref(context);
     dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY,0),^{
         while(YES) {
-            BOOL current;@synchronized(self){current=generation==self->_generation;}if(!current)break;
-            int client=accept(server,NULL,NULL);if(client<0)break;
+            BOOL current;@synchronized(self){current=generation==self->_generation&&listenSerial==(context?self->_httpsListenSerial:self->_httpListenSerial);}if(!current)break;
+            int client=accept(server,NULL,NULL);if(client<0){
+                if(errno==EINTR||errno==EAGAIN||errno==EWOULDBLOCK||errno==ECONNABORTED)continue;
+                [self emit:[NSString stringWithFormat:@"LOCAL LISTENER STOPPED: port %u, accept errno %d; foreground will repair it.",port,errno]];break;
+            }
             if(dispatch_semaphore_wait(self->_httpSlots,DISPATCH_TIME_NOW)!=0){close(client);continue;}
             if(context)SSL_CTX_up_ref(context);
             dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED,0),^{
@@ -450,6 +510,13 @@ static NSArray *txtStrings(const char *bytes,int length) {
                 @try {@autoreleasepool {if(!context || sl_tls_begin(context,client))[self serveClient:client generation:generation];}}
                 @finally {if(context){sl_tls_end();SSL_CTX_free(context);}close(client);dispatch_semaphore_signal(self->_httpSlots);}
             });
+        }
+        @synchronized(self){
+            int owned=context?self->_httpsSocket:self->_socket;
+            if(generation==self->_generation&&listenSerial==(context?self->_httpsListenSerial:self->_httpListenSerial)&&owned==server){
+                if(context){self->_httpsSocket=-1;self->_httpsAccepting=NO;}else{self->_socket=-1;self->_httpAccepting=NO;}
+                shutdown(server,SHUT_RDWR);close(server);
+            }
         }
         if(context)SSL_CTX_free(context);
     });return YES;
@@ -663,8 +730,11 @@ static NSArray *txtStrings(const char *bytes,int length) {
     [_media stop];[_vpnDiscovery stop];_vpnDiscovery=nil;[_h264 reset];
     @synchronized(self){_running=NO;_generation++;_mirrorTransportOpen=NO;_sessionFrames=0;_controlClients=0;}
     [_frameReady lock];[_frameReady broadcast];[_frameReady unlock];
-    if(_httpsSocket>=0){shutdown(_httpsSocket,SHUT_RDWR);close(_httpsSocket);_httpsSocket=-1;}
-    if(_socket>=0){shutdown(_socket,SHUT_RDWR);close(_socket);_socket=-1;}
+    @synchronized(self){
+        _httpAccepting=NO;_httpsAccepting=NO;
+        if(_httpsSocket>=0){shutdown(_httpsSocket,SHUT_RDWR);close(_httpsSocket);_httpsSocket=-1;}
+        if(_socket>=0){shutdown(_socket,SHUT_RDWR);close(_socket);_socket=-1;}
+    }
     if(_raop){raop_stop(_raop);raop_destroy(_raop);_raop=NULL;}
     if(_dns){dnssd_unregister_airplay(_dns);dnssd_unregister_raop(_dns);dnssd_destroy(_dns);_dns=NULL;}
     dispatch_sync(_decodeQueue,^{
