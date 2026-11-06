@@ -1,7 +1,5 @@
 Source 38bbf3af9498963709a4e2fbd6a136f722caf67d
-wift-const-vals-list /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ScreenLinkPreview.build/Debug-iphonesimulator/ScreenLinkDashboardUITests.build/Objects-normal/arm64/ScreenLinkDashboardUITests.SwiftConstValuesFileList --compile-time-extraction --deployment-aware-processing --validate-assistant-intents --no-app-shortcuts-localization
-2026-11-06 05:46:03.849 appintentsmetadataprocessor[11861:38751] Starting appintentsmetadataprocessor export
-2026-11-06 05:46:03.852 appintentsmetadataprocessor[11861:38751] warning: Metadata extraction skipped. No AppIntents.framework dependency found.
+ta extraction skipped. No AppIntents.framework dependency found.
 
 AppIntentsSSUTraining (in target 'ScreenLinkDashboardUITests' from project 'ScreenLinkPreview')
     cd /Users/runner/work/screentesla/screentesla/tools
@@ -65,3 +63,6 @@ Touch /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Prod
     cd /Users/runner/work/screentesla/screentesla/tools
     /usr/bin/touch -c /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Products/Debug-iphonesimulator/ScreenLinkDashboardUITests-Runner.app/PlugIns/ScreenLinkDashboardUITests.xctest
 
+2026-11-06 05:46:34.686134+0000 ScreenLinkDashboardUITests-Runner[12548:41183] [Default] Running tests...
+2026-11-06 05:46:34.754417+0000 ScreenLinkDashboardUITests-Runner[12548:41570] [General] Failed to send CA Event for app launch measurements for ca_event_type: 0 event_name: com.apple.app_launch_measurement.FirstFramePresentationMetric
+2026-11-06 05:46:34.796108+0000 ScreenLinkDashboardUITests-Runner[12548:41570] [General] Failed to send CA Event for app launch measurements for ca_event_type: 1 event_name: com.apple.app_launch_measurement.ExtendedLaunchMetrics
