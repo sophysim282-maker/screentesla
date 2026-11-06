@@ -1,5 +1,8 @@
 #import <Foundation/Foundation.h>
 #import "MediaCast.h"
+@interface MediaCast (RaceRegression)
+- (void)requestURL:(NSString *)url;
+@end
 #import "HLSPlaylist.h"
 #import <sys/socket.h>
 #import <unistd.h>
