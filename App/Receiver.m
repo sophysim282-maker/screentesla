@@ -436,7 +436,13 @@ static NSArray *txtStrings(const char *bytes,int length) {
         if(getsockopt(server,SOL_SOCKET,SO_ISDEFUNCT,&defunct,&size)==0&&defunct)return YES;
 #endif
         int listening=0;socklen_t length=sizeof listening;
-        return getsockopt(server,SOL_SOCKET,SO_ACCEPTCONN,&listening,&length)!=0||!listening;
+        if(getsockopt(server,SOL_SOCKET,SO_ACCEPTCONN,&listening,&length)==0)return !listening;
+        // Darwin may not implement this option. Keep a live accept loop when
+        // the socket still has a valid local endpoint; never restart it merely
+        // because SO_ACCEPTCONN is unsupported.
+        if(errno!=ENOPROTOOPT&&errno!=EINVAL)return YES;
+        struct sockaddr_storage endpoint;socklen_t endpointLength=sizeof endpoint;
+        return getsockname(server,(struct sockaddr *)&endpoint,&endpointLength)!=0;
     }
 }
 - (BOOL)resumeWebListeners {
@@ -469,7 +475,7 @@ static NSArray *txtStrings(const char *bytes,int length) {
         // website credentials and all healthy web listener workers.
         raop_stop(_raop);unsigned short port=raop_get_port(_raop);
         int result=raop_start(_raop,&port);
-        BOOL ready=result>0&&raop_is_running(_raop);healthy&=ready;
+        BOOL ready=result>=0&&raop_is_running(_raop);healthy&=ready;
         if(ready)raop_set_port(_raop,port);
         [self emit:ready?@"LISTENER RECOVERY: AirPlay listening again; reselect ScreenLink in YouTube if the sender released AirPlay.":@"LISTENER RECOVERY: AirPlay listener could not restart. Return to ScreenLink and retry."];
     }
