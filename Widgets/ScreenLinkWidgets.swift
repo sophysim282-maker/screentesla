@@ -58,21 +58,21 @@ private struct LauncherView: View {
     }
 }
 
-private func launcherConfiguration(_ mascot: Mascot) -> some WidgetConfiguration {
+private func launcherConfiguration(_ mascot: Mascot, displayName: LocalizedStringKey) -> some WidgetConfiguration {
     StaticConfiguration(kind: "ScreenLink.Launch.\(mascot.rawValue)", provider: LauncherProvider()) { _ in LauncherView(mascot: mascot) }
-        .configurationDisplayName("ScreenLink · \(mascot.title)")
+        .configurationDisplayName(displayName)
         .description("Tap to open ScreenLink and start YouTube only. Personal Hotspot must already be enabled.")
         .supportedFamilies([.systemSmall, .systemMedium])
 }
 // WidgetKit constructs each widget with init(); use distinct zero-argument types.
 private struct DogLauncherWidget: Widget {
-    var body: some WidgetConfiguration { launcherConfiguration(.dog) }
+    var body: some WidgetConfiguration { launcherConfiguration(.dog, displayName: "ScreenLink · Dog") }
 }
 private struct CatLauncherWidget: Widget {
-    var body: some WidgetConfiguration { launcherConfiguration(.cat) }
+    var body: some WidgetConfiguration { launcherConfiguration(.cat, displayName: "ScreenLink · Cat") }
 }
 private struct RoadsterLauncherWidget: Widget {
-    var body: some WidgetConfiguration { launcherConfiguration(.roadster) }
+    var body: some WidgetConfiguration { launcherConfiguration(.roadster, displayName: "ScreenLink · Roadster") }
 }
 
 private struct ControlsView: View {
