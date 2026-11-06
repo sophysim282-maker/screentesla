@@ -1,0 +1,47 @@
+const fs=require('fs'),http=require('http'),path=require('path'),assert=require('assert'),{chromium}=require('playwright');
+const root=process.argv[2],file=process.argv[3],binary=fs.readFileSync(file);let count=0,rotation=1,restarted=false,hidden=true,privacyRevision=1,failPrivacy=false;const boxes=[];
+for(let p=0;p<binary.length;){const size=binary.readUInt32BE(p);assert(size>=8);boxes.push({start:p,end:p+size,type:binary.toString('ascii',p+4,p+8)});p+=size;}
+const moof=boxes.findIndex(b=>b.type==='moof'),init=binary.subarray(0,boxes[moof].start),segments=[];
+for(let i=moof;i<boxes.length;i++)if(boxes[i].type==='moof'){const end=boxes[i+1]?.end||boxes[i].end;segments.push(binary.subarray(boxes[i].start,end));}
+const vod=[];for(let i=0;i<segments.length;i+=120)vod.push(Buffer.concat(segments.slice(i,i+120)));
+const scriptFiles={'/media/hls.js':'HLSPlayer.js','/media/canvas.js':'CanvasPlayer.js','/media/mp4box.js':'MP4Demux.js','/media/mux.js':'TSDemux.js'};
+const server=http.createServer((req,res)=>{const url=new URL(req.url,'http://localhost');res.setHeader('Cache-Control','no-store');
+ if(url.searchParams.get('token')!=='fixture'){res.statusCode=403;return res.end();}
+ if(['/split','/map','/video'].includes(url.pathname)){res.setHeader('Content-Type','text/html');return res.end(fs.readFileSync(path.join(root,url.pathname==='/video'?'MediaPlayer.html':url.pathname==='/split'?'SplitViewer.html':'MapPlayer.html')));}
+ if(scriptFiles[url.pathname]){res.setHeader('Content-Type','application/javascript');return res.end(fs.readFileSync(path.join(root,scriptFiles[url.pathname])));}
+ if(url.pathname==='/media/state'){res.setHeader('Content-Type','application/json');return res.end(JSON.stringify({active:true,epoch:'separate-media',url:'/fixture/media.m3u8?token=fixture',command:0,commandKind:'rate',paused:false,start:0,fraction:0}));}
+ if(url.pathname==='/media/report'){req.resume();res.setHeader('Content-Type','application/json');return res.end('{}');}
+ if(url.pathname==='/fixture/media.m3u8'){res.setHeader('Content-Type','application/vnd.apple.mpegurl');return res.end('#EXTM3U\n#EXT-X-TARGETDURATION:2\n#EXT-X-VERSION:7\n#EXT-X-MAP:URI="/fixture/init.mp4?token=fixture"\n'+vod.map((_,i)=>'#EXTINF:'+Math.min(2,(segments.length-i*120)/60)+',\n/fixture/part'+i+'.m4s?token=fixture\n').join('')+'#EXT-X-ENDLIST\n');}
+ if(url.pathname==='/fixture/init.mp4')return res.end(init);
+ if(url.pathname.startsWith('/fixture/part'))return res.end(vod[Number(url.pathname.match(/part(\d+)/)[1])]);
+ if(url.pathname==='/screen/privacy'&&req.method==='POST'){if(failPrivacy){req.resume();res.statusCode=503;return res.end('{}');}let body='';req.on('data',d=>body+=d);req.on('end',()=>{const next=JSON.parse(body);if(!next.hidden&&next.expectedRevision!==privacyRevision){res.statusCode=409;return res.end('{}');}hidden=next.hidden;privacyRevision++;res.setHeader('Content-Type','application/json');res.end(JSON.stringify({hidden,privacyRevision}));});return;}
+ if(url.pathname==='/screen/info'){res.setHeader('Content-Type','application/json');return res.end(JSON.stringify({epoch:(restarted?'second':'first')+'-'+privacyRevision,ready:!hidden,hidden,privacyRevision,codec:'avc1.42C01E',orientation:rotation,frames:count,ageMs:0}));}
+ if(url.pathname==='/screen/init.mp4'){if(hidden){res.statusCode=409;return res.end();}res.setHeader('X-Stream-Epoch',(restarted?'second':'first')+'-'+privacyRevision);return res.end(init);}
+ if(url.pathname==='/screen/segments'){
+  if(hidden){res.statusCode=409;return res.end();}const epoch=(restarted?'second':'first')+'-'+privacyRevision;if(url.searchParams.get('epoch')!==epoch){res.statusCode=409;return res.end();}
+  const after=Number(url.searchParams.get('after')),available=Math.min(count,segments.length);res.setHeader('X-Stream-Epoch',epoch);res.setHeader('X-Last-ID',available);
+  if(after>=available){res.statusCode=204;return res.end();}return res.end(Buffer.concat(segments.slice(after,available)));
+ }
+ res.statusCode=404;res.end();
+});
+(async()=>{
+ await new Promise(r=>server.listen(0,'127.0.0.1',r));const timer=setInterval(()=>count=Math.min(segments.length,count+4),60);
+ const browser=await chromium.launch({headless:true,args:['--no-sandbox']});const page=await browser.newPage({viewport:{width:1280,height:800}});page.on('pageerror',console.error);
+ await page.goto('http://127.0.0.1:'+server.address().port+'/split?token=fixture');const frame=page.frameLocator('#map');
+ await frame.locator('#source').waitFor({state:'attached'});await page.waitForFunction(()=>privacyRevision===1);assert(await page.locator('#mapCover').isVisible());assert(await frame.locator('#source').evaluate(v=>!v.getAttribute('src')));await page.click('#showScreen');await page.waitForFunction(()=>{const f=document.getElementById('map').contentWindow;return f.document.getElementById('source')?.currentTime>1;},null,{timeout:18000});
+ assert(await frame.locator('#screen').evaluate(canvas=>canvas.getContext('2d').getImageData(0,0,canvas.width,canvas.height).data.some((v,i)=>i%4!==3&&v>20)),'Live screen pixels must render');
+ await page.waitForFunction(()=>document.getElementById('media').contentWindow.eval('media().currentTime')>1,null,{timeout:15000});assert(await page.frameLocator('#media').locator('#canvas').evaluate(c=>c.getContext('2d').getImageData(0,0,c.width,c.height).data.some((v,i)=>i%4!==3&&v>20)));console.log('Both live map screen and independent HLS media play simultaneously on Canvas');
+ const mediaBefore=await page.evaluate(()=>document.getElementById('media').contentWindow.eval('media().currentTime'));await page.click('#hideScreen');await page.waitForFunction(()=>document.getElementById('hint').textContent.startsWith('HIDDEN'));
+ assert(hidden);await page.waitForFunction(()=>!document.getElementById('map').contentWindow.document.getElementById('source').getAttribute('src'));
+ assert(await frame.locator('#screen').evaluate(c=>!c.getContext('2d').getImageData(0,0,c.width,c.height).data.some((v,i)=>i%4!==3&&v>0)));assert(await page.locator('#mapCover').isVisible());await page.waitForTimeout(400);assert(await page.evaluate(()=>document.getElementById('media').contentWindow.eval('media().currentTime'))>mediaBefore);
+ await page.click('#showScreen');await page.waitForFunction(()=>document.getElementById('mapCover').hidden&&document.getElementById('map').contentWindow.document.getElementById('source')?.currentTime>1,null,{timeout:12000});console.log('Hide blacks/clears the screen source while independent media advances; explicit Show resumes fresh playback');
+ const divider=page.locator('#divider'),bounds=await divider.boundingBox();await page.mouse.move(bounds.x+7,bounds.y+80);await page.mouse.down();await page.mouse.move(880,400,{steps:8});await page.mouse.up();let value=Number(await divider.getAttribute('aria-valuenow'));assert(value>65&&value<75);assert(!await page.locator('#panels').evaluate(p=>p.classList.contains('dragging')));
+ await page.reload();assert.equal(Number(await divider.getAttribute('aria-valuenow')),value);await divider.focus();await page.keyboard.press('Home');assert.equal(await divider.getAttribute('aria-valuenow'),'20');await page.keyboard.press('End');assert.equal(await divider.getAttribute('aria-valuenow'),'80');await page.click('#reset');assert.equal(await divider.getAttribute('aria-valuenow'),'50');
+ await page.click('#layout');assert.equal(await divider.getAttribute('aria-orientation'),'horizontal');console.log('Pointer drag, ratio persistence, keyboard bounds, reset and stacked layout passed');
+ rotation=6;await page.waitForFunction(()=>{const c=document.getElementById('map').contentWindow.document.getElementById('screen');return c.width===360&&c.height===640;},null,{timeout:7000});console.log('Screen orientation rotation passed');
+ restarted=true;count=1;await page.waitForFunction(()=>{const v=document.getElementById('map').contentWindow.document.getElementById('source');return document.getElementById('map').contentWindow.document.getElementById('screen').dataset.epoch.startsWith('second-')&&v.currentTime>0.5&&v.currentTime<3;},null,{timeout:12000});console.log('Capture epoch restart recovery passed');
+ failPrivacy=true;await page.click('#hideScreen');await page.waitForFunction(()=>document.getElementById('hint').textContent.toLowerCase().includes('not confirmed'));assert(!hidden);assert(await page.locator('#mapCover').isVisible());assert(await frame.locator('#screen').evaluate(c=>!c.getContext('2d').getImageData(0,0,c.width,c.height).data.some((v,i)=>i%4!==3&&v>0)));console.log('Failed Hide remains covered and never claims server confirmation');
+ failPrivacy=false;await page.click('#hideScreen');await page.waitForFunction(()=>document.getElementById('hint').textContent.startsWith('HIDDEN'));assert(hidden);await page.click('#showScreen');await page.waitForFunction(()=>document.getElementById('mapCover').hidden,null,{timeout:10000});
+ await page.route('**/screen/info?*',route=>route.abort());await page.waitForFunction(()=>!document.getElementById('mapCover').hidden&&document.getElementById('hint').textContent.includes('not confirmed'),null,{timeout:6000});assert(await frame.locator('#screen').evaluate(c=>!c.getContext('2d').getImageData(0,0,c.width,c.height).data.some((v,i)=>i%4!==3&&v>0)));console.log('Lost privacy-status connection clears source/Canvas and masks the screen');
+ clearInterval(timer);await browser.close();server.close();
+})().catch(e=>{console.error(e);server.close();process.exit(1)});

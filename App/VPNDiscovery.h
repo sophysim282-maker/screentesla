@@ -5,5 +5,7 @@
 @interface VPNDiscovery : NSObject
 @property(nonatomic,copy) void (^status)(NSString *);
 - (BOOL)startWithProfile:(NSDictionary *)profile;
+- (BOOL)recoverIfNeeded;
+- (void)recoverOnForeground;
 - (void)stop;
 @end

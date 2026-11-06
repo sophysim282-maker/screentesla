@@ -6,6 +6,8 @@
 @property(nonatomic,copy) void (^ended)(void);
 @property(nonatomic,copy) BOOL (^videoIsLive)(void);
 @property(nonatomic,readonly) BOOL active;
+/// Native media mode must reserve runtime before leaving for the YouTube app.
+@property(nonatomic) BOOL allowWaitingForVideo;
 - (void)start;
 - (void)finish;
 @end
