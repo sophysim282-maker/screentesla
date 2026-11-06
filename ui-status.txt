@@ -1,5 +1,5 @@
 Source c775a261192fda5325dc3ae1c8717a9d8d105531
-nLinkDashboardUITests.xctest/Frameworks --strip-bitcode --scan-executable /Applications/Xcode_16.4.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/usr/lib/libXCTestSwiftSupport.dylib --strip-bitcode-tool /Applications/Xcode_16.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/bitcode_strip --emit-dependency-info /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ScreenLinkPreview.build/Debug-iphonesimulator/ScreenLinkDashboardUITests.build/SwiftStdLibToolInputDependencies.dep --filter-for-swift-os
+ntents/Developer/Platforms/iPhoneSimulator.platform/Developer/usr/lib/libXCTestSwiftSupport.dylib --strip-bitcode-tool /Applications/Xcode_16.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/bitcode_strip --emit-dependency-info /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Intermediates.noindex/ScreenLinkPreview.build/Debug-iphonesimulator/ScreenLinkDashboardUITests.build/SwiftStdLibToolInputDependencies.dep --filter-for-swift-os
 Ignoring --strip-bitcode because --sign was not passed
 
 AppIntentsSSUTraining (in target 'ScreenLinkDashboardUITests' from project 'ScreenLinkPreview')
@@ -64,3 +64,4 @@ Touch /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Prod
     cd /Users/runner/work/screentesla/screentesla/tools
     /usr/bin/touch -c /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Products/Debug-iphonesimulator/ScreenLinkDashboardUITests-Runner.app/PlugIns/ScreenLinkDashboardUITests.xctest
 
+2026-11-06 05:26:24.855794+0000 ScreenLinkDashboardUITests-Runner[9950:34094] [Default] Running tests...
