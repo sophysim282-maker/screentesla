@@ -30,6 +30,9 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ffmpeg
           python3 tools/fetch_canvas.py
+          curl --fail --location --retry 3 https://storage.googleapis.com/chrome-for-testing-public/140.0.7339.207/linux64/chrome-linux64.zip -o /tmp/chrome140.zip
+          unzip -q /tmp/chrome140.zip -d /tmp/screenlink-chrome140
+          echo "SCREENLINK_CHROME_BIN=/tmp/screenlink-chrome140/chrome-linux64/chrome" >> "$GITHUB_ENV"
       - name: Fullscreen and player regression checks
         run: |
           node tools/test_video_fullscreen.cjs
@@ -44,4 +47,4 @@ jobs:
         run: |
           mkdir -p build/recovery
           ffmpeg -v error -f lavfi -i testsrc2=size=1920x1080:rate=30 -f lavfi -i sine=frequency=440:sample_rate=48000 -t 24 -c:v libx264 -preset ultrafast -tune zerolatency -g 60 -sc_threshold 0 -c:a aac -hls_time 2 -hls_playlist_type vod -hls_segment_filename build/recovery/part%02d.ts build/recovery/master.m3u8
-          node tools/test_video_recovery.cjs App build/recovery
+          node --require ./tools/test_browser_engine.cjs tools/test_video_recovery.cjs App build/recovery
