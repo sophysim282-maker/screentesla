@@ -1,0 +1,46 @@
+name: Review build60 captured simulator visuals
+on:
+  push:
+    branches: ['ci/build59-maintenance']
+    paths: ['.github/workflows/review-build60-visuals.yml']
+permissions:
+  actions: read
+  contents: write
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: ScreenLink-build60-visual-previews
+          run-id: 42167077842
+          github-token: ${{ github.token }}
+          path: visuals
+      - run: python3 -m pip install Pillow
+      - name: Publish safe visual review previews
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import base64,io,json,os,pathlib,subprocess
+          from PIL import Image
+          repo=os.environ['GITHUB_REPOSITORY']
+          def api(path,data):
+              r=subprocess.run(['gh','api','--method','POST','repos/'+repo+'/'+path,'--input','-'],input=json.dumps(data),text=True,capture_output=True,check=True)
+              return json.loads(r.stdout)
+          entries=[]
+          for f in pathlib.Path('visuals').rglob('*.png'):
+              if f.parent.name!='previews':continue
+              pic=Image.open(f).convert('RGB');pic.thumbnail((1200,1600));b=io.BytesIO();pic.save(b,format='JPEG',quality=80)
+              blob=api('git/blobs',{'content':base64.b64encode(b.getvalue()).decode(),'encoding':'base64'})
+              entries.append({'path':f.name+'.jpg','mode':'100644','type':'blob','sha':blob['sha']})
+              data=json.dumps({'mime':'image/jpeg','base64':base64.b64encode(b.getvalue()).decode()})
+              blob=api('git/blobs',{'content':data,'encoding':'utf-8'});entries.append({'path':f.name+'.preview.json','mode':'100644','type':'blob','sha':blob['sha']})
+          for f in pathlib.Path('visuals').rglob('*.json'):
+              if f.stat().st_size<300000:
+                  blob=api('git/blobs',{'content':f.read_text(),'encoding':'utf-8'});entries.append({'path':'manifests/'+f.name,'mode':'100644','type':'blob','sha':blob['sha']})
+          tree=api('git/trees',{'tree':entries});person={'name':'ScreenLink CI','email':'screenlink-ci@users.noreply.github.com'}
+          commit=api('git/commits',{'message':'Review captured build60 simulator dashboard screenshots','tree':tree['sha'],'author':person,'committer':person})
+          api('git/refs',{'ref':'refs/heads/previews/review-build60-'+os.environ['GITHUB_RUN_ID'],'sha':commit['sha']})
+          print('REVIEW_PREVIEW_COMMIT='+commit['sha'])
+          PY
