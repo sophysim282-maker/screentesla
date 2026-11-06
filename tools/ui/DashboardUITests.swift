@@ -66,7 +66,7 @@ final class DashboardUITests: XCTestCase {
    }
   }
   var edit=spring.buttons["Edit"].firstMatch
-  if !edit.waitForExistence(timeout:2)||!edit.isHittable {
+  if !edit.waitForExistence(timeout:2) || !edit.isHittable {
    spring.coordinate(withNormalizedOffset:CGVector(dx:0.96,dy:0.45)).press(forDuration:2)
   }
   edit=spring.buttons["Edit"].firstMatch
