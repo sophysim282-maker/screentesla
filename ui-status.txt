@@ -1,161 +1,197 @@
 Source 38bbf3af9498963709a4e2fbd6a136f722caf67d
-ude Modules -exclude \*.tbd -resolve-src-symlinks /Applications/Xcode_16.4.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/PrivateFrameworks/XCTestSupport.framework /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Products/Debug-iphonesimulator/ScreenLinkDashboardUITests-Runner.app/Frameworks
+                    Other, 0x1019704e0, {{244.7, 239.0}, {92.0, 43.7}}
+                        Image, 0x101970850, {{244.7, 239.0}, {92.0, 43.7}}
+                      Other, 0x101970bc0, {{256.7, 251.0}, {68.0, 19.7}}
+                        Image, 0x101970f20, {{256.7, 251.0}, {68.0, 19.7}}
+                Icon, 0x101971960, {{28.7, 284.0}, {72.0, 86.7}}, identifier: 'Calendar', label: 'Calendar', value: Friday, November 06
+                  Other, 0x101971ce0, {{35.0, 286.0}, {60.0, 74.0}}
+                    Other, 0x101972080, {{35.0, 286.0}, {60.0, 60.0}}
+                    Other, 0x101972410, {{30.7, 349.0}, {68.0, 19.7}}, identifier: 'label-view'
+                      Other, 0x101972790, {{18.7, 337.0}, {92.0, 43.7}}
+                        Image, 0x101972b20, {{18.7, 337.0}, {92.0, 43.7}}
+                      Other, 0x101972ea0, {{30.7, 349.0}, {68.0, 19.7}}
+                        Image, 0x101973230, {{30.7, 349.0}, {68.0, 19.7}}
+                Icon, 0x1019735b0, {{123.7, 284.0}, {64.0, 86.7}}, identifier: 'Photos', label: 'Photos'
+                  Other, 0x101973fe0, {{125.7, 286.0}, {60.0, 74.0}}
+                    Other, 0x101974350, {{125.7, 286.0}, {60.0, 60.0}}
+                    Other, 0x1019746e0, {{127.3, 349.0}, {56.3, 19.7}}, identifier: 'label-view'
+                      Other, 0x101974a50, {{115.3, 337.0}, {80.3, 43.7}}
+                        Image, 0x101975460, {{115.3, 337.0}, {80.3, 43.7}}
+                      Other, 0x1019757f0, {{127.3, 349.0}, {56.3, 19.7}}
+                        Image, 0x101975b60, {{127.3, 349.0}, {56.3, 19.7}}
+                Icon, 0x101975eb0, {{205.3, 284.0}, {81.7, 86.7}}, identifier: 'Reminders', label: 'Reminders'
+                  Other, 0x101976240, {{216.3, 286.0}, {60.0, 74.0}}
+                    Other, 0x101976590, {{216.3, 286.0}, {60.0, 60.0}}
+                    Other, 0x101976920, {{207.3, 349.0}, {77.7, 19.7}}, identifier: 'label-view'
+                      Other, 0x101976c90, {{195.3, 337.0}, {101.7, 43.7}}
+                        Image, 0x101976fe0, {{195.3, 337.0}, {101.7, 43.7}}
+                      Other, 0x101977370, {{207.3, 349.0}, {77.7, 19.7}}
+                        Image, 0x1019776e0, {{207.3, 349.0}, {77.7, 19.7}}
+                Icon, 0x10190cd30, {{305.0, 284.0}, {64.0, 86.7}}, identifier: 'News', label: 'News'
+                  Other, 0x101983440, {{307.0, 286.0}, {60.0, 74.0}}
+                    Other, 0x1019801d0, {{307.0, 286.0}, {60.0, 60.0}}
+                    Other, 0x10198d990, {{312.7, 349.0}, {48.0, 19.7}}, identifier: 'label-view'
+                      Other, 0x10198d570, {{300.7, 337.0}, {72.0, 43.7}}
+                        Image, 0x10198d150, {{300.7, 337.0}, {72.0, 43.7}}
+                      Other, 0x10198cd30, {{312.7, 349.0}, {48.0, 19.7}}
+                        Image, 0x10198c910, {{312.7, 349.0}, {48.0, 19.7}}
+                Icon, 0x10198c4f0, {{33.0, 382.0}, {64.0, 86.7}}, identifier: 'Maps', label: 'Maps'
+                  Other, 0x10198c0d0, {{35.0, 384.0}, {60.0, 74.0}}
+                    Other, 0x10198bcb0, {{35.0, 384.0}, {60.0, 60.0}}
+                    Other, 0x10198b890, {{41.0, 447.0}, {47.3, 19.7}}, identifier: 'label-view'
+                      Other, 0x10198b470, {{29.0, 435.0}, {71.3, 43.7}}
+                        Image, 0x10198a870, {{29.0, 435.0}, {71.3, 43.7}}
+                      Other, 0x10198a450, {{41.0, 447.0}, {47.3, 19.7}}
+                        Image, 0x10198a030, {{41.0, 447.0}, {47.3, 19.7}}
+                Icon, 0x101989c10, {{123.7, 382.0}, {64.0, 86.7}}, identifier: 'Health', label: 'Health'
+                  Other, 0x1019897f0, {{125.7, 384.0}, {60.0, 74.0}}
+                    Other, 0x1019893d0, {{125.7, 384.0}, {60.0, 60.0}}
+                    Other, 0x101988fb0, {{128.3, 447.0}, {54.0, 19.7}}, identifier: 'label-view'
+                      Other, 0x101988b90, {{116.3, 435.0}, {78.0, 43.7}}
+                        Image, 0x101988770, {{116.3, 435.0}, {78.0, 43.7}}
+                      Other, 0x101988350, {{128.3, 447.0}, {54.0, 19.7}}
+                        Image, 0x101983ee0, {{128.3, 447.0}, {54.0, 19.7}}
+                Icon, 0x101987d20, {{214.3, 382.0}, {64.0, 86.7}}, identifier: 'Wallet', label: 'Wallet'
+                  Other, 0x101987900, {{216.3, 384.0}, {60.0, 74.0}}
+                    Other, 0x1019874e0, {{216.3, 384.0}, {60.0, 60.0}}
+                    Other, 0x1019859c0, {{220.0, 447.0}, {52.0, 19.7}}, identifier: 'label-view'
+                      Other, 0x1019805c0, {{208.0, 435.0}, {76.0, 43.7}}
+                        Image, 0x101986200, {{208.0, 435.0}, {76.0, 43.7}}
+                      Other, 0x101986840, {{220.0, 447.0}, {52.0, 19.7}}
+                        Image, 0x10198ac90, {{220.0, 447.0}, {52.0, 19.7}}
+                Icon, 0x10198adb0, {{302.7, 382.0}, {68.3, 86.7}}, identifier: 'Settings', label: 'Settings'
+                  Other, 0x10198aed0, {{307.0, 384.0}, {60.0, 74.0}}
+                    Other, 0x10198ddb0, {{307.0, 384.0}, {60.0, 60.0}}
+                    Other, 0x10198ded0, {{304.7, 447.0}, {64.3, 19.7}}, identifier: 'label-view'
+                      Other, 0x10198dff0, {{292.7, 435.0}, {88.3, 43.7}}
+                        Image, 0x10198e110, {{292.7, 435.0}, {88.3, 43.7}}
+                      Other, 0x10198e230, {{304.7, 447.0}, {64.3, 19.7}}
+                        Image, 0x10198e350, {{304.7, 447.0}, {64.3, 19.7}}
+              Icon, 0x10198e470, {{0.0, 0.0}, {0.0, 0.0}}
+                Icon, 0x10198e590, {{0.0, 0.0}, {0.0, 0.0}}, identifier: 'Fitness', label: 'Fitness'
+                Icon, 0x10198e6b0, {{0.0, 0.0}, {0.0, 0.0}}, identifier: 'Watch', label: 'Watch'
+                Icon, 0x10198e7d0, {{0.0, 0.0}, {0.0, 0.0}}, identifier: 'Contacts', label: 'Contacts'
+                Icon, 0x10198e8f0, {{0.0, 0.0}, {0.0, 0.0}}, identifier: 'Files', label: 'Files'
+                Icon, 0x10198ea10, {{0.0, 0.0}, {0.0, 0.0}}, identifier: 'Utilities', label: 'Utilities folder'
+                  Icon, 0x10198eb30, {{0.0, 0.0}, {0.0, 0.0}}, identifier: 'Passwords', label: 'Passwords'
+                  Icon, 0x10198ec50, {{0.0, 0.0}, {0.0, 0.0}}, identifier: 'Shortcuts', label: 'Shortcuts'
+                Icon, 0x10198ed70, {{0.0, 0.0}, {0.0, 0.0}}, identifier: 'ScreenLinkDashboardUITests-Runner', label: 'ScreenLinkDashboardUITests-Runner'
+                Icon, 0x10198ee90, {{0.0, 0.0}, {0.0, 0.0}}, identifier: 'ScreenLink', label: 'ScreenLink'
+              Other, 0x10198efb0, {{162.0, 709.0}, {78.0, 30.0}}, identifier: 'spotlight-pill', label: 'Search', value: Page 1 of 2
+                PageIndicator, 0x10198f0d0, {{162.0, 709.0}, {78.0, 35.0}}, identifier: 'Page control', value: Page 1 of 2
+                Other, 0x10198f1f0, {{162.0, 709.0}, {78.0, 30.0}}, identifier: 'spotlight-pill'
+                  Other, 0x10198f310, {{162.0, 709.0}, {78.0, 30.0}}
+                    Image, 0x10198f430, {{173.7, 718.3}, {11.3, 10.7}}, identifier: 'magnifyingglass', label: 'Search'
+                    StaticText, 0x10198f550, {{188.0, 716.7}, {40.3, 14.3}}, label: 'Search'
+              Other, 0x10198f670, {{0.0, 759.0}, {402.0, 115.0}}
+                Other, 0x10198f790, {{0.0, 759.0}, {402.0, 98.0}}, label: 'Dock'
+                  Icon, 0x10198f8b0, {{124.7, 776.0}, {64.0, 64.0}}, identifier: 'Safari', label: 'Safari'
+                    Other, 0x10198f9d0, {{126.7, 778.0}, {60.0, 60.0}}
+                      Other, 0x10198faf0, {{126.7, 778.0}, {60.0, 60.0}}
+                  Icon, 0x10198fc10, {{214.0, 776.0}, {64.0, 64.0}}, identifier: 'Messages', label: 'Messages'
+                    Other, 0x10198fd30, {{216.0, 778.0}, {60.0, 60.0}}
+                      Other, 0x10198fe50, {{216.0, 778.0}, {60.0, 60.0}}
+                Other, 0x10198ff70, {{17.0, 759.0}, {368.0, 98.0}}
+        Other, 0x101990090, {{0.0, 0.0}, {402.0, 874.0}}
+    Window, 0x1019901b0, {{0.0, 0.0}, {402.0, 874.0}}
+      Other, 0x1019902d0, {{0.0, 0.0}, {402.0, 874.0}}
+        Other, 0x1019903f0, {{0.0, 0.0}, {402.0, 874.0}}
+          Other, 0x101990510, {{138.3, 14.0}, {125.3, 36.7}}
+            Other, 0x101990630, {{138.3, 14.0}, {125.3, 36.7}}
+    Window, 0x101990750, {{0.0, 0.0}, {402.0, 874.0}}
+      Other, 0x101990870, {{0.0, 0.0}, {402.0, 874.0}}
+        Other, 0x101990990, {{0.0, 0.0}, {402.0, 874.0}}
+          Other, 0x101990ab0, {{0.0, 0.0}, {402.0, 874.0}}
+            Other, 0x101990ed0, {{138.3, 14.0}, {125.3, 36.7}}
+              Other, 0x101990ff0, {{138.3, 14.0}, {125.3, 36.7}}
+              Other, 0x101991110, {{138.3, 14.0}, {125.3, 36.7}}
+                Other, 0x101991230, {{138.3, 14.0}, {125.3, 36.7}}
+              Other, 0x101991350, {{139.3, 15.0}, {123.3, 34.7}}
+          Other, 0x101991470, {{0.0, 0.0}, {402.0, 874.0}}
+            Other, 0x101991590, {{138.3, 14.0}, {125.3, 36.7}}
+              Other, 0x1019916b0, {{138.3, 14.0}, {125.3, 36.7}}
+            Other, 0x1019917d0, {{138.3, 14.0}, {125.3, 36.7}}
+              Other, 0x1019918f0, {{139.0, 14.7}, {124.0, 35.3}}
+          Other, 0x101991a10, {{0.0, 0.0}, {402.0, 874.0}}
+            Other, 0x101991b30, {{138.3, 14.0}, {125.3, 36.7}}
+              Other, 0x101991c50, {{128.3, 10.0}, {145.3, 52.0}}
+              Other, 0x101991d70, {{138.3, 14.0}, {125.3, 36.7}}
+                Other, 0x101991e90, {{138.3, 14.0}, {125.3, 36.7}}
+                  Other, 0x101991fb0, {{138.3, 14.0}, {125.3, 36.7}}
+          Other, 0x1019920d0, {{218.0, 28.0}, {9.0, 9.0}}
+    Window, 0x1019921f0, {{0.0, 0.0}, {402.0, 874.0}}
+      Other, 0x101992310, {{0.0, 0.0}, {402.0, 874.0}}
+    Window (Main), 0x101992430, {{0.0, 0.0}, {402.0, 874.0}}
+      Other, 0x101992550, {{0.0, 0.0}, {402.0, 874.0}}
+        Other, 0x101992670, {{0.0, 0.0}, {402.0, 874.0}}
+          Other, 0x101992790, {{0.0, 0.0}, {402.0, 874.0}}
+            Other, 0x1019928b0, {{0.0, 0.0}, {402.0, 874.0}}
+              Other, 0x1019929d0, {{0.0, 0.0}, {402.0, 874.0}}
+              Other, 0x101992af0, {{0.0, 0.0}, {402.0, 874.0}}
+              Other, 0x101992c10, {{0.0, 0.0}, {402.0, 874.0}}
+              Other, 0x101992d30, {{0.0, 0.0}, {402.0, 874.0}}
+              Other, 0x101992e50, {{0.0, 0.0}, {402.0, 874.0}}
+              Other, 0x101992f70, {{0.0, 0.0}, {402.0, 874.0}}
+              Other, 0x101993090, {{0.0, 0.0}, {402.0, 874.0}}
+        Other, 0x101993260, {{0.0, 0.0}, {402.0, 874.0}}
+          Other, 0x101993380, {{0.0, 0.0}, {402.0, 874.0}}
+            Other, 0x1019934a0, {{0.0, 0.0}, {402.0, 874.0}}
+              Other, 0x1019935c0, {{0.0, 0.0}, {402.0, 874.0}}
+              Other, 0x1019936e0, {{0.0, 0.0}, {402.0, 874.0}}
+        Other, 0x101993800, {{0.0, 0.0}, {402.0, 874.0}}
+          Other, 0x101993920, {{0.0, 0.0}, {402.0, 874.0}}
+            Other, 0x101993a40, {{0.0, 0.0}, {402.0, 874.0}}
+              Other, 0x101993b60, {{0.0, 0.0}, {402.0, 874.0}}
+              Other, 0x101993c80, {{0.0, 0.0}, {402.0, 874.0}}
+    Window, 0x101993da0, {{0.0, 0.0}, {402.0, 874.0}}
+      Other, 0x101993ec0, {{0.0, 0.0}, {402.0, 874.0}}
+        Other, 0x101993fe0, {{0.0, 0.0}, {402.0, 874.0}}
+    Window, 0x101994100, {{0.0, 0.0}, {402.0, 874.0}}
+      Other, 0x101994220, {{0.0, 0.0}, {402.0, 874.0}}
+        Other, 0x101994340, {{0.0, 0.0}, {402.0, 874.0}}
+    Window, 0x101994460, {{0.0, 0.0}, {402.0, 874.0}}
+      Other, 0x101994580, {{0.0, 0.0}, {402.0, 874.0}}
+        Other, 0x1019946a0, {{0.0, 0.0}, {402.0, 874.0}}
+    Window, 0x1019947c0, {{0.0, 0.0}, {134.0, 291.3}}
+      Other, 0x1019948e0, {{0.0, 0.0}, {134.0, 291.3}}
+        Other, 0x101994a00, {{0.0, 0.0}, {134.0, 291.3}}
+    Window, 0x101994b20, {{0.0, 0.0}, {402.0, 874.0}}
+      StatusBar, 0x101994c40, {{0.0, 0.0}, {402.0, 54.0}}
+        Other, 0x101994d60, {{0.0, 0.0}, {402.0, 54.0}}
+          Other, 0x101994e80, {{0.0, 0.0}, {402.0, 54.0}}
+            Other, 0x101994fa0, {{6.0, 2.3}, {193.7, 10.7}}
+            Other, 0x1019950c0, {{203.7, 2.3}, {193.3, 10.7}}
+            Other, 0x1019951e0, {{6.0, 24.3}, {193.7, 10.7}}
+            StaticText, 0x101995300, {{56.0, 22.3}, {36.3, 20.3}}, label: '5:47 AM'
+            Other, 0x101995420, {{203.7, 24.3}, {193.3, 10.7}}
+            Other, 0x101995540, {{288.3, 26.3}, {19.3, 12.3}}, label: 'Cellular', value: No signal
+            Other, 0x101995660, {{315.0, 26.3}, {17.0, 12.3}}, identifier: '3 of 3 Wi-Fi bars', value: SSID, 3 of 3 Wi-Fi...
+            Other, 0x101995780, {{339.3, 26.0}, {27.3, 13.0}}, label: '100% battery power', value: Not charging
+    Window, 0x1019958a0, {{0.0, 0.0}, {402.0, 874.0}}
+      Other, 0x1019959c0, {{0.0, 0.0}, {402.0, 874.0}}
+    Window, 0x101995ae0, {{0.0, 0.0}, {402.0, 874.0}}
+      Other, 0x101995c00, {{0.0, 0.0}, {402.0, 874.0}}
+    Window, 0x101995d20, {{0.0, 0.0}, {402.0, 874.0}}
+      Other, 0x101995e40, {{0.0, 0.0}, {402.0, 874.0}}
+Path to element:
+ →Application, 0x100f55740, pid: 4401, label: ' '
+Query chain:
+ →Find: Application 'com.apple.springboard'
+  Output: {
+    Application, 0x1019999a0, pid: 4401, label: ' '
+  }
 
-Copy /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Products/Debug-iphonesimulator/ScreenLinkDashboardUITests-Runner.app/Frameworks/XCTestCore.framework /Applications/Xcode_16.4.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/PrivateFrameworks/XCTestCore.framework (in target 'ScreenLinkDashboardUITests' from project 'ScreenLinkPreview')
-    cd /Users/runner/work/screentesla/screentesla/tools
-    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -exclude Headers -exclude PrivateHeaders -exclude Modules -exclude \*.tbd -resolve-src-symlinks /Applications/Xcode_16.4.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/PrivateFrameworks/XCTestCore.framework /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Products/Debug-iphonesimulator/ScreenLinkDashboardUITests-Runner.app/Frameworks
-
-Copy /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Products/Debug-iphonesimulator/ScreenLinkDashboardUITests-Runner.app/Frameworks/XCTest.framework /Applications/Xcode_16.4.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/Frameworks/XCTest.framework (in target 'ScreenLinkDashboardUITests' from project 'ScreenLinkPreview')
-    cd /Users/runner/work/screentesla/screentesla/tools
-    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -exclude Headers -exclude PrivateHeaders -exclude Modules -exclude \*.tbd -resolve-src-symlinks /Applications/Xcode_16.4.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/Frameworks/XCTest.framework /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Products/Debug-iphonesimulator/ScreenLinkDashboardUITests-Runner.app/Frameworks
-
-Copy /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Products/Debug-iphonesimulator/ScreenLinkDashboardUITests-Runner.app/Frameworks/XCTAutomationSupport.framework /Applications/Xcode_16.4.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/PrivateFrameworks/XCTAutomationSupport.framework (in target 'ScreenLinkDashboardUITests' from project 'ScreenLinkPreview')
-    cd /Users/runner/work/screentesla/screentesla/tools
-    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -exclude Headers -exclude PrivateHeaders -exclude Modules -exclude \*.tbd -resolve-src-symlinks /Applications/Xcode_16.4.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/PrivateFrameworks/XCTAutomationSupport.framework /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Products/Debug-iphonesimulator/ScreenLinkDashboardUITests-Runner.app/Frameworks
-
-Copy /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Products/Debug-iphonesimulator/ScreenLinkDashboardUITests-Runner.app/Frameworks/Testing.framework /Applications/Xcode_16.4.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/Frameworks/Testing.framework (in target 'ScreenLinkDashboardUITests' from project 'ScreenLinkPreview')
-    cd /Users/runner/work/screentesla/screentesla/tools
-    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -exclude Headers -exclude PrivateHeaders -exclude Modules -exclude \*.tbd -resolve-src-symlinks /Applications/Xcode_16.4.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/Frameworks/Testing.framework /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Products/Debug-iphonesimulator/ScreenLinkDashboardUITests-Runner.app/Frameworks
-
-RegisterExecutionPolicyException /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Products/Debug-iphonesimulator/ScreenLinkDashboardUITests-Runner.app/PlugIns/ScreenLinkDashboardUITests.xctest (in target 'ScreenLinkDashboardUITests' from project 'ScreenLinkPreview')
-    cd /Users/runner/work/screentesla/screentesla/tools
-    builtin-RegisterExecutionPolicyException /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Products/Debug-iphonesimulator/ScreenLinkDashboardUITests-Runner.app/PlugIns/ScreenLinkDashboardUITests.xctest
-
-Touch /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Products/Debug-iphonesimulator/ScreenLinkDashboardUITests-Runner.app/PlugIns/ScreenLinkDashboardUITests.xctest (in target 'ScreenLinkDashboardUITests' from project 'ScreenLinkPreview')
-    cd /Users/runner/work/screentesla/screentesla/tools
-    /usr/bin/touch -c /Users/runner/work/screentesla/screentesla/build/PreviewDerived/Build/Products/Debug-iphonesimulator/ScreenLinkDashboardUITests-Runner.app/PlugIns/ScreenLinkDashboardUITests.xctest
-
-2026-11-06 05:46:34.686134+0000 ScreenLinkDashboardUITests-Runner[12548:41183] [Default] Running tests...
-2026-11-06 05:46:34.754417+0000 ScreenLinkDashboardUITests-Runner[12548:41570] [General] Failed to send CA Event for app launch measurements for ca_event_type: 0 event_name: com.apple.app_launch_measurement.FirstFramePresentationMetric
-2026-11-06 05:46:34.796108+0000 ScreenLinkDashboardUITests-Runner[12548:41570] [General] Failed to send CA Event for app launch measurements for ca_event_type: 1 event_name: com.apple.app_launch_measurement.ExtendedLaunchMetrics
-    t =      nans Interface orientation changed to Portrait
-Test Suite 'All tests' started at 2026-11-06 05:46:44.067.
-Test Suite 'ScreenLinkDashboardUITests.xctest' started at 2026-11-06 05:46:44.069.
-Test Suite 'DashboardUITests' started at 2026-11-06 05:46:44.070.
-Test Case '-[ScreenLinkDashboardUITests.DashboardUITests testDashboardControlsAndLayout]' started.
-    t =     0.00s Start Test at 2026-11-06 05:46:44.071
-    t =     0.87s Set Up
-    t =     0.90s Open local.screenlink.airplaylab
-    t =     0.90s     Launch local.screenlink.airplaylab
-    t =     4.61s         Setting up automation session
-    t =     5.81s         Wait for local.screenlink.airplaylab to idle
-    t =     7.36s Waiting 10.0s for "home.start" Button to exist
-    t =     8.41s     Checking `Expect predicate `existsNoRetry == 1` for object "home.start" Button`
-    t =     8.41s         Checking existence of `"home.start" Button`
-    t =     8.53s Find the "home.status" StaticText
-    t =     8.79s Added attachment named 'dashboard-light'
-    t =     8.79s Tap "home.start" Button
-    t =     8.79s     Wait for local.screenlink.airplaylab to idle
-    t =     8.80s     Find the "home.start" Button
-    t =     8.87s     Check for interrupting elements affecting "home.start" Button
-    t =     8.99s     Synthesize event
-    t =     9.43s     Wait for local.screenlink.airplaylab to idle
-    t =     9.43s Find the "home.status" StaticText
-    t =     9.46s Find the "home.disconnect" Button
-    t =     9.54s Tap "home.disconnect" Button
-    t =     9.54s     Wait for local.screenlink.airplaylab to idle
-    t =     9.54s     Find the "home.disconnect" Button
-    t =     9.57s     Check for interrupting elements affecting "home.disconnect" Button
-    t =     9.60s     Synthesize event
-    t =     9.91s     Wait for local.screenlink.airplaylab to idle
-    t =     9.92s Find the "home.status" StaticText
-    t =     9.94s Swipe down ScrollView (First Match)
-    t =     9.94s     Wait for local.screenlink.airplaylab to idle
-    t =     9.95s     Find the ScrollView (First Match)
-    t =     9.96s     Check for interrupting elements affecting "home.scroll" ScrollView
-    t =    10.00s     Synthesize event
-    t =    10.48s     Wait for local.screenlink.airplaylab to idle
-    t =    10.96s Tap "home.developer" Button
-    t =    10.96s     Wait for local.screenlink.airplaylab to idle
-    t =    10.97s     Find the "home.developer" Button
-    t =    11.07s     Check for interrupting elements affecting "home.developer" Button
-    t =    11.12s     Synthesize event
-    t =    11.41s     Wait for local.screenlink.airplaylab to idle
-    t =    11.42s Find the "home.status" StaticText
-    t =    11.45s Terminate local.screenlink.airplaylab:13300
-    t =    12.51s Open local.screenlink.airplaylab
-    t =    12.51s     Launch local.screenlink.airplaylab
-    t =    12.95s         Setting up automation session
-    t =    14.99s         Wait for local.screenlink.airplaylab to idle
-    t =    16.40s Added attachment named 'dashboard-dark'
-    t =    16.41s Terminate local.screenlink.airplaylab:13473
-    t =    17.41s Open local.screenlink.airplaylab
-    t =    17.41s     Launch local.screenlink.airplaylab
-    t =    18.36s         Setting up automation session
-    t =    19.69s         Wait for local.screenlink.airplaylab to idle
-    t =    20.95s Checking existence of `"home.start" Button`
-    t =    21.47s Swipe up ScrollView (First Match)
-    t =    21.47s     Wait for local.screenlink.airplaylab to idle
-    t =    21.48s     Find the ScrollView (First Match)
-    t =    21.56s     Check for interrupting elements affecting "home.scroll" ScrollView
-    t =    21.60s     Synthesize event
-    t =    22.06s     Wait for local.screenlink.airplaylab to idle
-    t =    24.16s Checking existence of `"home.disconnect" Button`
-    t =    24.33s Added attachment named 'dashboard-large-type'
-    t =    24.33s Setting device orientation to Landscape Left
-    t =    24.34s     Device orientation changed to Landscape Left
-    t =    24.55s     Interface orientation changed to Landscape Right
-    t =    24.56s     Wait for local.screenlink.airplaylab to idle
-    t =    25.01s Added attachment named 'dashboard-landscape'
-    t =    25.01s Setting device orientation to Portrait
-    t =    25.01s     Device orientation changed to Portrait
-    t =    25.10s     Interface orientation changed to Portrait
-    t =    25.11s     Wait for local.screenlink.airplaylab to idle
-    t =    25.44s Tear Down
-Test Case '-[ScreenLinkDashboardUITests.DashboardUITests testDashboardControlsAndLayout]' passed (25.715 seconds).
-Test Case '-[ScreenLinkDashboardUITests.DashboardUITests testProductionControllerCancelsPendingStartAndWidgetRoutes]' started.
-    t =     0.00s Start Test at 2026-11-06 05:47:09.787
-    t =     0.06s Set Up
-    t =     0.06s Open local.screenlink.airplaylab
-    t =     0.06s     Launch local.screenlink.airplaylab
-    t =     0.06s         Terminate local.screenlink.airplaylab:13558
-    t =     1.92s         Setting up automation session
-    t =     3.02s         Wait for local.screenlink.airplaylab to idle
-    t =     4.48s Waiting 10.0s for "home.start" Button to exist
-    t =     5.51s     Checking `Expect predicate `existsNoRetry == 1` for object "home.start" Button`
-    t =     5.51s         Checking existence of `"home.start" Button`
-    t =     5.58s Tap "home.start" Button
-    t =     5.58s     Wait for local.screenlink.airplaylab to idle
-    t =     5.59s     Find the "home.start" Button
-    t =     5.62s     Check for interrupting elements affecting "home.start" Button
-    t =     5.65s     Synthesize event
-    t =     5.98s     Wait for local.screenlink.airplaylab to idle
-    t =     5.98s Find the "home.disconnect" Button
-    t =     6.01s Find the "home.disconnect" Button
-    t =     6.06s Tap "home.disconnect" Button
-    t =     6.06s     Wait for local.screenlink.airplaylab to idle
-    t =     6.08s     Find the "home.disconnect" Button
-    t =     6.14s     Check for interrupting elements affecting "home.disconnect" Button
-    t =     6.18s     Synthesize event
-    t =     6.48s     Wait for local.screenlink.airplaylab to idle
-    t =     7.54s Checking `Expect predicate `label == "Disconnected"` for object "home.status" StaticText`
-    t =     7.54s     Find the "home.status" StaticText
-    t =     9.58s Find the "integration.state" StaticText
-    t =     9.60s Tap "integration.widgetStart" Button
-    t =     9.60s     Wait for local.screenlink.airplaylab to idle
-    t =     9.60s     Find the "integration.widgetStart" Button
-    t =     9.63s     Check for interrupting elements affecting "integration.widgetStart" Button
-    t =     9.67s     Synthesize event
-    t =     9.97s     Wait for local.screenlink.airplaylab to idle
-    t =    11.29s Checking `Expect predicate `label CONTAINS "pip=1"` for object "integration.state" StaticText`
-    t =    11.29s     Find the "integration.state" StaticText
-    t =    11.32s Tap "integration.widgetPeer" Button
-    t =    11.32s     Wait for local.screenlink.airplaylab to idle
-    t =    11.32s     Find the "integration.widgetPeer" Button
-    t =    11.34s     Check for interrupting elements affecting "integration.widgetPeer" Button
-    t =    11.37s     Synthesize event
-    t =    11.67s     Wait for local.screenlink.airplaylab to idle
-    t =    13.00s Tap "integration.widgetStop" Button
-    t =    13.00s     Wait for local.screenlink.airplaylab to idle
-    t =    13.01s     Find the "integration.widgetStop" Button
-    t =    13.03s     Check for interrupting elements affecting "integration.widgetStop" Button
-    t =    13.05s     Synthesize event
-    t =    13.36s     Wait for local.screenlink.airplaylab to idle
-    t =    14.69s Checking `Expect predicate `label CONTAINS "peers=1"` for object "integration.state" StaticText`
-    t =    14.69s     Find the "integration.state" StaticText
-    t =    15.76s Checking `Expect predicate `label == "Disconnected"` for object "home.status" StaticText`
-    t =    15.76s     Find the "home.status" StaticText
-    t =    15.79s Terminate local.screenlink.airplaylab:14124
-    t =    16.79s Open local.screenlink.airplaylab
-    t =    16.80s     Launch local.screenlink.airplaylab
-    t =    17.53s         Setting up automation session
+    t =     8.78s Waiting 5.0s for "ScreenLink" Icon to exist
+    t =     9.83s     Checking `Expect predicate `existsNoRetry == 1` for object "ScreenLink" Icon`
+    t =     9.83s         Checking existence of `"ScreenLink" Icon`
+    t =     9.92s Find the "ScreenLink" Icon
+    t =    10.05s Waiting 2.0s for "Edit" Button to exist
+    t =    11.11s     Checking `Expect predicate `existsNoRetry == 1` for object "Edit" Button`
+    t =    11.11s         Checking existence of `"Edit" Button`
+    t =    11.34s         Capturing element debug description
+    t =    12.06s     Checking `Expect predicate `existsNoRetry == 1` for object "Edit" Button`
+    t =    12.06s         Checking existence of `"Edit" Button`
+    t =    12.26s         Capturing element debug description
+    t =    12.27s     Checking existence of `"Edit" Button`
+    t =    12.45s Collecting debug information to assist test failure triage
+    t =    12.46s     Requesting snapshot of accessibility hierarchy for app with pid 4401
