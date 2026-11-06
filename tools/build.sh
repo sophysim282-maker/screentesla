@@ -154,7 +154,8 @@ assert parent['CFBundleVersion']=='63' and parent['CFBundleShortVersionString']=
 assert parent.get('CFBundleIcons',{}).get('CFBundlePrimaryIcon',{}).get('CFBundleIconName')=='AppIcon'
 assert (app/'Assets.car').is_file() and (app/'ScreenLinkCover.png').is_file()
 assert parent['NSSupportsLiveActivities']
-assert any('screenlink' in u.get('CFBundleURLSchemes',[]) for u in parent['CFBundleURLTypes'])
+assert parent['CFBundleIdentifier']=='local.screenlink.vpn3333'
+assert any('screenlink3333' in u.get('CFBundleURLSchemes',[]) for u in parent['CFBundleURLTypes'])
 print('Embedded widget, VPN and broadcast extension packaging verified:',w['CFBundleIdentifier'])
 print('Existing extensions:', info['CFBundleIdentifier'],b['CFBundleIdentifier'])
 VERIFY_VPN
