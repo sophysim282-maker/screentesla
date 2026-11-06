@@ -1,7 +1,7 @@
-name: Playback timing instrumentation checks
+name: Late video output regression checks
 on:
   push:
-    branches: [diagnose/build61-playback-timing]
+    branches: [fix/build63-late-video]
   workflow_dispatch:
 permissions:
   contents: read
@@ -19,6 +19,11 @@ jobs:
           node --check App/CanvasPlayer.js
           node --check App/CanvasShell.js
           node tools/test_playback_profile.cjs
+          node tools/test_video_lateness.cjs App/CanvasPlayer.js
+          curl --fail --location https://raw.githubusercontent.com/sophysim282-maker/screentesla/7494bcbb7e53b0ecef7412ab0589312012889ecf/App/CanvasPlayer.js -o /tmp/build62-canvas.js
+          if node tools/test_video_lateness.cjs /tmp/build62-canvas.js; then
+            echo "Build62 unexpectedly passed late output regression"; exit 1
+          fi
           node tools/test_video_continuity.cjs App/CanvasPlayer.js
           curl --fail --location https://raw.githubusercontent.com/sophysim282-maker/screentesla/38bbf3af9498963709a4e2fbd6a136f722caf67d/App/CanvasPlayer.js -o /tmp/build60-canvas.js
           if node tools/test_video_continuity.cjs /tmp/build60-canvas.js; then
@@ -47,7 +52,7 @@ jobs:
       - name: Real 1080p video recovery with continuous audio
         run: |
           mkdir -p build/recovery
-          ffmpeg -v error -f lavfi -i testsrc2=size=1920x1080:rate=30 -f lavfi -i sine=frequency=440:sample_rate=48000 -t 24 -c:v libx264 -preset ultrafast -tune zerolatency -g 60 -sc_threshold 0 -c:a aac -hls_time 2 -hls_playlist_type vod -hls_segment_filename build/recovery/part%02d.ts build/recovery/master.m3u8
+          ffmpeg -v error -f lavfi -i testsrc2=size=1920x1080:rate=30 -f lavfi -i sine=frequency=440:sample_rate=48000 -t 24 -c:v libx264 -preset ultrafast -bf 2 -g 60 -sc_threshold 0 -c:a aac -hls_time 2 -hls_playlist_type vod -hls_segment_filename build/recovery/part%02d.ts build/recovery/master.m3u8
           node --require ./tools/test_browser_engine.cjs tools/test_video_recovery.cjs App build/recovery 2>&1 | tee build/profile-test.log
       - uses: actions/upload-artifact@v4
         if: always()
