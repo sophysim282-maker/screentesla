@@ -33,7 +33,7 @@ static void serviceReply(DNSServiceRef service, DNSServiceFlags flags, DNSServic
     VPNDiscovery *owner=(__bridge VPNDiscovery *)context;
     if(error)[owner serviceFailed:service error:error];
     if(error)[owner report:[NSString stringWithFormat:@"VPN service registration failed: %d. Save the test log.",error]];
-    else [owner report:[NSString stringWithFormat:@"Published %s (%s) at the VPN peer. Check Screen Mirroring for ScreenLink VPN Phone.",name,type]];
+    else [owner report:[NSString stringWithFormat:@"Published %s (%s) at the VPN peer. Check Screen Mirroring for ScreenLink 3333 VPN Phone.",name,type]];
 }
 static void browseReply(DNSServiceRef service, DNSServiceFlags flags, uint32_t interface,
                         DNSServiceErrorType error, const char *name, const char *type, const char *domain, void *context) {

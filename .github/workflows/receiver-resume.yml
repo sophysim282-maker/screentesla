@@ -1,8 +1,7 @@
 name: Receiver listener resume regression
 on:
-  push:
-    branches: [release/build63]
   workflow_dispatch:
+
 permissions:
   contents: read
 jobs:

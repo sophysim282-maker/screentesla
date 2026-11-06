@@ -16,20 +16,20 @@ final class SLWidgetActivity: NSObject {
     @objc static func widgetDiagnostics() -> String {
         guard let plugins = Bundle.main.builtInPlugInsURL,
               let urls = try? FileManager.default.contentsOfDirectory(at: plugins, includingPropertiesForKeys: nil) else {
-            return "WIDGET MISSING: signed installation has no PlugIns folder. Preserve the widget extension when signing. Shortcut fallback: screenlink://start-youtube"
+            return "WIDGET MISSING: signed installation has no PlugIns folder. Preserve the widget extension when signing. Shortcut fallback: screenlink3333://start-youtube"
         }
         let widgets = urls.compactMap { Bundle(url: $0) }.filter {
             ($0.infoDictionary?["NSExtension"] as? [String: Any])?["NSExtensionPointIdentifier"] as? String == "com.apple.widgetkit-extension"
         }
         guard let widget = widgets.first else {
-            return "WIDGET MISSING AFTER SIGNING: ScreenLinkWidgets.appex was not found. Re-sign while preserving extensions. Shortcut fallback: screenlink://start-youtube"
+            return "WIDGET MISSING AFTER SIGNING: ScreenLinkWidgets.appex was not found. Re-sign while preserving extensions. Shortcut fallback: screenlink3333://start-youtube"
         }
         let parent = Bundle.main.bundleIdentifier ?? ""
         guard (widget.bundleIdentifier ?? "").hasPrefix(parent + ".") else {
             return "WIDGET BUNDLE-ID MISMATCH AFTER SIGNING: extension must use the signed app bundle ID as its prefix. Receiver settings are unchanged."
         }
         if #available(iOS 17.0, *) { WidgetCenter.shared.reloadAllTimelines() }
-        return "WIDGET BUNDLE PRESENT: \(widget.bundleIdentifier ?? "unknown"). Reload requested. This does not verify its signing profile or iOS registration. If still absent, share this diagnostic and the signed IPA (not your signing certificate/password). Shortcut fallback: screenlink://start-youtube"
+        return "WIDGET BUNDLE PRESENT: \(widget.bundleIdentifier ?? "unknown"). Reload requested. This does not verify its signing profile or iOS registration. If still absent, share this diagnostic and the signed IPA (not your signing certificate/password). Shortcut fallback: screenlink3333://start-youtube"
     }
     @objc static func finish() {
         DispatchQueue.main.async {

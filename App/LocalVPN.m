@@ -50,7 +50,7 @@
     NSString *identifier=[self providerIdentifier];
     if(!identifier){[self report:@"VPN extension is missing from this installation. Re-sign the complete IPA with its embedded extension retained."];if(completion)completion(NO);return;}
     self.busy=YES;self.pending=completion;NSUInteger attempt=++self.attempt;
-    [self report:probe?@"EXPERIMENTAL ROUTE PROBE: requesting additional local virtual address 240.3.3.3. No default Internet route, DNS change, TLS certificate or media relay is added. iOS may reject it; Tesla reachability is unverified.":@"Setting up ScreenLink local VPN. Allow iOS to add the VPN configuration when prompted. This routes only 10.7.0.1; no external VPN server or Internet routing is used."];
+    [self report:probe?@"EXPERIMENTAL ROUTE PROBE: requesting additional local virtual address 3.3.3.3. No default Internet route, DNS change, TLS certificate or media relay is added. iOS may reject it; Tesla reachability is unverified.":@"Setting up ScreenLink local VPN. Allow iOS to add the VPN configuration when prompted. This routes only 10.7.0.1; no external VPN server or Internet routing is used."];
     [NETunnelProviderManager loadAllFromPreferencesWithCompletionHandler:^(NSArray<NETunnelProviderManager *> *managers,NSError *error){dispatch_async(dispatch_get_main_queue(),^{
         if(attempt!=self.attempt)return;
         if(error){[self failed:error];return;}
@@ -60,7 +60,7 @@
         if(self.connected){[self acceptConnectedMode:probe completion:^(BOOL ok){[self complete:ok];}];return;}
         if(self.manager.connection.status!=NEVPNStatusDisconnected && self.manager.connection.status!=NEVPNStatusInvalid){[self report:@"Wait for the VPN to finish disconnecting before changing route mode."];[self complete:NO];return;}
         NETunnelProviderProtocol *config=[NETunnelProviderProtocol new];config.providerBundleIdentifier=identifier;config.serverAddress=@"ScreenLink local peer";config.disconnectOnSleep=NO;config.providerConfiguration=@{@"routeProbe":@(probe)};
-        self.manager.protocolConfiguration=config;self.manager.localizedDescription=@"ScreenLink Local VPN";self.manager.enabled=YES;
+        self.manager.protocolConfiguration=config;self.manager.localizedDescription=@"ScreenLink 3333 VPN";self.manager.enabled=YES;
         [self.manager saveToPreferencesWithCompletionHandler:^(NSError *saveError){dispatch_async(dispatch_get_main_queue(),^{
             if(attempt!=self.attempt)return;
             if(saveError){[self failed:saveError];return;}

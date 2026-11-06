@@ -1,7 +1,7 @@
 name: Phone-local STUN through routed browser NAT
 on:
-  pull_request:
   workflow_dispatch:
+
 permissions:
   contents: read
 jobs:

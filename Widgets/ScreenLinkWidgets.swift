@@ -2,8 +2,8 @@ import ActivityKit
 import SwiftUI
 import WidgetKit
 
-private let startURL = URL(string: "screenlink://start-youtube")!
-private let resumeURL = URL(string: "screenlink://resume")!
+private let startURL = URL(string: "screenlink3333://start-youtube")!
+private let resumeURL = URL(string: "screenlink3333://resume")!
 
 private enum Mascot: String {
     case dog, cat, roadster
@@ -27,7 +27,7 @@ private struct LauncherView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
             HStack {
-                Text("ScreenLink").font(.caption.bold()).foregroundStyle(.white.opacity(0.8))
+                Text("ScreenLink 3333").font(.caption.bold()).foregroundStyle(.white.opacity(0.8))
                 Spacer()
                 Image(systemName: "airplayvideo").foregroundStyle(mascot.tint)
             }
@@ -66,13 +66,13 @@ private func launcherConfiguration(_ mascot: Mascot, displayName: LocalizedStrin
 }
 // WidgetKit constructs each widget with init(); use distinct zero-argument types.
 private struct DogLauncherWidget: Widget {
-    var body: some WidgetConfiguration { launcherConfiguration(.dog, displayName: "ScreenLink · Dog") }
+    var body: some WidgetConfiguration { launcherConfiguration(.dog, displayName: "ScreenLink 3333 · Dog") }
 }
 private struct CatLauncherWidget: Widget {
-    var body: some WidgetConfiguration { launcherConfiguration(.cat, displayName: "ScreenLink · Cat") }
+    var body: some WidgetConfiguration { launcherConfiguration(.cat, displayName: "ScreenLink 3333 · Cat") }
 }
 private struct RoadsterLauncherWidget: Widget {
-    var body: some WidgetConfiguration { launcherConfiguration(.roadster, displayName: "ScreenLink · Roadster") }
+    var body: some WidgetConfiguration { launcherConfiguration(.roadster, displayName: "ScreenLink 3333 · Roadster") }
 }
 
 private struct ControlsView: View {
@@ -81,7 +81,7 @@ private struct ControlsView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Image(systemName: "airplayvideo").foregroundStyle(.mint)
-                Text("ScreenLink").font(.headline)
+                Text("ScreenLink 3333").font(.headline)
                 Spacer(minLength: 0)
             }
             Text("A bigger view").font(.title3.bold())
@@ -90,7 +90,7 @@ private struct ControlsView: View {
             if family == .systemMedium {
                 HStack(spacing: 12) {
                     Link(destination: startURL) { Label("Start + PiP", systemImage: "play.fill").font(.subheadline.bold()).padding(10).frame(maxWidth: .infinity).background(Color(red: 0.02, green: 0.38, blue: 0.4), in: RoundedRectangle(cornerRadius: 12)) }
-                    Link(destination: URL(string: "screenlink://disconnect-all")!) { Label("Disconnect All", systemImage: "power").font(.subheadline.bold()).padding(10).frame(maxWidth: .infinity).background(.white.opacity(0.12), in: RoundedRectangle(cornerRadius: 12)) }
+                    Link(destination: URL(string: "screenlink3333://disconnect-all")!) { Label("Disconnect All", systemImage: "power").font(.subheadline.bold()).padding(10).frame(maxWidth: .infinity).background(.white.opacity(0.12), in: RoundedRectangle(cornerRadius: 12)) }
                 }.foregroundStyle(.white)
             } else {
                 Label("Open controls", systemImage: "arrow.up.forward.app").font(.subheadline.bold()).foregroundStyle(.mint)
@@ -104,7 +104,7 @@ private struct ControlsView: View {
 private struct ScreenLinkControlsWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "ScreenLink.Controls", provider: LauncherProvider()) { _ in ControlsView() }
-            .configurationDisplayName("ScreenLink Controls")
+            .configurationDisplayName("ScreenLink 3333 Controls")
             .description("Start YouTube + PiP or disconnect all ScreenLink sharing. Controls open the app; iOS consent may be required.")
             .supportedFamilies([.systemSmall, .systemMedium])
     }
@@ -131,7 +131,7 @@ private struct ScreenLinkLiveActivity: Widget {
         ActivityConfiguration(for: ScreenLinkActivityAttributes.self) { context in
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("ScreenLink · YouTube").font(.headline)
+                    Text("ScreenLink 3333 · YouTube").font(.headline)
                     Text(label(context)).font(.subheadline).foregroundStyle(context.isStale ? .orange : .mint)
                     Text("Local hotspot · no recording").font(.caption).foregroundStyle(.secondary)
                 }
@@ -149,7 +149,7 @@ private struct ScreenLinkLiveActivity: Widget {
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
                     VStack(alignment: .leading) {
-                        Text("ScreenLink").font(.headline)
+                        Text("ScreenLink 3333").font(.headline)
                         Text("YouTube only").font(.caption).foregroundStyle(.secondary)
                     }
                 }

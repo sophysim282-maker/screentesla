@@ -1,9 +1,7 @@
 name: Build unsigned iPhone AirPlay lab
 on:
-  pull_request:
   workflow_dispatch:
-  push:
-    branches: [main, feature/youtube-airplay-010]
+
 permissions:
   contents: read
 jobs:

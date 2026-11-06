@@ -19,7 +19,7 @@ targets:
     - path: ../App/BrandAssets.xcassets
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: local.screenlink.airplaylab
+        PRODUCT_BUNDLE_IDENTIFIER: local.screenlink.vpn3333
         PRODUCT_NAME: ScreenLinkPreview
         CLANG_ENABLE_OBJC_ARC: true
         HEADER_SEARCH_PATHS:
@@ -31,14 +31,14 @@ targets:
     info:
       path: ui/Preview-Info.plist
       properties:
-        CFBundleDisplayName: ScreenLink
+        CFBundleDisplayName: ScreenLink 3333
         CFBundleShortVersionString: 0.20.23
         CFBundleVersion: '60'
         UILaunchScreen: {}
         NSSupportsLiveActivities: true
         CFBundleURLTypes:
         - CFBundleURLName: ScreenLink
-          CFBundleURLSchemes: [screenlink]
+          CFBundleURLSchemes: [screenlink3333]
         NSLocalNetworkUsageDescription: Cloud UI test fixture.
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
@@ -57,7 +57,7 @@ targets:
     - path: ../Shared/ScreenLinkActivityAttributes.swift
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: local.screenlink.airplaylab.Widgets
+        PRODUCT_BUNDLE_IDENTIFIER: local.screenlink.vpn3333.Widgets
         SWIFT_VERSION: '5.0'
         APPLICATION_EXTENSION_API_ONLY: true
         SKIP_INSTALL: true
@@ -68,7 +68,7 @@ targets:
     info:
       path: ui/Widget-Info.plist
       properties:
-        CFBundleDisplayName: ScreenLink
+        CFBundleDisplayName: ScreenLink 3333
         CFBundleShortVersionString: 0.20.23
         CFBundleVersion: '60'
         NSExtension:

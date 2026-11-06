@@ -6,6 +6,6 @@ static inline int sl_route_probe_peer(uint32_t peer,uint32_t local,uint32_t brid
     if((peer>>24)==127 && (local>>24)==127)return 1;
     if(!mask || !bridge || !peer || peer==bridge || (peer&mask)!=(bridge&mask))return 0;
     if(!(peer&~mask) || (peer&~mask)==~mask)return 0;
-    return local==bridge || (aliasOwned && local==0xf0030303u);
+    return local==bridge || (aliasOwned && local==0x03030303u);
 }
 #endif

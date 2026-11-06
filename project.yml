@@ -4,7 +4,7 @@ options:
     iOS: '15.0'
 settings:
   base:
-    PRODUCT_BUNDLE_IDENTIFIER: local.screenlink.airplaylab
+    PRODUCT_BUNDLE_IDENTIFIER: local.screenlink.vpn3333
     CLANG_ENABLE_OBJC_ARC: true
     GCC_PREPROCESSOR_DEFINITIONS:
     - $(inherited)
@@ -76,7 +76,7 @@ targets:
     info:
       path: App/Info.plist
       properties:
-        CFBundleDisplayName: ScreenLink
+        CFBundleDisplayName: ScreenLink 3333
         CFBundleShortVersionString: 0.20.26
         CFBundleVersion: '63'
         UILaunchScreen: {}
@@ -84,15 +84,15 @@ targets:
         CFBundleURLTypes:
         - CFBundleURLName: ScreenLink
           CFBundleURLSchemes:
-          - screenlink
+          - screenlink3333
         UIBackgroundModes:
         - audio
         - processing
         BGTaskSchedulerPermittedIdentifiers:
-        - local.screenlink.airplaylab.casting.*
-        - local.screenlink.airplaylab.3TY7CJCWLP.casting.*
-        - 3TY7CJCWLP.local.screenlink.airplaylab.casting.*
-        - 3TY7CJCWLP.local.screenlink.airplaylab.3TY7CJCWLP.casting.*
+        - local.screenlink.vpn3333.casting.*
+        - local.screenlink.vpn3333.3TY7CJCWLP.casting.*
+        - 3TY7CJCWLP.local.screenlink.vpn3333.casting.*
+        - 3TY7CJCWLP.local.screenlink.vpn3333.3TY7CJCWLP.casting.*
         NSLocalNetworkUsageDescription: Advertise an experimental AirPlay receiver and share received video with your local browser.
         NSBonjourServices:
         - _airplay._tcp
@@ -110,7 +110,7 @@ targets:
     - path: Tunnel
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: local.screenlink.airplaylab.LocalTunnel
+        PRODUCT_BUNDLE_IDENTIFIER: local.screenlink.vpn3333.LocalTunnel
         PRODUCT_NAME: ScreenLinkLocalTunnel
         APPLICATION_EXTENSION_API_ONLY: true
         OTHER_LDFLAGS:
@@ -127,7 +127,7 @@ targets:
     info:
       path: Tunnel/Info.plist
       properties:
-        CFBundleDisplayName: ScreenLink Local VPN
+        CFBundleDisplayName: ScreenLink 3333 Local VPN
         CFBundleShortVersionString: 0.20.26
         CFBundleVersion: '63'
         NSExtension:
@@ -168,7 +168,7 @@ targets:
       - '**/*.md'
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: local.screenlink.airplaylab.Broadcast
+        PRODUCT_BUNDLE_IDENTIFIER: local.screenlink.vpn3333.Broadcast
         PRODUCT_NAME: ScreenLinkBroadcast
         LD_RUNPATH_SEARCH_PATHS:
         - $(inherited)
@@ -197,7 +197,7 @@ targets:
     info:
       path: Broadcast/Info.plist
       properties:
-        CFBundleDisplayName: ScreenLink Screen
+        CFBundleDisplayName: ScreenLink 3333 Screen
         CFBundleShortVersionString: 0.20.26
         CFBundleVersion: '63'
         NSLocalNetworkUsageDescription: Share the live iPhone screen and AirPlay media with your hotspot viewer during a screen broadcast.
@@ -219,7 +219,7 @@ targets:
     - path: Shared
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: local.screenlink.airplaylab.Widgets
+        PRODUCT_BUNDLE_IDENTIFIER: local.screenlink.vpn3333.Widgets
         PRODUCT_NAME: ScreenLinkWidgets
         SWIFT_VERSION: '5.0'
         APPLICATION_EXTENSION_API_ONLY: true
@@ -232,7 +232,7 @@ targets:
     info:
       path: Widgets/Info.plist
       properties:
-        CFBundleDisplayName: ScreenLink
+        CFBundleDisplayName: ScreenLink 3333
         CFBundleShortVersionString: 0.20.26
         CFBundleVersion: '63'
         NSExtension:
