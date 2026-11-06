@@ -8,22 +8,33 @@
     uint64_t _sequence,_base,_pendingTime;
     uint32_t _lastDuration;
     BOOL _pendingKey,_needKey;
-    NSUInteger _bytes;
+    NSUInteger _bytes,_maxBytes,_maxPackets,_privacyRevision;
+    BOOL _privacyHidden;
+    uint64_t _notBefore;
 }
 @end
 @implementation H264Stream
-- (instancetype)init {if((self=[super init])){_ready=[NSCondition new];[self reset];}return self;}
+- (instancetype)init {return [self initWithMaxBytes:24*1024*1024 packets:720];}
+- (instancetype)initWithMaxBytes:(NSUInteger)bytes packets:(NSUInteger)packets {if((self=[super init])){_maxBytes=MAX(1024,bytes);_maxPackets=MAX(2,packets);_privacyRevision=1;_ready=[NSCondition new];[self reset];}return self;}
 - (void)reset {
     [_ready lock];_initialization=nil;_pending=nil;_units=[NSMutableArray array];_epoch=NSUUID.UUID.UUIDString;_sequence=0;_base=0;_bytes=0;_needKey=YES;_lastDuration=33333;[_ready broadcast];[_ready unlock];
 }
+- (BOOL)privacyHidden {[_ready lock];BOOL hidden=_privacyHidden;[_ready unlock];return hidden;}
+- (void)setPrivacyHidden:(BOOL)hidden notBefore:(uint64_t)timestamp {[self changePrivacyHidden:hidden notBefore:timestamp expectedRevision:[[self info][@"privacyRevision"] unsignedIntegerValue]];}
+- (BOOL)changePrivacyHidden:(BOOL)hidden notBefore:(uint64_t)timestamp expectedRevision:(NSUInteger)revision {
+    [_ready lock];if(!hidden && revision!=_privacyRevision){[_ready unlock];return NO;}_privacyHidden=hidden;_privacyRevision++;_notBefore=timestamp;_pending=nil;[_units removeAllObjects];_bytes=0;_sequence=0;_base=0;_needKey=YES;_epoch=NSUUID.UUID.UUIDString;[_ready broadcast];[_ready unlock];return YES;
+}
+- (NSUInteger)privacyPermitForTimestamp:(uint64_t)timestamp {[_ready lock];NSUInteger permit=(!_privacyHidden && timestamp>=_notBefore)?_privacyRevision:0;[_ready unlock];return permit;}
 - (void)configureSPS:(NSData *)sps PPS:(NSData *)pps width:(uint16_t)width height:(uint16_t)height {
     NSMutableData *data=[NSMutableData dataWithLength:2048+sps.length+pps.length];
     size_t length=sl_mp4_init(data.mutableBytes,data.length,sps.bytes,sps.length,pps.bytes,pps.length,width,height);
     [self reset];if(!length)return;data.length=length;const uint8_t *p=sps.bytes;
     [_ready lock];_initialization=data;_codec=[NSString stringWithFormat:@"avc1.%02X%02X%02X",p[1],p[2],p[3]];[_ready broadcast];[_ready unlock];
 }
-- (void)appendAVCC:(NSData *)sample timestamp:(uint64_t)time keyframe:(BOOL)key {
+- (void)appendAVCC:(NSData *)sample timestamp:(uint64_t)time keyframe:(BOOL)key {[self appendAVCC:sample timestamp:time keyframe:key privacyPermit:[self privacyPermitForTimestamp:time]];}
+- (void)appendAVCC:(NSData *)sample timestamp:(uint64_t)time keyframe:(BOOL)key privacyPermit:(NSUInteger)permit {
     [_ready lock];
+    if(!permit || _privacyHidden || permit!=_privacyRevision || time<_notBefore){[_ready unlock];return;}
     if(_pending && time<_pendingTime){_pending=nil;[_units removeAllObjects];_bytes=0;_sequence=0;_needKey=YES;_epoch=NSUUID.UUID.UUIDString;}
     if(_pending && time==_pendingTime)time=_pendingTime+_lastDuration;
     if(!_initialization || (_needKey && !key)){[_ready unlock];return;}
@@ -41,18 +52,20 @@
             // Evict cache history without interrupting clients that are already
             // decoding. A new client waits for a retained keyframe; it must
             // never bootstrap using a dependent frame after eviction.
-            while(_units.count>1 && (_bytes>24*1024*1024 || _units.count>720)){
+            while(_units.count>1 && (_bytes>_maxBytes || _units.count>_maxPackets)){
                 _bytes-=[_units.firstObject[@"data"] length];[_units removeObjectAtIndex:0];
             }
         }
     }
     _pending=sample;_pendingTime=time;_pendingKey=key;[_ready broadcast];[_ready unlock];
 }
-- (NSDictionary *)info {[_ready lock];NSDictionary *result=@{@"epoch":_epoch,@"ready":@(_initialization!=nil),@"codec":_codec ?: @"",@"sequence":@(_sequence)};[_ready unlock];return result;}
-- (NSDictionary *)initialization {[_ready lock];NSDictionary *result=@{@"epoch":_epoch,@"data":_initialization ?: [NSData data]};[_ready unlock];return result;}
-- (NSDictionary *)readAfter:(uint64_t)after epoch:(NSString *)epoch {
-    [_ready lock];NSDate *deadline=[NSDate dateWithTimeIntervalSinceNow:1];
-    while([epoch isEqual:_epoch] && (!_units.count || after>=_sequence))if(![_ready waitUntilDate:deadline])break;
+- (NSDictionary *)info {[_ready lock];NSDictionary *result=@{@"epoch":_epoch,@"ready":@(_initialization!=nil&&!_privacyHidden),@"hidden":@(_privacyHidden),@"privacyRevision":@(_privacyRevision),@"codec":_codec ?: @"",@"sequence":@(_sequence)};[_ready unlock];return result;}
+- (NSDictionary *)initialization {[_ready lock];NSDictionary *result=@{@"epoch":_epoch,@"data":(!_privacyHidden?_initialization:nil) ?: [NSData data]};[_ready unlock];return result;}
+- (NSDictionary *)readAfter:(uint64_t)after epoch:(NSString *)epoch {return [self readAfter:after epoch:epoch maxBytes:2*1024*1024 wait:1];}
+- (NSDictionary *)readAfter:(uint64_t)after epoch:(NSString *)epoch maxBytes:(NSUInteger)limit wait:(NSTimeInterval)wait {
+    limit=MAX(1024,MIN(limit,2*1024*1024));[_ready lock];NSDate *deadline=[NSDate dateWithTimeIntervalSinceNow:MAX(0,MIN(wait,1))];
+    while(!_privacyHidden && [epoch isEqual:_epoch] && (!_units.count || after>=_sequence))if(![_ready waitUntilDate:deadline])break;
+    if(_privacyHidden){NSDictionary *result=@{@"reset":@YES,@"hidden":@YES,@"epoch":_epoch,@"data":NSData.data};[_ready unlock];return result;}
     uint64_t first=[_units.firstObject[@"id"] unsignedLongLongValue];
     if(![epoch isEqual:_epoch] || after>_sequence || (after && first && after+1<first)) {
         NSDictionary *result=@{@"reset":@YES,@"epoch":_epoch};[_ready unlock];return result;
@@ -65,7 +78,7 @@
     }
     for(NSUInteger i=after?0:bootstrap;i<_units.count;i++){
         NSDictionary *unit=_units[i];
-        if([unit[@"id"] unsignedLongLongValue]>after){[data appendData:unit[@"data"]];last=[unit[@"id"] unsignedLongLongValue];if(data.length>=2*1024*1024)break;}
+        if([unit[@"id"] unsignedLongLongValue]>after){if([unit[@"data"] length]>limit-data.length)break;[data appendData:unit[@"data"]];last=[unit[@"id"] unsignedLongLongValue];if(data.length>=limit)break;}
     }
     NSDictionary *result=@{@"reset":@NO,@"epoch":_epoch,@"id":@(last),@"data":data};[_ready unlock];return result;
 }
