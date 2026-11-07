@@ -32,7 +32,8 @@ const app=process.argv[2]||'App',override=process.env.SCREENLINK_TEST_SHELL_OVER
  const diagnostic=await page.evaluate(()=>JSON.stringify(ScreenLinkCanvasStatus()));assert(!diagnostic.includes('private-proof-')&&!diagnostic.includes(approved.nonce),'No credentials in copied playback diagnostics');
  // A different browser still needs phone approval. Never auto-take over merely
  // because it uses the same hotspot; only the stored nonce+token can rebind.
- await page.evaluate(()=>{sessionStorage.clear();localStorage.removeItem('screenlink-approved-viewer-v1');});await page.close();page=await context.newPage();await page.goto('https://car.tesla4khmer.com/video');await page.waitForFunction(()=>document.getElementById('status').textContent.includes('Another browser session'));assert.equal(await page.evaluate(()=>ScreenLinkCanvasStatus().connected),false);
+ // Clear after the old page's pagehide credential save, before the new script.
+ await page.close();await context.addInitScript(()=>{sessionStorage.clear();localStorage.removeItem('screenlink-approved-viewer-v1');});page=await context.newPage();await page.goto('https://car.tesla4khmer.com/video');await page.waitForFunction(()=>document.getElementById('status').textContent.includes('Another browser session'));assert.equal(await page.evaluate(()=>ScreenLinkCanvasStatus().connected),false);
  phase='pending';await page.waitForFunction(()=>document.getElementById('status').textContent.includes('Approve local viewer'),null,{timeout:10000});approved=null;phase='automatic';await page.waitForFunction(()=>ScreenLinkCanvasStatus().connected,null,{timeout:10000});
  assert.deepEqual(errors,[]);console.log('WEBSITE_RECOVERY_PASSED: seven DHCP/reload cycles, reopened tab proof, token rotation, temporary HTTPS outage and automatic reconnect; busy/pending shown honestly; no takeover or diagnostic credential leak.');
  }finally{await browser.close();}})().catch(e=>{console.error(e);process.exit(1)});
