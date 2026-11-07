@@ -1,0 +1,56 @@
+name: Build64 official Chrome playback verification
+on:
+  push:
+    branches: ['release/build64-glass']
+    paths: ['.github/workflows/glass-browser64.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  browser:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: sophysim282-maker/screentesla
+          ref: 35c1b532d2f5c3d33d622554b57028d150baa928
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Browser dependencies
+        run: |
+          npm install --no-save playwright@1.55.0
+          npx playwright install --with-deps chromium
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          python3 tools/fetch_canvas.py
+          curl --fail --location --retry 3 https://storage.googleapis.com/chrome-for-testing-public/140.0.7339.207/linux64/chrome-linux64.zip -o /tmp/chrome140.zip
+          unzip -q /tmp/chrome140.zip -d /tmp/screenlink-chrome140
+          echo "SCREENLINK_CHROME_BIN=/tmp/screenlink-chrome140/chrome-linux64/chrome" >> "$GITHUB_ENV"
+      - name: Glass UI and existing fullscreen behavior
+        run: |
+          node --check App/CanvasShell.js
+          node tools/test_glass_ui.cjs
+          node tools/test_video_fullscreen.cjs
+          node tools/test_video_lateness.cjs App/CanvasPlayer.js
+          node tools/test_video_continuity.cjs App/CanvasPlayer.js
+          ffprobe -v error -show_entries stream=codec_type -of csv=p=0 App/CarAmbient.mp4 > build/ambient-streams.txt
+          test "$(cat build/ambient-streams.txt)" = video
+      - name: Real Canvas video and sound with privacy and reconnection checks
+        run: |
+          mkdir -p build/pure
+          ffmpeg -v error -f lavfi -i testsrc2=size=640x360:rate=60 -t 12 -c:v libx264 -preset ultrafast -tune zerolatency -x264-params aud=1:keyint=120:scenecut=0 -f h264 build/source.h264
+          cc tools/test_fmp4.c -o build/mux
+          build/mux build/source.h264 build/live.mp4
+          ffmpeg -v error -f lavfi -i testsrc2=size=640x360:rate=30 -f lavfi -i sine=frequency=440:sample_rate=48000 -t 10 -c:v libx264 -preset ultrafast -tune zerolatency -g 60 -c:a aac -hls_time 2 -hls_playlist_type vod -hls_segment_filename build/pure/part%02d.ts build/pure/master.m3u8
+          ffmpeg -v error -f lavfi -i testsrc2=size=640x360:rate=30 -f lavfi -i sine=frequency=440:sample_rate=48000 -t 10 -c:v libx264 -preset ultrafast -g 60 -c:a aac -hls_time 2 -hls_segment_type fmp4 -hls_playlist_type vod -hls_segment_filename build/pure/fragment%02d.m4s build/pure/fragmented.m3u8
+          python3 tools/create_packed_audio_fixture.py build/pure
+          node --require ./tools/test_browser_engine.cjs tools/test_pure_canvas.cjs App build/pure build/live.mp4
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ScreenLink-build64-website-previews
+          path: build/ui/*.png
+          retention-days: 7
