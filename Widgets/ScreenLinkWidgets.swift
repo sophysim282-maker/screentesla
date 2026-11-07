@@ -75,51 +75,104 @@ private struct RoadsterLauncherWidget: Widget {
     var body: some WidgetConfiguration { launcherConfiguration(.roadster, displayName: "ScreenLink · Roadster") }
 }
 
+private let stopURL = URL(string: "screenlink://disconnect-all")!
+private let openURL = URL(string: "screenlink://open")!
+
+private struct ActionPill: View {
+    let title: String
+    let symbol: String
+    let url: URL
+    var body: some View {
+        Link(destination: url) {
+            Label(title, systemImage: symbol)
+                .font(.caption.bold()).lineLimit(1).minimumScaleFactor(0.8)
+                .frame(maxWidth: .infinity, minHeight: 36)
+                .background(.white.opacity(0.12), in: Capsule())
+        }.foregroundStyle(.white)
+    }
+}
+private struct QuickActions: View {
+    var body: some View {
+        VStack(spacing: 7) {
+            HStack(spacing: 7) {
+                ActionPill(title: "Start", symbol: "play.fill", url: startURL)
+                ActionPill(title: "Resume PiP", symbol: "pip.enter", url: resumeURL)
+            }
+            HStack(spacing: 7) {
+                ActionPill(title: "Open app", symbol: "arrow.up.forward.app", url: openURL)
+                ActionPill(title: "Disconnect", symbol: "power", url: stopURL)
+            }
+        }
+    }
+}
 private struct ControlsView: View {
     @Environment(\.widgetFamily) var family
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Image(systemName: "airplayvideo").foregroundStyle(.mint)
+                Image(systemName: "car.side").foregroundStyle(.mint)
                 Text("ScreenLink").font(.headline)
                 Spacer(minLength: 0)
             }
-            Text("A bigger view").font(.title3.bold())
-            Text("Open the app to control sharing").font(.caption).foregroundStyle(.secondary)
-            Spacer(minLength: 0)
-            if family == .systemMedium {
-                HStack(spacing: 12) {
-                    Link(destination: startURL) { Label("Start + PiP", systemImage: "play.fill").font(.subheadline.bold()).padding(10).frame(maxWidth: .infinity).background(Color(red: 0.02, green: 0.38, blue: 0.4), in: RoundedRectangle(cornerRadius: 12)) }
-                    Link(destination: URL(string: "screenlink://disconnect-all")!) { Label("Disconnect All", systemImage: "power").font(.subheadline.bold()).padding(10).frame(maxWidth: .infinity).background(.white.opacity(0.12), in: RoundedRectangle(cornerRadius: 12)) }
-                }.foregroundStyle(.white)
+            if family == .systemSmall {
+                Text("Your video.\nA bigger view.").font(.title3.bold())
+                Spacer(minLength: 0)
+                Label("Open controls", systemImage: "arrow.up.forward.app").font(.caption.bold()).foregroundStyle(.mint)
             } else {
-                Label("Open controls", systemImage: "arrow.up.forward.app").font(.subheadline.bold()).foregroundStyle(.mint)
+                if family == .systemLarge {
+                    Text("Ready when you are").font(.title2.bold())
+                    Text("Hotspot → YouTube AirPlay → return for PiP").font(.caption).foregroundStyle(.white.opacity(0.7))
+                    Spacer(minLength: 0)
+                }
+                QuickActions()
+                Text("Actions open ScreenLink · no recording").font(.system(size: 10)).foregroundStyle(.white.opacity(0.65))
             }
         }
         .foregroundStyle(.white)
-        .containerBackground(for: .widget) { LinearGradient(colors: [Color(red: 0.025, green: 0.065, blue: 0.13), Color(red: 0.03, green: 0.24, blue: 0.28)], startPoint: .topLeading, endPoint: .bottomTrailing) }
-        .widgetURL(resumeURL)
+        .containerBackground(for: .widget) { LinearGradient(colors: [Color(red: 0.06, green: 0.10, blue: 0.12), Color(red: 0.08, green: 0.26, blue: 0.24)], startPoint: .topLeading, endPoint: .bottomTrailing) }
+        .widgetURL(openURL)
     }
 }
 private struct ScreenLinkControlsWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "ScreenLink.Controls", provider: LauncherProvider()) { _ in ControlsView() }
             .configurationDisplayName("ScreenLink Controls")
-            .description("Start YouTube + PiP or disconnect all ScreenLink sharing. Controls open the app; iOS consent may be required.")
-            .supportedFamilies([.systemSmall, .systemMedium])
+            .description("Start, resume PiP, open ScreenLink or disconnect all. Actions open the app; iOS consent may be required.")
+            .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
+    }
+}
+private struct ResumeView: View {
+    @Environment(\.widgetFamily) var family
+    var body: some View {
+        Group {
+            if family == .accessoryCircular {
+                Image(systemName: "pip.enter").font(.title2)
+            } else {
+                VStack(alignment: .leading) {
+                    Label("ScreenLink", systemImage: "pip.enter").font(.headline)
+                    Text("Resume PiP").font(.caption)
+                }
+            }
+        }.containerBackground(for: .widget) { Color.clear }
+         .widgetURL(resumeURL)
+         .accessibilityLabel("Open ScreenLink and resume the selected PiP session")
+    }
+}
+private struct ResumeWidget: Widget {
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: "ScreenLink.Resume", provider: LauncherProvider()) { _ in ResumeView() }
+            .configurationDisplayName("ScreenLink Resume PiP")
+            .description("Open ScreenLink to resume your selected floating video session.")
+            .supportedFamilies([.accessoryCircular, .accessoryRectangular])
     }
 }
 
 private struct MotionBadge: View {
     let phase: Int
     var body: some View {
-        HStack(spacing: 6) {
-            Text("🐕").offset(y: phase.isMultiple(of: 2) ? 0 : -3)
-            Text("🐈").offset(y: phase.isMultiple(of: 2) ? -3 : 0)
-            Text("🏎️").rotationEffect(.degrees(phase.isMultiple(of: 2) ? -5 : 5))
-        }
-        .animation(.easeInOut(duration: 0.8), value: phase)
-        .accessibilityLabel("Dog, cat and Roadster")
+        Image(systemName: "car.side.fill")
+            .foregroundStyle(.mint)
+            .accessibilityLabel("ScreenLink Roadster")
     }
 }
 
@@ -129,7 +182,8 @@ private struct ScreenLinkLiveActivity: Widget {
     }
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: ScreenLinkActivityAttributes.self) { context in
-            HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("ScreenLink · YouTube").font(.headline)
                     Text(label(context)).font(.subheadline).foregroundStyle(context.isStale ? .orange : .mint)
@@ -140,6 +194,8 @@ private struct ScreenLinkLiveActivity: Widget {
                     MotionBadge(phase: context.state.phase).font(.title2)
                     if context.state.running && !context.isStale { Text(context.state.started, style: .timer).font(.caption.monospacedDigit()) }
                 }
+                }
+                QuickActions()
             }.padding(16)
             .activityBackgroundTint(Color(red: 0.04, green: 0.07, blue: 0.13))
             .activitySystemActionForegroundColor(.white)
@@ -157,11 +213,14 @@ private struct ScreenLinkLiveActivity: Widget {
                     MotionBadge(phase: context.state.phase).font(.title3)
                 }
                 DynamicIslandExpandedRegion(.bottom) {
+                    VStack(spacing: 8) {
                     HStack {
                         Image(systemName: context.state.running && !context.isStale ? "airplayvideo" : "pause.circle")
                         Text(label(context)).font(.caption.bold())
                         Spacer()
                         if context.state.running && !context.isStale { Text(context.state.started, style: .timer).font(.caption.monospacedDigit()) }
+                    }
+                    QuickActions()
                     }
                 }
             } compactLeading: {
@@ -169,7 +228,7 @@ private struct ScreenLinkLiveActivity: Widget {
             } compactTrailing: {
                 Text(context.isStale ? "!" : (context.state.running ? "YT" : "Ⅱ")).font(.caption2.bold()).foregroundStyle(.mint)
             } minimal: {
-                Text(context.state.phase.isMultiple(of: 2) ? "🐕" : "🐈")
+                Image(systemName: "car.side.fill").accessibilityLabel("ScreenLink")
             }
             .widgetURL(resumeURL)
             .keylineTint(.mint)
@@ -181,9 +240,11 @@ private struct ScreenLinkLiveActivity: Widget {
 struct ScreenLinkWidgetBundle: WidgetBundle {
     var body: some Widget {
         ScreenLinkControlsWidget()
+        ResumeWidget()
         DogLauncherWidget()
         CatLauncherWidget()
         RoadsterLauncherWidget()
         ScreenLinkLiveActivity()
     }
 }
+

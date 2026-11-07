@@ -18,7 +18,7 @@ const fs=require('fs'),assert=require('assert'),{chromium}=require('playwright')
   assert(!(await page.locator('#mediaStage').evaluate(e=>e.classList.contains('video-fullscreen'))));
   await page.click('#videoFull');await page.keyboard.press('Escape');
   assert(!(await page.locator('#mediaStage').evaluate(e=>e.classList.contains('video-fullscreen'))));
-  await page.click('#showPerformance');
+  await page.locator('.tools summary').click();await page.click('#showPerformance');
   assert(await page.locator('#performancePanel').isVisible());
   assert((await page.locator('#performanceText').innerText()).includes('Decoder feed wait ms'));
   await page.click('#freezePerformance');assert.equal(await page.locator('#freezePerformance').innerText(),'Resume report');
