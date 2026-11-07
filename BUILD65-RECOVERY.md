@@ -1,0 +1,11 @@
+# ScreenLink 0.20.28 / build65
+
+Scope: HTTPS viewer session recovery and truthful cached-page status. User explicitly confirmed build64 playback is smooth and requested no playback changes. CanvasPlayer.js, CanvasScreen.js, MediaCast.m, BoundedDownload.m, YouTubePiP.m, LocalVPN.m, PacketTunnelProvider.m and widget implementation remain byte-identical to build64. Do not claim the first physical disconnect is diagnosed without device logs.
+
+Confirmed defects: previousToken existed only in JS memory and disappeared on reload, preventing an approved nonce from proving ownership after a DHCP peer change; reopening a tab lost nonce too. The generic catch hid busy/pending failures as waiting forever. The main app rejected manual viewer approvals in no-recording mediaOnly mode because approval polling/actions required broadcastArmed. A service worker always returned cached shell before testing the phone and accepted arbitrary successful HTML for its root cache.
+
+Fix: bounded origin-local storage for approved nonce+token; preserve peer proof across reload/tab reopening. Busy/pending/error phase is visible; copied diagnostics expose phases/times but never credentials. Secure navigation checks the live phone first with a 3-second static-shell fallback. Wrong HTTP approval HTML cannot replace the secure viewer cache. Main app can approve a pending YouTube-only viewer, and an explicit Reconnect website action repairs listeners/re-arms approval without stopping AirPlay, media, PiP or VPN. HTTPS handshake/approval outcomes are rate-limited in native logs.
+
+DNS verified 2026-11-07: car.tesla4khmer.com A 240.3.3.3, no AAAA. DNS configuration was not modified. Public cloud compilation/tests carry no personalized TLS identity. Final HTTPS restoration stays private.
+
+Tests: reproduce lost-credential reload+changed-peer failure against build64; new browser tests cover seven DHCP/reload cycles, tab reopening, temporary HTTPS outage, explicit reapproval, privacy/denial and no credential diagnostic leak. Native approval test proves correct-token peer rebinding and rejection without proof. Existing real video/audio/privacy suite still required. Physical Tesla endurance cannot be guaranteed from browser tests.

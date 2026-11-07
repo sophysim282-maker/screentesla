@@ -56,6 +56,7 @@
   self.previewHost=[UIView new];self.previewHost.backgroundColor=UIColor.blackColor;self.previewHost.layer.cornerRadius=20;self.previewHost.clipsToBounds=YES;self.previewHost.hidden=YES;
   NSLayoutConstraint *previewHeight=[self.previewHost.heightAnchor constraintEqualToConstant:160];previewHeight.priority=750;previewHeight.active=YES;[stack addArrangedSubview:self.previewHost];
   UIButton *copy=[self button:@"Website link" symbol:@"link" action:@selector(copyTapped) filled:NO];copy.accessibilityIdentifier=@"home.copy";[stack addArrangedSubview:copy];
+  UIButton *reconnect=[self button:@"Reconnect website" symbol:@"arrow.clockwise" action:@selector(reconnectTapped) filled:NO];reconnect.accessibilityIdentifier=@"home.reconnect";[stack addArrangedSubview:reconnect];
   UIButton *developer=[UIButton buttonWithType:UIButtonTypeSystem];[developer setTitle:@"Developer" forState:UIControlStateNormal];developer.tintColor=UIColor.secondaryLabelColor;developer.accessibilityIdentifier=@"home.developer";[developer addTarget:self action:@selector(developerTapped) forControlEvents:UIControlEventTouchUpInside];[developer.heightAnchor constraintGreaterThanOrEqualToConstant:44].active=YES;[stack addArrangedSubview:developer];
   UIStackView *steps=[UIStackView new];steps.axis=UILayoutConstraintAxisVertical;steps.spacing=7;[steps addArrangedSubview:[self label:@"Connect in three steps" style:UIFontTextStyleHeadline]];
   for(NSString *line in @[@"1   Connect the viewer to your phone’s hotspot.",@"2   Choose ScreenLink in YouTube’s AirPlay menu.",@"3   Return here once to prepare the floating video."]){UILabel *label=[self label:line style:UIFontTextStyleSubheadline];label.textColor=UIColor.secondaryLabelColor;[steps addArrangedSubview:label];}[stack addArrangedSubview:steps];
@@ -89,5 +90,7 @@
 - (void)disconnectTapped {if(self.disconnectAction)self.disconnectAction();}
 - (void)developerTapped {[self stopAmbient];if(self.developerAction)self.developerAction();}
 - (void)copyTapped {if(self.copyAction)self.copyAction();UIAccessibilityPostNotification(UIAccessibilityAnnouncementNotification,@"Website link copied");}
+- (void)reconnectTapped {if(self.reconnectAction)self.reconnectAction();}
 @end
+
 

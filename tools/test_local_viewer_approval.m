@@ -20,6 +20,11 @@ int main(void){@autoreleasepool{
  NSString *rebound=[gate request:nonce peer:@"172.20.10.3" previousToken:token now:5][@"token"];assert(rebound.length && ![rebound isEqual:token]);
  assert(![gate allowsToken:token peer:peer now:5]);assert([gate allowsToken:rebound peer:@"172.20.10.3" now:5]);
  assert(![gate decide:NO requestID:identifier now:6]);
+ // Reproduce the browser reload failure: without the last approved token a
+ // changed hotspot peer remains busy. The persisted proof must recover it.
+ assert([[gate request:nonce peer:@"172.20.10.4" previousToken:nil now:6][@"phase"] isEqual:@"busy"]);
+ NSString *restored=[gate request:nonce peer:@"172.20.10.4" previousToken:rebound now:6][@"token"];assert(restored.length&&![restored isEqual:rebound]);
+ assert(![gate allowsToken:rebound peer:@"172.20.10.3" now:6]);assert([gate allowsToken:restored peer:@"172.20.10.4" now:6]);
  [gate reset];assert(![gate allowsToken:token peer:peer now:7]);
  [gate request:nonce peer:peer now:8];identifier=[gate statusAt:8][@"requestID"];assert([gate decide:NO requestID:identifier now:9]);assert(![gate request:nonce peer:peer now:10][@"token"]);assert([[gate request:nonce peer:peer now:10][@"phase"] isEqual:@"rejected"]);
  assert([[gate statusAt:130][@"phase"] isEqual:@"idle"]);
@@ -31,3 +36,4 @@ int main(void){@autoreleasepool{
  [gate armAutomaticAt:20000];assert([[gate request:nonce peer:peer now:20001][@"phase"] isEqual:@"approved"]);token=[gate request:nonce peer:peer now:20002][@"token"];assert([gate allowsToken:token peer:peer now:20002]);assert(![gate allowsToken:token peer:@"172.20.10.3" now:20002]);[gate reset];assert([[gate request:nonce peer:peer now:20003][@"phase"] isEqual:@"pending"]);[gate armAutomaticAt:21000];assert([[gate request:nonce peer:peer now:21301][@"phase"] isEqual:@"pending"]);
  puts("Local viewer approval passed: no token before phone decision; peer/nonce binding, stale approval, rejection, expiry and disconnect revocation.");
 }return 0;}
+

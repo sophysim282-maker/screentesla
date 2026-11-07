@@ -40,6 +40,8 @@ _Static_assert(kVTInvalidSessionErr == -12903, "Check decoder error mapping agai
     CFTimeInterval _screenTime;
     MediaCast *_media;
     LocalViewerApproval *_localViewer;
+    NSString *_lastViewerRequestSummary;
+    NSTimeInterval _lastViewerRequestLog,_lastTLSFailureLog;
     SLMediaSession *_rtcMedia;
     VideoInbox *_inbox;
     NSUInteger _controlClients;
@@ -513,7 +515,7 @@ static NSArray *txtStrings(const char *bytes,int length) {
             dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED,0),^{
                 struct timeval timeout={5,0};setsockopt(client,SOL_SOCKET,SO_RCVTIMEO,&timeout,sizeof timeout);setsockopt(client,SOL_SOCKET,SO_SNDTIMEO,&timeout,sizeof timeout);
                 int one=1;setsockopt(client,SOL_SOCKET,SO_NOSIGPIPE,&one,sizeof one);
-                @try {@autoreleasepool {if(!context || sl_tls_begin(context,client))[self serveClient:client generation:generation];}}
+                @try {@autoreleasepool {if(!context || sl_tls_begin(context,client))[self serveClient:client generation:generation];else {NSTimeInterval now=NSProcessInfo.processInfo.systemUptime;BOOL report=NO;@synchronized(self){if(now-self->_lastTLSFailureLog>15){self->_lastTLSFailureLog=now;report=YES;}}if(report)[self emit:@"HTTPS HANDSHAKE FAILED: HTTP fallback may still work. TLS connection did not complete; this is separate from DNS and viewer approval. No media session was reset."];}}}
                 @finally {if(context){sl_tls_end();SSL_CTX_free(context);}close(client);dispatch_semaphore_signal(self->_httpSlots);}
             });
         }
@@ -591,7 +593,7 @@ static NSArray *txtStrings(const char *bytes,int length) {
     }
     else if(current && [url.path isEqual:@"/local-viewer/request"]){
         if(!aliasClient || ![parts.firstObject isEqual:@"POST"] || ![origin isEqual:expectedOrigin] || !viewerHeaderValid){status=@"403 Forbidden";[self emit:[NSString stringWithFormat:@"LOCAL APPROVAL REQUEST REJECTED: owned-alias/hotspot=%d, POST=%d, expected-origin=%d, request-header=%d. No media access granted.",aliasClient,[parts.firstObject isEqual:@"POST"],[origin isEqual:expectedOrigin],viewerHeaderValid]];}
-        else{id object=[NSJSONSerialization JSONObjectWithData:[request subdataWithRange:NSMakeRange(bodyOffset,bodyLength)] options:0 error:nil];NSString *nonce=[object isKindOfClass:NSDictionary.class]?object[@"nonce"]:nil;NSDictionary *result=[_localViewer request:nonce peer:peerHost previousToken:([object isKindOfClass:NSDictionary.class]?object[@"previousToken"]:nil) now:localNow];mime=@"application/json";body=[NSJSONSerialization dataWithJSONObject:result options:0 error:nil];}
+        else{id object=[NSJSONSerialization JSONObjectWithData:[request subdataWithRange:NSMakeRange(bodyOffset,bodyLength)] options:0 error:nil];NSString *nonce=[object isKindOfClass:NSDictionary.class]?object[@"nonce"]:nil;NSDictionary *result=[_localViewer request:nonce peer:peerHost previousToken:([object isKindOfClass:NSDictionary.class]?object[@"previousToken"]:nil) now:localNow];NSString *summary=[NSString stringWithFormat:@"VIEWER REQUEST: %@, peer %@, phase %@, recovery proof %@. No tokens logged.",secureTransport?@"HTTPS":@"HTTP",peerHost,result[@"phase"]?:@"unknown",([object[@"previousToken"] isKindOfClass:NSString.class]&&[object[@"previousToken"] length])?@"present":@"absent"];BOOL report=NO;@synchronized(self){if(![summary isEqual:self->_lastViewerRequestSummary]||localNow-self->_lastViewerRequestLog>30){self->_lastViewerRequestSummary=summary;self->_lastViewerRequestLog=localNow;report=YES;}}if(report)[self emit:summary];mime=@"application/json";body=[NSJSONSerialization dataWithJSONObject:result options:0 error:nil];}
     }
     else if(current && secureTransport && aliasClient && [parts.firstObject isEqual:@"GET"] && ([@[@"/",@"/split",@"/map",@"/video",@"/sw.js"] containsObject:url.path]||[url.path hasPrefix:@"/app/"])){NSDictionary *assets=@{@"/":@"CanvasShell.html",@"/split":@"CanvasShell.html",@"/map":@"CanvasShell.html",@"/video":@"CanvasShell.html",@"/sw.js":@"CanvasServiceWorker.js",@"/app/pure.js":@"CanvasShell.js",@"/app/screen.js":@"CanvasScreen.js",@"/app/canvas.js":@"CanvasPlayer.js",@"/app/mp4box.js":@"MP4Demux.js",@"/app/mux.js":@"TSDemux.js",@"/app/car-poster.jpg":@"CarPoster.jpg",@"/app/car-ambient.webp":@"CarAmbient.webp"};NSString *file=assets[url.path];if(!file){status=@"404 Not Found";}else{mime=[file hasSuffix:@".js"]?@"application/javascript":[file hasSuffix:@".jpg"]?@"image/jpeg":[file hasSuffix:@".webp"]?@"image/webp":@"text/html; charset=utf-8";NSString *path=[NSBundle.mainBundle pathForResource:file.stringByDeletingPathExtension ofType:file.pathExtension];body=path?[NSData dataWithContentsOfFile:path]:nil;if(!body){status=@"503 Service Unavailable";body=NSData.data;}if([url.path isEqual:@"/sw.js"])extra=@"Service-Worker-Allowed: /\r\n";}}
     else if(current && aliasClient && [parts.firstObject isEqual:@"GET"] && [url.path isEqual:@"/capabilities"]){mime=@"text/html; charset=utf-8";body=[NSData dataWithContentsOfFile:[NSBundle.mainBundle pathForResource:@"Capabilities" ofType:@"html"]]?:NSData.data;}
@@ -753,4 +755,5 @@ static NSArray *txtStrings(const char *bytes,int length) {
     @synchronized(self){_jpeg=nil;_frames=0;_nextJPEG=0;_frameTime=0;_decodedFrames=0;_lastDecodedTime=0;_jpegDemandUntil=0;_compressedFrames=0;_lastCompressedTime=0;}
 }
 @end
+
 
