@@ -14,7 +14,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: sophysim282-maker/screentesla
-          ref: 35c1b532d2f5c3d33d622554b57028d150baa928
+          ref: a1469435756b0cfe5f6f5b7443fbc9c83a73e698
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
