@@ -246,6 +246,11 @@ struct ScreenLinkWidgetBundle: WidgetBundle {
         CatLauncherWidget()
         RoadsterLauncherWidget()
         ScreenLinkLiveActivity()
+        if #available(iOS 18.0, *) {
+            ScreenLinkSessionControl()
+            CarPlayPauseControl()
+            CarMuteControl()
+        }
     }
 }
 
