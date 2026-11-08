@@ -39,6 +39,13 @@ static atomic_int webOpenConnections;
 static __weak Receiver *webWatchOwner;
 // Build 80: set by serveClient when an HTTPS reply may keep its connection open.
 static _Thread_local BOOL webKeepAlive;
+// Build 82: kept-open website connections used all 12 slots ("WEBSITE BUSY") and PiP's
+// own media requests were refused. The app has 32 slots; idle connections close after 5 s.
+#if SL_BROADCAST_EXTENSION
+#define SL_HTTP_SLOTS 12
+#else
+#define SL_HTTP_SLOTS 32
+#endif
 extern void sl_dnssd_set_external(dnssd_t *, int);
 extern const char *sl_dnssd_get_raop_txt(dnssd_t *, int *);
 _Static_assert(kVTInvalidSessionErr == -12903, "Check decoder error mapping against the iOS SDK");
@@ -199,7 +206,7 @@ static SLVideoSettings videoSettings(SLVideoProfile profile) {
             BOOL report=sl_web_watch_tick(&webWatch,NSProcessInfo.processInfo.systemUptime,6);
             unsigned long http=webWatch.http-webWatch.httpMark,tls=webWatch.tlsFailures-webWatch.tlsMark,busy=webWatch.busy-webWatch.busyMark,host=webWatch.wrongHost-webWatch.wrongHostMark;
             pthread_mutex_unlock(&webWatchLock);
-            if(report)[owner emit:[NSString stringWithFormat:@"WEBSITE SILENT: no HTTPS request from the car for 6 s. Since its last HTTPS request: %lu HTTP (240.3.3.3) requests, %lu HTTPS handshake failures, %lu wrong-address HTTPS requests, %lu connections refused because all 12 slots were busy; %d connections open now. If the HTTPS numbers are all 0, the car is not reaching the phone over HTTPS (name lookup or network). Before stopping, open https://car.tesla4khmer.com/capabilities?check=1 on the car and copy this log.",http,tls,host,busy,atomic_load(&webOpenConnections)]];
+            if(report)[owner emit:[NSString stringWithFormat:@"WEBSITE SILENT: no HTTPS request from the car for 6 s. Since its last HTTPS request: %lu HTTP (240.3.3.3) requests, %lu HTTPS handshake failures, %lu wrong-address HTTPS requests, %lu connections refused because all slots were busy; %d connections open now. If the HTTPS numbers are all 0, the car is not reaching the phone over HTTPS (name lookup or network). Before stopping, open https://car.tesla4khmer.com/capabilities?check=1 on the car and copy this log.",http,tls,host,busy,atomic_load(&webOpenConnections)]];
         });
         dispatch_resume(timer);
     });
@@ -207,7 +214,7 @@ static SLVideoSettings videoSettings(SLVideoProfile profile) {
 - (void)noteWebBusy:(BOOL)secure {
     double now=NSProcessInfo.processInfo.systemUptime;
     pthread_mutex_lock(&webWatchLock);unsigned long total=++webWatch.busy;BOOL log=sl_web_watch_allow(&webBusyLogAt,now,5);pthread_mutex_unlock(&webWatchLock);
-    if(log)[self emit:[NSString stringWithFormat:@"WEBSITE BUSY: all 12 phone connection slots in use; closed a new %@ connection without answering (%lu refused so far, %d open).",secure?@"HTTPS":@"HTTP",total,atomic_load(&webOpenConnections)]];
+    if(log)[self emit:[NSString stringWithFormat:@"WEBSITE BUSY: all %d phone connection slots in use; closed a new %@ connection without answering (%lu refused so far, %d open).",SL_HTTP_SLOTS,secure?@"HTTPS":@"HTTP",total,atomic_load(&webOpenConnections)]];
 }
 - (void)noteHandshakeFailure:(int)client {
     struct sockaddr_in peer={0};socklen_t size=sizeof peer;char address[INET_ADDRSTRLEN]="unknown";
@@ -240,7 +247,7 @@ static SLVideoSettings videoSettings(SLVideoProfile profile) {
 #else
         _ci=[CIContext contextWithOptions:nil];
 #endif
-_decodeQueue=dispatch_queue_create("ScreenLink.decode",DISPATCH_QUEUE_SERIAL);_jpegQueue=dispatch_queue_create("ScreenLink.jpeg",DISPATCH_QUEUE_SERIAL);_httpSlots=dispatch_semaphore_create(12);_mediaSlots=dispatch_semaphore_create(_screenStream?3:8);_streamSlots=dispatch_semaphore_create(2);_frameReady=[NSCondition new];_token=NSUUID.UUID.UUIDString;[self installLifecycleObservers];
+_decodeQueue=dispatch_queue_create("ScreenLink.decode",DISPATCH_QUEUE_SERIAL);_jpegQueue=dispatch_queue_create("ScreenLink.jpeg",DISPATCH_QUEUE_SERIAL);_httpSlots=dispatch_semaphore_create(SL_HTTP_SLOTS);_mediaSlots=dispatch_semaphore_create(_screenStream?3:8);_streamSlots=dispatch_semaphore_create(2);_frameReady=[NSCondition new];_token=NSUUID.UUID.UUIDString;[self installLifecycleObservers];
         __weak Receiver *weak=self;
         _media.status=^(NSString *text){[weak emit:text];};
         _inbox=[[VideoInbox alloc]initWithQueue:_decodeQueue maxBytes:(_screenStream?2:16)*1024*1024 maxPackets:(_screenStream?30:120) consume:^(NSData *data,uint64_t timestamp,NSUInteger generation){
@@ -579,7 +586,7 @@ static NSArray *txtStrings(const char *bytes,int length) {
                 @try {@autoreleasepool {atomic_fetch_add(&webOpenConnections,1);if(!context || sl_tls_begin(context,client)){
                     // Build 80: reuse open HTTPS connections, so the car needs far fewer name
                     // lookups and secure handshakes (each failed lookup silenced the website).
-                    for(int served=0;served<500;served++){webKeepAlive=NO;@autoreleasepool{[self serveClient:client generation:generation];}if(!webKeepAlive||!sl_tls_wait_readable(client,10000))break;}
+                    for(int served=0;served<500;served++){webKeepAlive=NO;@autoreleasepool{[self serveClient:client generation:generation];}if(!webKeepAlive||!sl_tls_wait_readable(client,5000))break;}
                 }else [self noteHandshakeFailure:client];}}
                 @finally {atomic_fetch_sub(&webOpenConnections,1);if(context){sl_tls_end();SSL_CTX_free(context);}close(client);dispatch_semaphore_signal(self->_httpSlots);}
             });
@@ -760,7 +767,7 @@ static NSArray *txtStrings(const char *bytes,int length) {
     } else {status=@"404 Not Found";}
     if(aliasClient && ([url.path isEqual:@"/media/state"] || [url.path hasPrefix:@"/media/resource/"]))body=SLRetokenLocalMediaData(body,mime,self.token,token);
     BOOL keep=secureTransport&&current&&parts.count>2&&[parts[2] hasPrefix:@"HTTP/1.1"]&&![[wsHeaders[@"connection"] lowercaseString] containsString:@"close"];
-    NSString *header=[NSString stringWithFormat:@"HTTP/1.1 %@\r\nContent-Type: %@\r\nContent-Length: %lu\r\nCache-Control: no-store\r\n%@X-Content-Type-Options: nosniff\r\n%@\r\n",status,mime,(unsigned long)body.length,keep?@"Connection: keep-alive\r\nKeep-Alive: timeout=10, max=500\r\n":@"Connection: close\r\n",extra];
+    NSString *header=[NSString stringWithFormat:@"HTTP/1.1 %@\r\nContent-Type: %@\r\nContent-Length: %lu\r\nCache-Control: no-store\r\n%@X-Content-Type-Options: nosniff\r\n%@\r\n",status,mime,(unsigned long)body.length,keep?@"Connection: keep-alive\r\nKeep-Alive: timeout=5, max=500\r\n":@"Connection: close\r\n",extra];
     NSData *h=[header dataUsingEncoding:NSUTF8StringEncoding];if(send_all(client,h.bytes,h.length)&&send_all(client,body.bytes,body.length))webKeepAlive=keep;
 }
 - (void)screenSocket:(int)client generation:(NSUInteger)generation token:(NSString *)token peer:(NSString *)peer {
