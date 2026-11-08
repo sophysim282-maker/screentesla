@@ -23,11 +23,18 @@ recorder=$!
 sleep 1
 xcrun simctl launch "$device" local.screenlink.preview86
 container="$(xcrun simctl get_app_container "$device" local.screenlink.preview86 data)"
-for attempt in $(seq 1 30); do
+for attempt in $(seq 1 90); do
   if test -f "$container/Documents/phone-controls-passed.txt"; then break; fi
   sleep 1
 done
-test "$(cat "$container/Documents/phone-controls-passed.txt")" = PHONE_UI_PASSED
+xcrun simctl io "$device" screenshot build/ui/home-check.png || true
+if ! test "$(cat "$container/Documents/phone-controls-passed.txt" 2>/dev/null)" = PHONE_UI_PASSED; then
+  kill -INT "$recorder" 2>/dev/null || true; wait "$recorder" 2>/dev/null || true
+  echo "PREVIEW DID NOT PASS. Running: $(xcrun simctl spawn "$device" launchctl list 2>/dev/null | grep -c preview86 || true)"
+  find ~/Library/Logs/DiagnosticReports -name 'ScreenLinkPreview*' -mmin -15 -print -exec head -80 {} \; 2>/dev/null || true
+  xcrun simctl spawn "$device" log show --last 3m --style compact --predicate 'process == "ScreenLinkPreview"' 2>/dev/null | tail -60 || true
+  exit 1
+fi
 sleep 4
 xcrun simctl io "$device" screenshot build/ui/home-dark.png
 sleep 4
