@@ -24,6 +24,8 @@ python3 tools/make_identity_ipa.py build/tls-test/identity/wrong.ipa build/tls-t
 cc -std=c11 -Wall -Wextra -Werror -I"$openssl_root/include" -L"$openssl_root/lib" -Wl,-rpath,"$openssl_root/lib" tools/test_identity_import.c App/ZipEntry.c App/LocalTLS.c -lssl -lcrypto -lz -o build/tls-test/identity/test
 build/tls-test/identity/test build/tls-test/identity/good.ipa build/tls-test/identity/raw.ipa build/tls-test/identity/out build/tls-test/identity/wrong.ipa
 build/tls-test/web-watch
+cc -std=c11 -Wall -Wextra -Werror tools/test_local_dns.c -o build/tls-test/local-dns
+build/tls-test/local-dns
 cc -std=c11 -Wall -Wextra -Werror -I"$openssl_root/include" -L"$openssl_root/lib" -Wl,-rpath,"$openssl_root/lib" tools/test_local_websocket.c App/LocalWebSocket.c -lcrypto -o build/test-local-websocket
 build/test-local-websocket
 mkdir -p build
@@ -161,7 +163,7 @@ assert w.get('CFBundlePackageType')=='XPC!'
 widget_binary=(widget/w['CFBundleExecutable']).read_bytes()
 for kind in [b'ScreenLink.Controls',b'ScreenLink.CarPlayer',b'CarPlayerIntent',b'start-youtube',b'disconnect-all']:
     assert kind in widget_binary, 'Widget control route/configuration missing: '+str(kind)
-assert parent['CFBundleVersion']=='76' and parent['CFBundleShortVersionString']=='0.20.39'
+assert parent['CFBundleVersion']=='77' and parent['CFBundleShortVersionString']=='0.20.40'
 assert parent.get('CFBundleIcons',{}).get('CFBundlePrimaryIcon',{}).get('CFBundleIconName')=='AppIcon'
 assert (app/'Assets.car').is_file() and (app/'ScreenLinkCover.png').is_file()
 assert parent['NSSupportsLiveActivities']
