@@ -53,7 +53,11 @@ static int fixture_bind(int fd,const struct sockaddr *a,socklen_t length){
 - (void)serveClient:(int)fd generation:(NSUInteger)generation {
  if(!sl_tls_active(fd)){const char *response="HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nOK";send(fd,response,strlen(response),0);return;}
  char request[1024]={0};size_t used=0;while(used<sizeof request-1&&!strstr(request,"\r\n\r\n")){ssize_t n=sl_tls_read(fd,request+used,sizeof request-1-used);if(n<=0)return;used+=(size_t)n;}
- char *start=strstr(request,"X-ScreenLink-Health: ");if(!start)return;start+=strlen("X-ScreenLink-Health: ");char nonce[33];memcpy(nonce,start,32);nonce[32]=0;
+ NSString *healthChallenge=nil;
+ for(NSString *field in [[NSString stringWithUTF8String:request] componentsSeparatedByString:@"\r\n"]){
+ __PRODUCTION_HEALTH_HEADER_PARSE__
+ }
+ assert(sl_https_valid_challenge(healthChallenge.UTF8String));char nonce[33];memcpy(nonce,healthChallenge.UTF8String,33);
  assert(sl_https_health_allowed(1,1,"GET",0,"/local/https-health",nonce));
  if(atomic_load(&stallHTTPS)){usleep(450000);return;}
  char response[256];int size=snprintf(response,sizeof response,"HTTP/1.1 200 OK\r\nContent-Length: 32\r\n\r\n%s",nonce);sl_tls_write(fd,response,(size_t)size);
@@ -82,4 +86,6 @@ int main(int argc,char **argv){@autoreleasepool{
  puts("HTTPS_WATCHDOG_PASSED: exact production methods detect TLS response stall, rebind only HTTPS after two failures, preserve HTTP/approval/media/PiP/VPN, suppress on real HTTPS success, respect cooldown/stale generation/listener leases and stop cancellation.");return 0;
 }}
 '''
+header_parse=next(line for line in source.splitlines() if 'healthChallenge=[[field substringFromIndex:' in line)
+fixture=fixture.replace('__PRODUCTION_HEALTH_HEADER_PARSE__',header_parse)
 Path('build/https-watchdog-fixture.m').write_text(fixture)
