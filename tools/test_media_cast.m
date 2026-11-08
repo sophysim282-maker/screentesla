@@ -83,8 +83,11 @@ int main(void){@autoreleasepool{
     NSUInteger count=resources.count;
     assert(![rolling rewrite:@"#EXTM3U\nfile:///private/test\n" base:[NSURL URLWithString:owner] owner:owner epoch:epoch code:&rewriteCode]&&rewriteCode==422&&resources.count==count);
     assert(![rolling rewrite:@"#EXTM3U\nhttps://example.test/a\n" base:[NSURL URLWithString:owner] owner:owner epoch:@"stale" code:&rewriteCode]&&rewriteCode==410&&resources.count==count);
-    NSMutableString *oversized=[NSMutableString stringWithString:@"#EXTM3U\n"];for(NSUInteger i=0;i<4100;i++)[oversized appendFormat:@"https://example.test/b/%lu\n",(unsigned long)i];
+    NSMutableString *oversized=[NSMutableString stringWithString:@"#EXTM3U\n"];for(NSUInteger i=0;i<16400;i++)[oversized appendFormat:@"https://example.test/b/%lu\n",(unsigned long)i]; /* build 81: app limit 16384 */
     assert(![rolling rewrite:oversized base:[NSURL URLWithString:owner] owner:owner epoch:epoch code:&rewriteCode]&&rewriteCode==503&&resources.count==count&&resources[pinned]);
+    // Build 81: a long video (~6000 segment references, as on the phone) now fits.
+    NSMutableString *longVideo=[NSMutableString stringWithString:@"#EXTM3U\n"];for(NSUInteger i=0;i<6000;i++)[longVideo appendFormat:@"https://example.test/long/%lu\n",(unsigned long)i];
+    assert([rolling rewrite:longVideo base:[NSURL URLWithString:owner] owner:owner epoch:epoch code:&rewriteCode]&&resources.count>=6000);
     [rolling stop];assert(!resources.count&&!flights.count&&!retired.count);
     puts("Registry lifecycle passed: 6500 unique URLs, current seek links, stable UUID reloads, in-flight pinning, bounded memory, transactional capacity and invalid/stale errors.");
     [media report:@{@"epoch":state[@"epoch"],@"command":@0,@"position":@4,@"duration":@10,@"ready":@YES,@"paused":@NO}];assert(media.videoIsLive);assert([event(fds[1])[@"state"] isEqual:@"playing"]);
