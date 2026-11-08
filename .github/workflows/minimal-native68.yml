@@ -1,0 +1,66 @@
+name: Build68 native verification and phone preview
+on:
+  push:
+    branches: ['release/build68-minimal-viewer']
+    paths: ['.github/workflows/minimal-native68.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native:
+    runs-on: macos-15-intel
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 36cb08744c7360144b8e6a2ccce9540142117717
+          persist-credentials: false
+      - name: Native phone controls and denied-discovery regression
+        run: |
+          mkdir -p build
+          curl --fail --location https://raw.githubusercontent.com/sophysim282-maker/screentesla/73042462800d6e184a648d833acbe0e19082dcf5/App/VPNDiscovery.m -o /tmp/build67-discovery.m
+          xcrun --sdk macosx clang -fobjc-arc -fblocks -Itools/fixtures -IApp tools/test_discovery_recovery.m /tmp/build67-discovery.m -framework Foundation -o build/discovery-before
+          if build/discovery-before > build/discovery-before.txt 2>&1; then
+            echo 'Baseline unexpectedly recovered policy-denied discovery'; exit 1
+          fi
+          python3 -c "assert 'POLICY_DENIED_HANDLES_REUSED' in open('build/discovery-before.txt').read()"
+          xcrun --sdk macosx clang -fobjc-arc -fblocks -Itools/fixtures -IApp tools/test_discovery_recovery.m App/VPNDiscovery.m -framework Foundation -o build/discovery-after
+          build/discovery-after
+          xcrun --sdk macosx clang -Wall -Wextra -Werror -fobjc-arc -IApp tools/test_viewer_controls.m App/ViewerControls.m -framework Foundation -o build/viewer-controls
+          build/viewer-controls
+      - name: Verify build64 media engines remain unchanged
+        run: |
+          python3 - <<'PY'
+          import pathlib,urllib.request
+          base='https://raw.githubusercontent.com/sophysim282-maker/screentesla/0f24708601cb28fc30e328a97b4ff04909e4dd88/'
+          for file in ['App/CanvasPlayer.js','App/CanvasScreen.js','App/MediaCast.m','App/BoundedDownload.m','App/YouTubePiP.m','App/LocalVPN.m','Tunnel/PacketTunnelProvider.m','Widgets/ScreenLinkWidgets.swift','App/LocalTLS.c','App/LocalViewerApproval.m']:
+              assert urllib.request.urlopen(base+file,timeout=30).read()==pathlib.Path(file).read_bytes(),'Accepted build64 implementation changed: '+file
+          print('Build64 media delivery, decoding, audio scheduler, TLS, PiP, VPN and widgets unchanged; no build66 watchdog')
+          PY
+      - name: Cloud Mac tests and iPhone compilation
+        run: |
+          brew install xcodegen autoconf automake libtool openssl@3
+          bash tools/build.sh
+          xcrun --sdk macosx clang -fobjc-arc -IShared tools/test_widget_routes.m -framework Foundation -o build/widget-routes
+          build/widget-routes
+      - name: Verify native phone UI actions and capture preview
+        run: bash tools/preview_phone68.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ScreenLink-build68-phone-previews
+          path: build/ui/*.png
+          retention-days: 7
+      - name: Verify raw package has no personalized identity
+        run: |
+          python3 - <<'PY'
+          import zipfile
+          with zipfile.ZipFile('build/ScreenLink-AirPlay-Lab-unsigned.ipa') as z:
+              assert not any('/PrivateTLS/' in n or n.endswith('.mobileprovision') for n in z.namelist())
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ScreenLink-build68-RAW-NOT-FOR-INSTALL
+          path: build/ScreenLink-AirPlay-Lab-unsigned.ipa
+          retention-days: 2
+
