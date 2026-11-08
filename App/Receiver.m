@@ -607,7 +607,7 @@ static NSArray *txtStrings(const char *bytes,int length) {
         NSRange separator=[field rangeOfString:@":"];if(separator.location!=NSNotFound){NSString *name=[[field substringToIndex:separator.location] lowercaseString];if([@[@"upgrade",@"connection",@"sec-websocket-key",@"sec-websocket-version",@"origin",@"host"] containsObject:name]){if(wsHeaders[name])duplicateWS=YES;wsHeaders[name]=[[field substringFromIndex:NSMaxRange(separator)] stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceCharacterSet];}}
 
         if([field.lowercaseString hasPrefix:@"host:"])host=[[[field substringFromIndex:5] stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceCharacterSet] lowercaseString];
-        if([field.lowercaseString hasPrefix:@"x-screenlink-health:"])healthChallenge=[[field substringFromIndex:19] stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceCharacterSet];
+        if([field.lowercaseString hasPrefix:@"x-screenlink-health:"])healthChallenge=[[field substringFromIndex:@"x-screenlink-health:".length] stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceCharacterSet];
         if([field.lowercaseString hasPrefix:@"x-screenlink-control:"] && [[[field substringFromIndex:21] stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceCharacterSet] isEqual:@"app"])localControl=YES;
         if([field.lowercaseString hasPrefix:@"content-length:"])bodyLength=(NSUInteger)MAX(0,[[field substringFromIndex:15] integerValue]);
         if([field.lowercaseString hasPrefix:@"origin:"])origin=[[field substringFromIndex:7] stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceCharacterSet];
