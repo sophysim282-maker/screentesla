@@ -86,7 +86,25 @@ jobs:
               metadata=[n for n in names if n.startswith(prefix+'Metadata.appintents/') and not n.endswith('/')]
               assert metadata and any(b'CarPlayerIntent' in z.read(n) for n in metadata), 'Missing compiled widget intent metadata'
           PY
-      - uses: actions/upload-artifact@v4
+      - name: Add website certificate from private Secrets
+        id: identity
+        env:
+          SCREENLINK_TLS_FULLCHAIN: ${{ secrets.SCREENLINK_TLS_FULLCHAIN }}
+          SCREENLINK_TLS_KEY: ${{ secrets.SCREENLINK_TLS_KEY }}
+          REPO_PRIVATE: ${{ github.event.repository.private }}
+        run: |
+          if [ -z "$SCREENLINK_TLS_KEY" ] || [ -z "$SCREENLINK_TLS_FULLCHAIN" ]; then echo "No certificate Secrets: uploading the raw IPA."; echo "ready=false" >> "$GITHUB_OUTPUT"; exit 0; fi
+          if [ "$REPO_PRIVATE" != "true" ]; then echo "Repository is public: refusing to put the certificate in a download." >&2; exit 1; fi
+          OPENSSL="$(brew --prefix openssl@3)/bin/openssl" python3 tools/add_identity_ci.py build/ScreenLink-AirPlay-Lab-unsigned.ipa build/ScreenLink-ready-to-sign.ipa
+          echo "ready=true" >> "$GITHUB_OUTPUT"
+      - if: steps.identity.outputs.ready == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ScreenLink-build74-READY-TO-SIGN
+          path: build/ScreenLink-ready-to-sign.ipa
+          retention-days: 2
+      - if: steps.identity.outputs.ready != 'true'
+        uses: actions/upload-artifact@v4
         with:
           name: ScreenLink-build74-RAW-NOT-FOR-INSTALL
           path: build/ScreenLink-AirPlay-Lab-unsigned.ipa
