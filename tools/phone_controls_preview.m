@@ -18,7 +18,7 @@ static UIView *find(UIView *v,NSString *identifier){if([v.accessibilityIdentifie
   UISegmentedControl *quality=(id)find(home,@"player.quality");UISlider *volume=(id)find(home,@"player.volume"),*seek=(id)find(home,@"player.seek");UIButton *pause=(id)find(home,@"player.pause");
   assert(quality.enabled&&volume.enabled&&seek.enabled&&pause.enabled);
   quality.selectedSegmentIndex=1;[quality sendActionsForControlEvents:UIControlEventValueChanged];volume.value=.4;[volume sendActionsForControlEvents:UIControlEventValueChanged];seek.value=.5;[seek sendActionsForControlEvents:UIControlEventValueChanged];[pause sendActionsForControlEvents:UIControlEventTouchUpInside];
-  assert(actions.count==4&&[actions[0][@"quality"] isEqual:@"720"]&&fabs([actions[1][@"volume"] doubleValue]-.4)<.01&&[actions[2][@"seek"] doubleValue]==150&&[actions[3][@"paused"] boolValue]);
+  assert(actions.count==4&&[actions[0][@"quality"] isEqual:@"720"]&&fabs([actions[1][@"volume"] doubleValue]-.4)<.01&&[actions[2][@"seek"] doubleValue]==150&&[actions[3][@"paused"] boolValue]&&CFGetTypeID((__bridge CFTypeRef)actions[3][@"paused"])==CFBooleanGetTypeID());
   UIScrollView *scroll=(id)find(home,@"home.scroll");[scroll setContentOffset:CGPointMake(0,560) animated:NO];
   NSString *marker=[NSHomeDirectory() stringByAppendingPathComponent:@"Documents/phone-controls-passed.txt"];[@"PHONE_UI_PASSED" writeToFile:marker atomically:YES encoding:NSUTF8StringEncoding error:nil];
  });return YES;
