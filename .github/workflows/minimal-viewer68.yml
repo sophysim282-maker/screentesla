@@ -14,7 +14,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: sophysim282-maker/screentesla
-          ref: 73a90ebbb166c075c7e0d0311ffb462cc92608bc
+          ref: 4837b152813df761d70eb26e73dc0a3fd1399dbb
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
@@ -70,7 +70,6 @@ jobs:
           retention-days: 7
 
   native:
-    needs: browser
     runs-on: macos-15-intel
     timeout-minutes: 40
     steps:
