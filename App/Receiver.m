@@ -37,6 +37,8 @@ static SLWebWatch webWatch;
 static double webBusyLogAt,webTLSLogAt,webHostLogAt;
 static atomic_int webOpenConnections;
 static __weak Receiver *webWatchOwner;
+// Build 80: set by serveClient when an HTTPS reply may keep its connection open.
+static _Thread_local BOOL webKeepAlive;
 extern void sl_dnssd_set_external(dnssd_t *, int);
 extern const char *sl_dnssd_get_raop_txt(dnssd_t *, int *);
 _Static_assert(kVTInvalidSessionErr == -12903, "Check decoder error mapping against the iOS SDK");
@@ -574,7 +576,11 @@ static NSArray *txtStrings(const char *bytes,int length) {
             dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED,0),^{
                 struct timeval timeout={5,0};setsockopt(client,SOL_SOCKET,SO_RCVTIMEO,&timeout,sizeof timeout);setsockopt(client,SOL_SOCKET,SO_SNDTIMEO,&timeout,sizeof timeout);
                 int one=1;setsockopt(client,SOL_SOCKET,SO_NOSIGPIPE,&one,sizeof one);
-                @try {@autoreleasepool {atomic_fetch_add(&webOpenConnections,1);if(!context || sl_tls_begin(context,client))[self serveClient:client generation:generation];else [self noteHandshakeFailure:client];}}
+                @try {@autoreleasepool {atomic_fetch_add(&webOpenConnections,1);if(!context || sl_tls_begin(context,client)){
+                    // Build 80: reuse open HTTPS connections, so the car needs far fewer name
+                    // lookups and secure handshakes (each failed lookup silenced the website).
+                    for(int served=0;served<500;served++){webKeepAlive=NO;@autoreleasepool{[self serveClient:client generation:generation];}if(!webKeepAlive||!sl_tls_wait_readable(client,10000))break;}
+                }else [self noteHandshakeFailure:client];}}
                 @finally {atomic_fetch_sub(&webOpenConnections,1);if(context){sl_tls_end();SSL_CTX_free(context);}close(client);dispatch_semaphore_signal(self->_httpSlots);}
             });
         }
@@ -753,8 +759,9 @@ static NSArray *txtStrings(const char *bytes,int length) {
         if(!body){status=@"500 Internal Server Error";body=[@"Viewer resource missing" dataUsingEncoding:NSUTF8StringEncoding];}
     } else {status=@"404 Not Found";}
     if(aliasClient && ([url.path isEqual:@"/media/state"] || [url.path hasPrefix:@"/media/resource/"]))body=SLRetokenLocalMediaData(body,mime,self.token,token);
-    NSString *header=[NSString stringWithFormat:@"HTTP/1.1 %@\r\nContent-Type: %@\r\nContent-Length: %lu\r\nCache-Control: no-store\r\nConnection: close\r\nX-Content-Type-Options: nosniff\r\n%@\r\n",status,mime,(unsigned long)body.length,extra];
-    NSData *h=[header dataUsingEncoding:NSUTF8StringEncoding];if(send_all(client,h.bytes,h.length))send_all(client,body.bytes,body.length);
+    BOOL keep=secureTransport&&current&&parts.count>2&&[parts[2] hasPrefix:@"HTTP/1.1"]&&![[wsHeaders[@"connection"] lowercaseString] containsString:@"close"];
+    NSString *header=[NSString stringWithFormat:@"HTTP/1.1 %@\r\nContent-Type: %@\r\nContent-Length: %lu\r\nCache-Control: no-store\r\n%@X-Content-Type-Options: nosniff\r\n%@\r\n",status,mime,(unsigned long)body.length,keep?@"Connection: keep-alive\r\nKeep-Alive: timeout=10, max=500\r\n":@"Connection: close\r\n",extra];
+    NSData *h=[header dataUsingEncoding:NSUTF8StringEncoding];if(send_all(client,h.bytes,h.length)&&send_all(client,body.bytes,body.length))webKeepAlive=keep;
 }
 - (void)screenSocket:(int)client generation:(NSUInteger)generation token:(NSString *)token peer:(NSString *)peer {
     NSString *epoch=nil;uint64_t after=0;

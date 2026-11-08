@@ -3,6 +3,7 @@
 #include <sys/socket.h>
 #include <limits.h>
 #include <errno.h>
+#include <poll.h>
 #include <stdio.h>
 #include <openssl/err.h>
 #ifdef SSL_R_UNEXPECTED_EOF_WHILE_READING
@@ -67,4 +68,11 @@ int sl_tls_identity_check(const char *chain,const char *key,char *detail,size_t 
  if(problem){snprintf(detail,size,"%s",problem);}
  else{BIO *bio=BIO_new(BIO_s_mem());char when[64]="unknown date";if(bio&&ASN1_TIME_print(bio,X509_get0_notAfter(cert))){int n=BIO_read(bio,when,(int)sizeof when-1);if(n>0)when[n]=0;}BIO_free(bio);snprintf(detail,size,"Certificate for car.tesla4khmer.com, valid until %s.",when);}
  SSL_CTX_free(ctx);ERR_clear_error();return problem==NULL;
+}
+// Build 80: keep-alive. Waits up to ms for the next request bytes (TLS-buffered or socket).
+int sl_tls_wait_readable(int fd,int ms){
+ if(sl_tls_active(fd)&&SSL_pending(session)>0)return 1;
+ struct pollfd p={fd,POLLIN,0};int r;
+ do r=poll(&p,1,ms);while(r<0&&errno==EINTR);
+ return r>0&&(p.revents&(POLLIN|POLLHUP))&&!(p.revents&POLLNVAL);
 }
