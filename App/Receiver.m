@@ -40,7 +40,8 @@ static __weak Receiver *webWatchOwner;
 // Build 80: set by serveClient when an HTTPS reply may keep its connection open.
 static _Thread_local BOOL webKeepAlive;
 // Build 82: kept-open website connections used all 12 slots ("WEBSITE BUSY") and PiP's
-// own media requests were refused. The app has 32 slots; idle connections close after 5 s.
+// own media requests were refused. The app has 32 slots. Build 83: idle website connections
+// stay open 2 min, so the phone (almost) never closes one the browser is about to reuse.
 #if SL_BROADCAST_EXTENSION
 #define SL_HTTP_SLOTS 12
 #else
@@ -586,7 +587,7 @@ static NSArray *txtStrings(const char *bytes,int length) {
                 @try {@autoreleasepool {atomic_fetch_add(&webOpenConnections,1);if(!context || sl_tls_begin(context,client)){
                     // Build 80: reuse open HTTPS connections, so the car needs far fewer name
                     // lookups and secure handshakes (each failed lookup silenced the website).
-                    for(int served=0;served<500;served++){webKeepAlive=NO;@autoreleasepool{[self serveClient:client generation:generation];}if(!webKeepAlive||!sl_tls_wait_readable(client,5000))break;}
+                    for(int served=0;served<1000;served++){webKeepAlive=NO;@autoreleasepool{[self serveClient:client generation:generation];}if(!webKeepAlive||!sl_tls_wait_readable(client,120000))break;}
                 }else [self noteHandshakeFailure:client];}}
                 @finally {atomic_fetch_sub(&webOpenConnections,1);if(context){sl_tls_end();SSL_CTX_free(context);}close(client);dispatch_semaphore_signal(self->_httpSlots);}
             });
@@ -767,7 +768,7 @@ static NSArray *txtStrings(const char *bytes,int length) {
     } else {status=@"404 Not Found";}
     if(aliasClient && ([url.path isEqual:@"/media/state"] || [url.path hasPrefix:@"/media/resource/"]))body=SLRetokenLocalMediaData(body,mime,self.token,token);
     BOOL keep=secureTransport&&current&&parts.count>2&&[parts[2] hasPrefix:@"HTTP/1.1"]&&![[wsHeaders[@"connection"] lowercaseString] containsString:@"close"];
-    NSString *header=[NSString stringWithFormat:@"HTTP/1.1 %@\r\nContent-Type: %@\r\nContent-Length: %lu\r\nCache-Control: no-store\r\n%@X-Content-Type-Options: nosniff\r\n%@\r\n",status,mime,(unsigned long)body.length,keep?@"Connection: keep-alive\r\nKeep-Alive: timeout=5, max=500\r\n":@"Connection: close\r\n",extra];
+    NSString *header=[NSString stringWithFormat:@"HTTP/1.1 %@\r\nContent-Type: %@\r\nContent-Length: %lu\r\nCache-Control: no-store\r\n%@X-Content-Type-Options: nosniff\r\n%@\r\n",status,mime,(unsigned long)body.length,keep?@"Connection: keep-alive\r\nKeep-Alive: timeout=120, max=1000\r\n":@"Connection: close\r\n",extra];
     NSData *h=[header dataUsingEncoding:NSUTF8StringEncoding];if(send_all(client,h.bytes,h.length)&&send_all(client,body.bytes,body.length))webKeepAlive=keep;
 }
 - (void)screenSocket:(int)client generation:(NSUInteger)generation token:(NSString *)token peer:(NSString *)peer {
