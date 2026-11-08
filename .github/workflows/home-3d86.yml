@@ -82,14 +82,6 @@ jobs:
           bash tools/build.sh
           xcrun --sdk macosx clang -fobjc-arc -IShared tools/test_widget_routes.m -framework Foundation -o build/widget-routes
           build/widget-routes
-      - name: Home preview in an iPhone simulator (motion video + screenshots)
-        run: bash tools/preview_home86.sh
-      - if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: ScreenLink-build86-HOME-PREVIEW
-          path: build/ui
-          retention-days: 7
       - name: Verify intent metadata and raw package
         run: |
           python3 - <<'PY'
@@ -127,3 +119,18 @@ jobs:
           name: ScreenLink-build86-RAW-NOT-FOR-INSTALL
           path: build/ScreenLink-AirPlay-Lab-unsigned.ipa
           retention-days: 2
+  preview:
+    runs-on: macos-15
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Home preview in an iPhone simulator (motion video + screenshots)
+        run: bash tools/preview_home86.sh
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ScreenLink-build86-HOME-PREVIEW
+          path: build/ui
+          retention-days: 7
