@@ -1,3 +1,6 @@
+#if defined(__APPLE__)
+#define _DARWIN_C_SOURCE
+#endif
 #define _POSIX_C_SOURCE 200809L
 #include "../App/LocalHTTPSProbe.h"
 #include "../App/LocalTLS.h"
@@ -28,7 +31,7 @@ static void *serve(void *arg){struct server *s=arg;for(unsigned i=0;i<s->rounds;
  sl_tls_end();close(fd);
  }close(s->fd);return NULL;}
 static SLHTTPSProbeResult run(SSL_CTX *ctx,const char *chain,int mode,unsigned timeout){
- int fd=socket(AF_INET,SOCK_STREAM,0);assert(fd>=0);struct sockaddr_in a={0};a.sin_family=AF_INET;a.sin_addr.s_addr=htonl(INADDR_LOOPBACK);assert(!bind(fd,(struct sockaddr *)&a,sizeof a));assert(!listen(fd,8));socklen_t len=sizeof a;assert(!getsockname(fd,(struct sockaddr *)&a,&len));
+ int fd=socket(AF_INET,SOCK_STREAM,0);assert(fd>=0);struct sockaddr_in a={0};a.sin_family=AF_INET;a.sin_addr.s_addr=htonl(0x7f000001u);assert(!bind(fd,(struct sockaddr *)&a,sizeof a));assert(!listen(fd,8));socklen_t len=sizeof a;assert(!getsockname(fd,(struct sockaddr *)&a,&len));
  struct server s={ctx,fd,mode,1};pthread_t t;assert(!pthread_create(&t,NULL,serve,&s));SLHTTPSProbeResult r=sl_https_probe(chain,ntohs(a.sin_port),timeout);pthread_join(t,NULL);return r;
 }
 int main(int argc,char **argv){assert(argc==4);signal(SIGPIPE,SIG_IGN);SSL_CTX *ctx=sl_tls_context(argv[1],argv[2]);assert(ctx);

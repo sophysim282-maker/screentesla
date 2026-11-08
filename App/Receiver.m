@@ -509,6 +509,7 @@ static NSArray *txtStrings(const char *bytes,int length) {
 - (BOOL)repairHTTPSListenerAtGeneration:(NSUInteger)generation serial:(NSUInteger)serial {
     @synchronized(self){
         if(!_running||!_httpsWatchdog||generation!=_generation||serial!=_httpsListenSerial)return NO;
+        if(_lastExternalHTTPSResponse>0&&NSProcessInfo.processInfo.systemUptime-_lastExternalHTTPSResponse<20)return NO;
         // Validate replacement identity before retiring any owned listener.
         NSString *directory=[NSBundle.mainBundle.bundlePath stringByAppendingPathComponent:@"PrivateTLS"];
         SSL_CTX *context=sl_tls_context([[directory stringByAppendingPathComponent:@"fullchain.pem"] fileSystemRepresentation],[[directory stringByAppendingPathComponent:@"private.key"] fileSystemRepresentation]);

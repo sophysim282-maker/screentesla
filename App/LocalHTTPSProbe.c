@@ -1,3 +1,6 @@
+#if defined(__APPLE__)
+#define _DARWIN_C_SOURCE
+#endif
 #define _POSIX_C_SOURCE 200809L
 #include "LocalHTTPSProbe.h"
 #include <openssl/ssl.h>
@@ -43,7 +46,7 @@ SLHTTPSProbeResult sl_https_probe(const char *chain,uint16_t port,unsigned timeo
  int one=1;setsockopt(fd,SOL_SOCKET,SO_NOSIGPIPE,&one,sizeof one);
 #endif
  int flags=fcntl(fd,F_GETFL,0);if(flags<0||fcntl(fd,F_SETFL,flags|O_NONBLOCK)<0){outcome=SLHTTPSConnect;goto done;}
- struct sockaddr_in address={0};address.sin_family=AF_INET;address.sin_port=htons(port);address.sin_addr.s_addr=htonl(INADDR_LOOPBACK);
+ struct sockaddr_in address={0};address.sin_family=AF_INET;address.sin_port=htons(port);address.sin_addr.s_addr=htonl(0x7f000001u);
  if(connect(fd,(struct sockaddr *)&address,sizeof address)!=0){if(errno!=EINPROGRESS){outcome=SLHTTPSConnect;goto done;}int status=ready(fd,POLLOUT,deadline);if(status<=0){outcome=status==0?SLHTTPSTimeout:SLHTTPSConnect;goto done;}int error=0;socklen_t length=sizeof error;if(getsockopt(fd,SOL_SOCKET,SO_ERROR,&error,&length)||error){outcome=SLHTTPSConnect;goto done;}}
  ssl=SSL_new(ctx);if(!ssl)goto done;SSL_set_fd(ssl,fd);if(SSL_set1_host(ssl,"car.tesla4khmer.com")!=1||SSL_set_tlsext_host_name(ssl,"car.tesla4khmer.com")!=1)goto done;
  for(;;){int result=SSL_connect(ssl);if(result==1)break;int wait=waitTLS(ssl,result,fd,deadline);if(wait<=0){outcome=wait==0?SLHTTPSTimeout:SLHTTPSHandshake;goto done;}}
