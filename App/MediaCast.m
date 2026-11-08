@@ -36,9 +36,17 @@ static BOOL sendBytes(int fd,NSData *data){const char *p=data.bytes;NSUInteger n
 - (void)log:(NSString *)text{if(self.status)self.status(text);}
 - (BOOL)active{[_ready lock];BOOL value=_active;[_ready unlock];return value;}
 - (BOOL)videoIsLive{[_ready lock];BOOL value=_active && _readyToPlay && NSProcessInfo.processInfo.systemUptime-_heartbeat<10;[_ready unlock];return value;}
+// Build 81: long YouTube videos send ~1000 segments per quality and 6 qualities; 4096
+// references filled up, PiP could not load ("MEDIA PLAYLIST CAPACITY"), and iOS then
+// suspended the app. The main app allows 16384; the memory-limited extension keeps 4096.
+#if SL_BROADCAST_EXTENSION
+#define SL_MEDIA_REGISTRY_LIMIT 4096
+#else
+#define SL_MEDIA_REGISTRY_LIMIT 16384
+#endif
 - (NSString *)registerURL:(NSString *)url{
     NSString *identifier=_identifiers[url];
-    if(!identifier){if(_resources.count>=4096)return nil;identifier=NSUUID.UUID.UUIDString;_resources[identifier]=url;_identifiers[url]=identifier;}
+    if(!identifier){if(_resources.count>=SL_MEDIA_REGISTRY_LIMIT)return nil;identifier=NSUUID.UUID.UUIDString;_resources[identifier]=url;_identifiers[url]=identifier;}
     return [NSString stringWithFormat:@"/media/resource/%@?token=%@",identifier,self.token];
 }
 // Registry mutation is serialized by _ready, and publication is transactional.
@@ -64,7 +72,7 @@ static BOOL sendBytes(int fd,NSData *data){const char *p=data.bytes;NSUInteger n
     for(NSDictionary *entry in _retiredLinks)[keep unionSet:entry[@"ids"]];
     NSSet *old=_playlistLinks[owner];double until=[_playlistTimes[owner] doubleValue]+30;BOOL retiring=old&&![old isEqual:next]&&until>now;
     if(retiring)[keep unionSet:old];
-    if(keep.count>4096||(!_playlistLinks[owner]&&_playlistLinks.count>=64)||(retiring&&_retiredLinks.count>=64)){
+    if(keep.count>SL_MEDIA_REGISTRY_LIMIT||(!_playlistLinks[owner]&&_playlistLinks.count>=64)||(retiring&&_retiredLinks.count>=64)){
         [_ready unlock];*code=503;[self log:@"MEDIA PLAYLIST CAPACITY: active/in-flight references fill bounded registry; retry after snapshot grace."];return nil;
     }
     if(retiring)[_retiredLinks addObject:@{@"ids":old,@"until":@(until)}];
