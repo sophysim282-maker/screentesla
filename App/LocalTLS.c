@@ -3,7 +3,15 @@
 #include <sys/socket.h>
 #include <limits.h>
 #include <errno.h>
+#include <stdio.h>
+#include <openssl/err.h>
+#ifdef SSL_R_UNEXPECTED_EOF_WHILE_READING
+#define SL_TLS_PEER_EOF(detail) (ERR_GET_REASON(detail)==SSL_R_UNEXPECTED_EOF_WHILE_READING)
+#else
+#define SL_TLS_PEER_EOF(detail) 0
+#endif
 static _Thread_local SSL *session;
+static _Thread_local char lastError[200];
 SSL_CTX *sl_tls_context(const char *chain,const char *key){
  SSL_CTX *ctx=SSL_CTX_new(TLS_server_method());if(!ctx)return NULL;
  SSL_CTX_set_min_proto_version(ctx,TLS1_2_VERSION);
@@ -21,7 +29,14 @@ int sl_tls_begin(SSL_CTX *ctx,int fd){
  session=SSL_new(ctx);if(!session)return 0;
  SSL_set_fd(session,fd);
  SSL_set_mode(session,SSL_MODE_ENABLE_PARTIAL_WRITE|SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER);
- if(SSL_accept(session)==1)return 1;
+ lastError[0]=0;
+ errno=0;int result=SSL_accept(session),saved=errno;if(result==1)return 1;
+ // Build 70: keep the reason for the website diagnostics log.
+ int code=SSL_get_error(session,result);unsigned long detail=ERR_get_error();char reason[120]="none";
+ if(detail)ERR_error_string_n(detail,reason,sizeof reason);
+ const char *kind=(code==SSL_ERROR_WANT_READ||code==SSL_ERROR_WANT_WRITE)?"timed out waiting for the browser":code==SSL_ERROR_SYSCALL?(saved==EAGAIN||saved==EWOULDBLOCK?"timed out waiting for the browser":(result==0||!saved?"browser closed the connection":"network error")):code==SSL_ERROR_SSL?(SL_TLS_PEER_EOF(detail)?"browser closed the connection":"TLS protocol error"):code==SSL_ERROR_ZERO_RETURN?"browser closed TLS":"other";
+ snprintf(lastError,sizeof lastError,"%s (ssl %d, errno %d, %s)",kind,code,saved,reason);
+ ERR_clear_error();
  sl_tls_end();return 0;
 }
 ssize_t sl_tls_read(int fd,void *bytes,size_t size){
@@ -36,3 +51,4 @@ ssize_t sl_tls_write(int fd,const void *bytes,size_t size){
  int n=SSL_write(session,bytes,(int)(size>INT_MAX?INT_MAX:size));if(n>0)return n;errno=EIO;return -1;
 }
 void sl_tls_end(void){if(session){SSL_free(session);session=NULL;}}
+const char *sl_tls_last_error(void){return lastError[0]?lastError:"unknown";}

@@ -13,6 +13,10 @@ mkdir -p build/tls-test
 "$openssl_root/bin/openssl" req -x509 -newkey rsa:2048 -nodes -days 1 -subj '/CN=car.tesla4khmer.com' -addext 'subjectAltName=DNS:car.tesla4khmer.com' -keyout build/tls-test/key.pem -out build/tls-test/cert.pem 2>/dev/null
 cc -std=c11 -Wall -Wextra -Werror -I"$openssl_root/include" -L"$openssl_root/lib" -Wl,-rpath,"$openssl_root/lib" tools/test_local_tls.c App/LocalTLS.c -lssl -lcrypto -pthread -o build/tls-test/test
 build/tls-test/test build/tls-test/cert.pem build/tls-test/key.pem
+cc -std=c11 -Wall -Wextra -Werror -I"$openssl_root/include" -L"$openssl_root/lib" -Wl,-rpath,"$openssl_root/lib" tools/test_tls_failure_reason.c App/LocalTLS.c -lssl -lcrypto -o build/tls-test/failure-reason
+build/tls-test/failure-reason build/tls-test/cert.pem build/tls-test/key.pem
+cc -std=c11 -Wall -Wextra -Werror tools/test_web_watch.c -o build/tls-test/web-watch
+build/tls-test/web-watch
 cc -std=c11 -Wall -Wextra -Werror -I"$openssl_root/include" -L"$openssl_root/lib" -Wl,-rpath,"$openssl_root/lib" tools/test_local_websocket.c App/LocalWebSocket.c -lcrypto -o build/test-local-websocket
 build/test-local-websocket
 mkdir -p build
@@ -150,7 +154,7 @@ assert w.get('CFBundlePackageType')=='XPC!'
 widget_binary=(widget/w['CFBundleExecutable']).read_bytes()
 for kind in [b'ScreenLink.Controls',b'ScreenLink.CarPlayer',b'CarPlayerIntent',b'start-youtube',b'disconnect-all']:
     assert kind in widget_binary, 'Widget control route/configuration missing: '+str(kind)
-assert parent['CFBundleVersion']=='69' and parent['CFBundleShortVersionString']=='0.20.32'
+assert parent['CFBundleVersion']=='70' and parent['CFBundleShortVersionString']=='0.20.33'
 assert parent.get('CFBundleIcons',{}).get('CFBundlePrimaryIcon',{}).get('CFBundleIconName')=='AppIcon'
 assert (app/'Assets.car').is_file() and (app/'ScreenLinkCover.png').is_file()
 assert parent['NSSupportsLiveActivities']

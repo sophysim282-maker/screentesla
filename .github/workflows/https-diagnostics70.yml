@@ -1,0 +1,58 @@
+name: Build70 website diagnostics
+on:
+  push:
+    branches: ['release/build70-https-diagnostics']
+    paths: ['.github/workflows/https-diagnostics70.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native:
+    runs-on: macos-15-intel
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify car page, reconnect and unchanged player behavior
+        run: |
+          node --check App/CanvasShell.js
+          node tools/test_live_reconnect.cjs
+          node tools/test_website_recovery.cjs App
+          node tools/test_video_fullscreen.cjs
+          node tools/test_video_lateness.cjs App/CanvasPlayer.js
+          node tools/test_video_continuity.cjs App/CanvasPlayer.js
+          git fetch --depth=1 origin release/build64-glass
+          git diff --exit-code FETCH_HEAD -- App/CanvasPlayer.js App/MediaCast.m
+      - name: Verify widget commands and loopback transport
+        run: |
+          mkdir -p build
+          xcrun --sdk macosx clang -Wall -Wextra -Werror -fobjc-arc -IApp tools/test_viewer_controls.m App/ViewerControls.m -framework Foundation -o build/viewer-controls
+          build/viewer-controls
+          xcrun --sdk macosx swiftc Shared/CarPlayerConnection.swift tools/test_car_player_connection.swift -o build/test-car-player-connection
+          python3 tools/test_car_player_connection.py
+      - name: Compile and verify iPhone package on cloud Mac
+        run: |
+          brew install xcodegen autoconf automake libtool openssl@3
+          bash tools/build.sh
+          xcrun --sdk macosx clang -fobjc-arc -IShared tools/test_widget_routes.m -framework Foundation -o build/widget-routes
+          build/widget-routes
+      - name: Verify intent metadata and raw package
+        run: |
+          python3 - <<'PY'
+          import plistlib,zipfile
+          with zipfile.ZipFile('build/ScreenLink-AirPlay-Lab-unsigned.ipa') as z:
+              names=z.namelist()
+              assert not any('/PrivateTLS/' in n or n.endswith('.mobileprovision') for n in names)
+              widget=next(n for n in names if n.endswith('/ScreenLinkWidgets.appex/Info.plist'))
+              plist=plistlib.loads(z.read(widget))
+              assert plist['NSAppTransportSecurity']['NSExceptionDomains']['127.0.0.1']['NSExceptionAllowsInsecureHTTPLoads']
+              prefix=widget.removesuffix('Info.plist')
+              metadata=[n for n in names if n.startswith(prefix+'Metadata.appintents/') and not n.endswith('/')]
+              assert metadata and any(b'CarPlayerIntent' in z.read(n) for n in metadata), 'Missing compiled widget intent metadata'
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ScreenLink-build70-RAW-NOT-FOR-INSTALL
+          path: build/ScreenLink-AirPlay-Lab-unsigned.ipa
+          retention-days: 2

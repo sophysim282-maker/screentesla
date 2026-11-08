@@ -27,6 +27,15 @@
 #import <unistd.h>
 #import "raop.h"
 #import <netinet/tcp.h>
+#import "WebWatch.h"
+#import <pthread.h>
+#import <stdatomic.h>
+// Build 70 website diagnostics: process-wide, logging only.
+static pthread_mutex_t webWatchLock=PTHREAD_MUTEX_INITIALIZER;
+static SLWebWatch webWatch;
+static double webBusyLogAt,webTLSLogAt,webHostLogAt;
+static atomic_int webOpenConnections;
+static __weak Receiver *webWatchOwner;
 extern void sl_dnssd_set_external(dnssd_t *, int);
 extern const char *sl_dnssd_get_raop_txt(dnssd_t *, int *);
 _Static_assert(kVTInvalidSessionErr == -12903, "Check decoder error mapping against the iOS SDK");
@@ -175,6 +184,46 @@ static SLVideoSettings videoSettings(SLVideoProfile profile) {
     }
 }
 @implementation Receiver
+- (void)resetWebWatch {pthread_mutex_lock(&webWatchLock);memset(&webWatch,0,sizeof webWatch);webBusyLogAt=webTLSLogAt=webHostLogAt=0;pthread_mutex_unlock(&webWatchLock);}
+- (void)startWebWatchTimer {
+    static dispatch_source_t timer;static dispatch_once_t once;webWatchOwner=self;
+    dispatch_once(&once,^{
+        timer=dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER,0,0,dispatch_get_global_queue(QOS_CLASS_UTILITY,0));
+        dispatch_source_set_timer(timer,dispatch_time(DISPATCH_TIME_NOW,2*NSEC_PER_SEC),2*NSEC_PER_SEC,NSEC_PER_SEC/2);
+        dispatch_source_set_event_handler(timer,^{
+            Receiver *owner=webWatchOwner;if(!owner||!owner.isRunning)return;
+            pthread_mutex_lock(&webWatchLock);
+            BOOL report=sl_web_watch_tick(&webWatch,NSProcessInfo.processInfo.systemUptime,6);
+            unsigned long http=webWatch.http-webWatch.httpMark,tls=webWatch.tlsFailures-webWatch.tlsMark,busy=webWatch.busy-webWatch.busyMark,host=webWatch.wrongHost-webWatch.wrongHostMark;
+            pthread_mutex_unlock(&webWatchLock);
+            if(report)[owner emit:[NSString stringWithFormat:@"WEBSITE SILENT: no HTTPS request from the car for 6 s. Since its last HTTPS request: %lu HTTP (240.3.3.3) requests, %lu HTTPS handshake failures, %lu wrong-address HTTPS requests, %lu connections refused because all 12 slots were busy; %d connections open now. If the HTTPS numbers are all 0, the car is not reaching the phone over HTTPS (name lookup or network). Before stopping, open https://car.tesla4khmer.com/capabilities?check=1 on the car and copy this log.",http,tls,host,busy,atomic_load(&webOpenConnections)]];
+        });
+        dispatch_resume(timer);
+    });
+}
+- (void)noteWebBusy:(BOOL)secure {
+    double now=NSProcessInfo.processInfo.systemUptime;
+    pthread_mutex_lock(&webWatchLock);unsigned long total=++webWatch.busy;BOOL log=sl_web_watch_allow(&webBusyLogAt,now,5);pthread_mutex_unlock(&webWatchLock);
+    if(log)[self emit:[NSString stringWithFormat:@"WEBSITE BUSY: all 12 phone connection slots in use; closed a new %@ connection without answering (%lu refused so far, %d open).",secure?@"HTTPS":@"HTTP",total,atomic_load(&webOpenConnections)]];
+}
+- (void)noteHandshakeFailure:(int)client {
+    struct sockaddr_in peer={0};socklen_t size=sizeof peer;char address[INET_ADDRSTRLEN]="unknown";
+    if(getpeername(client,(struct sockaddr *)&peer,&size)==0&&peer.sin_family==AF_INET)inet_ntop(AF_INET,&peer.sin_addr,address,sizeof address);
+    NSString *reason=[NSString stringWithUTF8String:sl_tls_last_error()]?:@"unknown";
+    double now=NSProcessInfo.processInfo.systemUptime;
+    pthread_mutex_lock(&webWatchLock);unsigned long total=++webWatch.tlsFailures;BOOL log=sl_web_watch_allow(&webTLSLogAt,now,5);pthread_mutex_unlock(&webWatchLock);
+    if(log)[self emit:[NSString stringWithFormat:@"HTTPS HANDSHAKE FAILED from %s: %@ (%lu so far). A few from browser pre-connections are normal; many in a row mean the secure connection itself is failing.",address,reason,total]];
+}
+- (void)noteWrongHost:(NSString *)host {
+    double now=NSProcessInfo.processInfo.systemUptime;
+    pthread_mutex_lock(&webWatchLock);unsigned long total=++webWatch.wrongHost;BOOL log=sl_web_watch_allow(&webHostLogAt,now,5);pthread_mutex_unlock(&webWatchLock);
+    if(log)[self emit:[NSString stringWithFormat:@"HTTPS REQUEST REFUSED: address '%@' is not car.tesla4khmer.com (%lu so far).",host?:@"(none)",total]];
+}
+- (void)noteSecureRequest {
+    pthread_mutex_lock(&webWatchLock);double gap=sl_web_watch_secure(&webWatch,NSProcessInfo.processInfo.systemUptime);pthread_mutex_unlock(&webWatchLock);
+    if(gap>=0)[self emit:[NSString stringWithFormat:@"WEBSITE BACK: car HTTPS requests resumed after %.0f s of silence.",gap]];
+}
+- (void)noteHTTPRequest {pthread_mutex_lock(&webWatchLock);webWatch.http++;pthread_mutex_unlock(&webWatchLock);}
 - (instancetype)init { if((self=[super init])) { _socket=-1;_httpsSocket=-1;_localViewer=[LocalViewerApproval new];_h264=[H264Stream new];_media=[MediaCast new];_viewerControls=[ViewerControls new];
 #if SL_BROADCAST_EXTENSION
         _h264=[[H264Stream alloc]initWithMaxBytes:2*1024*1024 packets:90];_screenStream=[[H264Stream alloc]initWithMaxBytes:3*1024*1024 packets:120];_broadcastLog=[NSMutableArray array];_appBackgrounded=YES;_compressedOnlyInBackground=YES;
@@ -485,6 +534,7 @@ static NSArray *txtStrings(const char *bytes,int length) {
     return [self resumeWebListeners]&&healthy;
 }
 - (BOOL)startWeb {
+    [self resetWebWatch];[self startWebWatchTimer];
     if(![self startListener:8080 context:NULL])return NO;
     NSString *directory=[NSBundle.mainBundle.bundlePath stringByAppendingPathComponent:@"PrivateTLS"];
     SSL_CTX *context=sl_tls_context([[directory stringByAppendingPathComponent:@"fullchain.pem"] fileSystemRepresentation],[[directory stringByAppendingPathComponent:@"private.key"] fileSystemRepresentation]);
@@ -511,13 +561,13 @@ static NSArray *txtStrings(const char *bytes,int length) {
                 if(errno==EINTR||errno==EAGAIN||errno==EWOULDBLOCK||errno==ECONNABORTED)continue;
                 [self emit:[NSString stringWithFormat:@"LOCAL LISTENER STOPPED: port %u, accept errno %d; foreground will repair it.",port,errno]];break;
             }
-            if(dispatch_semaphore_wait(self->_httpSlots,DISPATCH_TIME_NOW)!=0){close(client);continue;}
+            if(dispatch_semaphore_wait(self->_httpSlots,DISPATCH_TIME_NOW)!=0){close(client);[self noteWebBusy:context!=NULL];continue;}
             if(context)SSL_CTX_up_ref(context);
             dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED,0),^{
                 struct timeval timeout={5,0};setsockopt(client,SOL_SOCKET,SO_RCVTIMEO,&timeout,sizeof timeout);setsockopt(client,SOL_SOCKET,SO_SNDTIMEO,&timeout,sizeof timeout);
                 int one=1;setsockopt(client,SOL_SOCKET,SO_NOSIGPIPE,&one,sizeof one);
-                @try {@autoreleasepool {if(!context || sl_tls_begin(context,client))[self serveClient:client generation:generation];}}
-                @finally {if(context){sl_tls_end();SSL_CTX_free(context);}close(client);dispatch_semaphore_signal(self->_httpSlots);}
+                @try {@autoreleasepool {atomic_fetch_add(&webOpenConnections,1);if(!context || sl_tls_begin(context,client))[self serveClient:client generation:generation];else [self noteHandshakeFailure:client];}}
+                @finally {atomic_fetch_sub(&webOpenConnections,1);if(context){sl_tls_end();SSL_CTX_free(context);}close(client);dispatch_semaphore_signal(self->_httpSlots);}
             });
         }
         @synchronized(self){
@@ -558,11 +608,13 @@ static NSArray *txtStrings(const char *bytes,int length) {
         if([field.lowercaseString hasPrefix:@"range:"])byteRange=[[field substringFromIndex:6] stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceCharacterSet];
     }
     BOOL secureTransport=sl_tls_active(client);
-    if(secureTransport && ![@[@"car.tesla4khmer.com",@"car.tesla4khmer.com:443"] containsObject:host])return;
+    if(secureTransport && ![@[@"car.tesla4khmer.com",@"car.tesla4khmer.com:443"] containsObject:host]){[self noteWrongHost:host];return;}
+    if(secureTransport)[self noteSecureRequest];
     NSString *expectedOrigin=secureTransport?@"https://car.tesla4khmer.com":@"http://240.3.3.3:8080";
     if(bodyLength>8192)return;
     while(request.length-bodyOffset<bodyLength){ssize_t n=sl_tls_read(client,buffer,MIN(sizeof buffer,bodyLength-(request.length-bodyOffset)));if(n<=0)return;[request appendBytes:buffer length:n];}
     struct sockaddr_in peer={0};socklen_t peerSize=sizeof peer;BOOL loopback=getpeername(client,(struct sockaddr *)&peer,&peerSize)==0 && peer.sin_family==AF_INET && (ntohl(peer.sin_addr.s_addr)>>24)==127;
+    if(!secureTransport && !loopback)[self noteHTTPRequest];
     BOOL localOwner=loopback && localControl && [parts.firstObject isEqual:@"GET"] && [url.path isEqual:@"/local/owner"];
     BOOL localStop=loopback && localControl && [parts.firstObject isEqual:@"POST"] && [url.path isEqual:@"/local/broadcast/stop"];
     BOOL localRTC=loopback&&localControl&&[url.path hasPrefix:@"/local/rtc/"]&&_screenStream!=nil&&([parts.firstObject isEqual:@"GET"]||[parts.firstObject isEqual:@"POST"]);
