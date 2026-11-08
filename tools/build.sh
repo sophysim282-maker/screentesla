@@ -13,6 +13,17 @@ mkdir -p build/tls-test
 "$openssl_root/bin/openssl" req -x509 -newkey rsa:2048 -nodes -days 1 -subj '/CN=car.tesla4khmer.com' -addext 'subjectAltName=DNS:car.tesla4khmer.com' -keyout build/tls-test/key.pem -out build/tls-test/cert.pem 2>/dev/null
 cc -std=c11 -Wall -Wextra -Werror -I"$openssl_root/include" -L"$openssl_root/lib" -Wl,-rpath,"$openssl_root/lib" tools/test_local_tls.c App/LocalTLS.c -lssl -lcrypto -pthread -o build/tls-test/test
 build/tls-test/test build/tls-test/cert.pem build/tls-test/key.pem
+"$openssl_root/bin/openssl" req -x509 -newkey rsa:2048 -nodes -days 1 -subj '/CN=car.tesla4khmer.com' -addext 'subjectAltName=DNS:car.tesla4khmer.com' -keyout build/tls-test/other-key.pem -out build/tls-test/other-cert.pem 2>/dev/null
+cc -std=c11 -Wall -Wextra -Werror -I"$openssl_root/include" -L"$openssl_root/lib" -Wl,-rpath,"$openssl_root/lib" tools/test_https_probe.c App/LocalHTTPSProbe.c App/LocalTLS.c -lssl -lcrypto -pthread -o build/tls-test/probe
+build/tls-test/probe build/tls-test/cert.pem build/tls-test/key.pem build/tls-test/other-cert.pem
+mkdir -p build/https-fixture/PrivateTLS
+cp build/tls-test/cert.pem build/https-fixture/PrivateTLS/fullchain.pem
+cp build/tls-test/key.pem build/https-fixture/PrivateTLS/private.key
+python3 tools/create_https_watchdog_fixture.py
+cc -std=c11 -Wall -Wextra -Werror -I"$openssl_root/include" -c App/LocalHTTPSProbe.c -o build/tls-test/probe.o
+cc -std=c11 -Wall -Wextra -Werror -I"$openssl_root/include" -c App/LocalTLS.c -o build/tls-test/tls.o
+xcrun --sdk macosx clang -fobjc-arc -fblocks -Wall -Wextra -Wno-unused-parameter -IApp -I"$openssl_root/include" -L"$openssl_root/lib" -Wl,-rpath,"$openssl_root/lib" build/https-watchdog-fixture.m build/tls-test/probe.o build/tls-test/tls.o -framework Foundation -lssl -lcrypto -o build/tls-test/watchdog
+build/tls-test/watchdog "$PWD/build/https-fixture"
 cc -std=c11 -Wall -Wextra -Werror -I"$openssl_root/include" -L"$openssl_root/lib" -Wl,-rpath,"$openssl_root/lib" tools/test_local_websocket.c App/LocalWebSocket.c -lcrypto -o build/test-local-websocket
 build/test-local-websocket
 mkdir -p build
@@ -150,7 +161,7 @@ assert w.get('CFBundlePackageType')=='XPC!'
 widget_binary=(widget/w['CFBundleExecutable']).read_bytes()
 for kind in [b'ScreenLink.Controls',b'start-youtube',b'disconnect-all']:
     assert kind in widget_binary, 'Widget control route/configuration missing: '+str(kind)
-assert parent['CFBundleVersion']=='65' and parent['CFBundleShortVersionString']=='0.20.28'
+assert parent['CFBundleVersion']=='66' and parent['CFBundleShortVersionString']=='0.20.29'
 assert parent.get('CFBundleIcons',{}).get('CFBundlePrimaryIcon',{}).get('CFBundleIconName')=='AppIcon'
 assert (app/'Assets.car').is_file() and (app/'ScreenLinkCover.png').is_file()
 assert parent['NSSupportsLiveActivities']
@@ -160,6 +171,7 @@ print('Existing extensions:', info['CFBundleIdentifier'],b['CFBundleIdentifier']
 VERIFY_VPN
 (cd build && zip -qry ScreenLink-AirPlay-Lab-unsigned.ipa Payload)
 echo 'Unsigned IPA built. Free signing still required. Same-phone AirPlay has NOT been tested by this build.'
+
 
 
 

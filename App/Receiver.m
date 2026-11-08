@@ -1,5 +1,6 @@
 #import "Receiver.h"
 #import "LocalTLS.h"
+#import "LocalHTTPSProbe.h"
 #import "LocalWebSocket.h"
 #import "VPNDiscovery.h"
 #import "AnnexB.h"
@@ -58,6 +59,11 @@ _Static_assert(kVTInvalidSessionErr == -12903, "Check decoder error mapping agai
     BOOL _running;
     BOOL _httpAccepting,_httpsAccepting;
     NSUInteger _httpListenSerial,_httpsListenSerial;
+    dispatch_source_t _httpsWatchdog;
+    dispatch_queue_t _webHealthQueue;
+    dispatch_semaphore_t _httpsProbeSlots;
+    SLHTTPSHealthPolicy _httpsHealth;
+    NSTimeInterval _lastExternalHTTPSResponse,_lastHTTPSHealthLog;
     BOOL _previewPending;
     BOOL _jpegBusy;
     dispatch_queue_t _jpegQueue;
@@ -94,6 +100,9 @@ _Static_assert(kVTInvalidSessionErr == -12903, "Check decoder error mapping agai
 - (BOOL)listenerNeedsRepair:(BOOL)secure;
 - (BOOL)resumeWebListeners;
 - (BOOL)startListener:(unsigned short)port context:(SSL_CTX *)context;
+- (void)startHTTPSWatchdog;
+- (void)checkHTTPSHealth;
+- (BOOL)repairHTTPSListenerAtGeneration:(NSUInteger)generation serial:(NSUInteger)serial;
 - (void)serveClient:(int)client generation:(NSUInteger)generation;
 - (void)streamClient:(int)client generation:(NSUInteger)generation;
 - (void)screenSocket:(int)client generation:(NSUInteger)generation token:(NSString *)token peer:(NSString *)peer;
@@ -181,7 +190,7 @@ static SLVideoSettings videoSettings(SLVideoProfile profile) {
 #else
         _ci=[CIContext contextWithOptions:nil];
 #endif
-_decodeQueue=dispatch_queue_create("ScreenLink.decode",DISPATCH_QUEUE_SERIAL);_jpegQueue=dispatch_queue_create("ScreenLink.jpeg",DISPATCH_QUEUE_SERIAL);_httpSlots=dispatch_semaphore_create(12);_mediaSlots=dispatch_semaphore_create(_screenStream?3:8);_streamSlots=dispatch_semaphore_create(2);_frameReady=[NSCondition new];_token=NSUUID.UUID.UUIDString;[self installLifecycleObservers];
+_decodeQueue=dispatch_queue_create("ScreenLink.decode",DISPATCH_QUEUE_SERIAL);_jpegQueue=dispatch_queue_create("ScreenLink.jpeg",DISPATCH_QUEUE_SERIAL);_webHealthQueue=dispatch_queue_create("ScreenLink.https-health",DISPATCH_QUEUE_SERIAL);_httpsProbeSlots=dispatch_semaphore_create(2);_httpSlots=dispatch_semaphore_create(12);_mediaSlots=dispatch_semaphore_create(_screenStream?3:8);_streamSlots=dispatch_semaphore_create(2);_frameReady=[NSCondition new];_token=NSUUID.UUID.UUIDString;[self installLifecycleObservers];
         __weak Receiver *weak=self;
         _media.status=^(NSString *text){[weak emit:text];};
         _inbox=[[VideoInbox alloc]initWithQueue:_decodeQueue maxBytes:(_screenStream?2:16)*1024*1024 maxPackets:(_screenStream?30:120) consume:^(NSData *data,uint64_t timestamp,NSUInteger generation){
@@ -241,7 +250,7 @@ _decodeQueue=dispatch_queue_create("ScreenLink.decode",DISPATCH_QUEUE_SERIAL);_j
     }];
     _foregroundObserver=[NSNotificationCenter.defaultCenter addObserverForName:UIApplicationDidBecomeActiveNotification object:nil queue:NSOperationQueue.mainQueue usingBlock:^(NSNotification *note){
         Receiver *owner=weak;if(!owner)return;
-        if(owner->_running){[owner resumeListenersIfNeeded];if(owner.discoveryMode==SLDiscoveryPhoneVPN)[owner->_vpnDiscovery recoverOnForeground];}
+        if(owner->_running){[owner resumeListenersIfNeeded];dispatch_async(owner->_webHealthQueue,^{[owner checkHTTPSHealth];});if(owner.discoveryMode==SLDiscoveryPhoneVPN)[owner->_vpnDiscovery recoverOnForeground];}
         dispatch_async(owner->_decodeQueue,^{
             owner->_appBackgrounded=NO;owner->_backgroundFailures=0;owner->_nextDecoderAttempt=0;
             if(owner->_running && owner->_waitingForIDR)[owner emit:@"App active again. Decoder recovery will resume at the next H.264 keyframe; the browser may hold its last image until then."];
@@ -448,6 +457,7 @@ static NSArray *txtStrings(const char *bytes,int length) {
     }
 }
 - (BOOL)resumeWebListeners {
+    @synchronized(self){
     BOOL healthy=YES;
     for(NSNumber *secure in @[@NO,@YES]){
         BOOL tls=secure.boolValue;
@@ -468,6 +478,7 @@ static NSArray *txtStrings(const char *bytes,int length) {
         [self emit:[NSString stringWithFormat:@"LISTENER RECOVERY: %@ %@; viewer authorization and media state retained.",tls?@"HTTPS 443":@"HTTP 8080",ready?@"listening again":@"could not bind"]];
     }
     return healthy;
+    }
 }
 - (BOOL)resumeListenersIfNeeded {
     if(!_running)return NO;
@@ -483,11 +494,53 @@ static NSArray *txtStrings(const char *bytes,int length) {
     }
     return [self resumeWebListeners]&&healthy;
 }
+- (void)startHTTPSWatchdog {
+    @synchronized(self){
+        if(_httpsWatchdog)return; // startWeb runs just before _running becomes YES.
+        _httpsHealth=(SLHTTPSHealthPolicy){0};_lastHTTPSHealthLog=0;
+        _httpsWatchdog=dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER,0,0,_webHealthQueue);
+        dispatch_source_set_timer(_httpsWatchdog,dispatch_time(DISPATCH_TIME_NOW,5*NSEC_PER_SEC),15*NSEC_PER_SEC,NSEC_PER_SEC);
+        __weak Receiver *weak=self;
+        dispatch_source_set_event_handler(_httpsWatchdog,^{[weak checkHTTPSHealth];});
+        dispatch_resume(_httpsWatchdog);
+    }
+    [self emit:@"HTTPS HEALTH MONITOR: local encrypted request/response checks enabled while iOS allows execution. Does not grant extra background time."];
+}
+- (BOOL)repairHTTPSListenerAtGeneration:(NSUInteger)generation serial:(NSUInteger)serial {
+    @synchronized(self){
+        if(!_running||!_httpsWatchdog||generation!=_generation||serial!=_httpsListenSerial)return NO;
+        // Validate replacement identity before retiring any owned listener.
+        NSString *directory=[NSBundle.mainBundle.bundlePath stringByAppendingPathComponent:@"PrivateTLS"];
+        SSL_CTX *context=sl_tls_context([[directory stringByAppendingPathComponent:@"fullchain.pem"] fileSystemRepresentation],[[directory stringByAppendingPathComponent:@"private.key"] fileSystemRepresentation]);
+        if(!context){[self emit:@"HTTPS HEALTH RECOVERY BLOCKED: identity invalid. HTTP, viewer approval and media retained."];return NO;}
+        int server=_httpsSocket;_httpsSocket=-1;_httpsAccepting=NO;++_httpsListenSerial;
+        if(server>=0){shutdown(server,SHUT_RDWR);close(server);}
+        BOOL ready=[self startListener:443 context:context];SSL_CTX_free(context);
+        [self emit:ready?@"HTTPS HEALTH RECOVERY: rebound port 443 only. Existing HTTP, viewer approval, AirPlay, video/audio media, PiP and VPN retained.":@"HTTPS HEALTH RECOVERY: port 443 could not rebind; cooldown active. HTTP and media retained."];
+        return ready;
+    }
+}
+- (void)checkHTTPSHealth {
+    NSUInteger generation,serial;
+    @synchronized(self){if(!_running||!_httpsWatchdog)return;generation=_generation;serial=_httpsListenSerial;}
+    NSString *chain=[NSBundle.mainBundle.bundlePath stringByAppendingPathComponent:@"PrivateTLS/fullchain.pem"];
+    SLHTTPSProbeResult result=sl_https_probe(chain.fileSystemRepresentation,443,2000);
+    NSTimeInterval now=NSProcessInfo.processInfo.systemUptime;BOOL repair=NO,report=NO,recovered=NO;
+    @synchronized(self){
+        if(!_running||!_httpsWatchdog||generation!=_generation||serial!=_httpsListenSerial)return;
+        recovered=result==SLHTTPSHealthy&&_httpsHealth.failures>0;
+        repair=sl_https_should_repair(&_httpsHealth,result==SLHTTPSHealthy,now,_lastExternalHTTPSResponse);
+        if(result!=SLHTTPSHealthy&&(now-_lastHTTPSHealthLog>=15||_lastHTTPSHealthLog==0)){_lastHTTPSHealthLog=now;report=YES;}
+    }
+    if(report)[self emit:[NSString stringWithFormat:@"HTTPS HEALTH CHECK: %s. Repeated failure required; recent real HTTPS success suppresses recovery.",sl_https_probe_name(result)]];
+    if(recovered)[self emit:@"HTTPS HEALTH CHECK: encrypted request/response recovered without restarting the listener."];
+    if(repair)[self repairHTTPSListenerAtGeneration:generation serial:serial];
+}
 - (BOOL)startWeb {
     if(![self startListener:8080 context:NULL])return NO;
     NSString *directory=[NSBundle.mainBundle.bundlePath stringByAppendingPathComponent:@"PrivateTLS"];
     SSL_CTX *context=sl_tls_context([[directory stringByAppendingPathComponent:@"fullchain.pem"] fileSystemRepresentation],[[directory stringByAppendingPathComponent:@"private.key"] fileSystemRepresentation]);
-    if(context){if([self startListener:443 context:context])[self emit:@"LOCAL HTTPS READY: https://car.tesla4khmer.com/ — approve the viewer on this phone. Open /capabilities to check browser APIs."];else [self emit:@"HTTPS port 443 unavailable. HTTP viewer remains available."];SSL_CTX_free(context);}
+    if(context){if([self startListener:443 context:context])[self emit:@"LOCAL HTTPS READY: https://car.tesla4khmer.com/ — approve the viewer on this phone. Open /capabilities to check browser APIs."];else [self emit:@"HTTPS port 443 unavailable. HTTP viewer remains available."];SSL_CTX_free(context);[self startHTTPSWatchdog];}
     else [self emit:@"Local HTTPS not started: certificate missing, expired, wrong hostname or mismatched key. HTTP viewer remains available."];
     return YES;
 }
@@ -510,13 +563,17 @@ static NSArray *txtStrings(const char *bytes,int length) {
                 if(errno==EINTR||errno==EAGAIN||errno==EWOULDBLOCK||errno==ECONNABORTED)continue;
                 [self emit:[NSString stringWithFormat:@"LOCAL LISTENER STOPPED: port %u, accept errno %d; foreground will repair it.",port,errno]];break;
             }
-            if(dispatch_semaphore_wait(self->_httpSlots,DISPATCH_TIME_NOW)!=0){close(client);continue;}
+            // Local HTTPS self-checks cannot be starved by external media slots.
+            struct sockaddr_in peer={0};socklen_t peerLength=sizeof peer;
+            BOOL healthPeer=context&&getpeername(client,(struct sockaddr *)&peer,&peerLength)==0&&peer.sin_family==AF_INET&&(ntohl(peer.sin_addr.s_addr)>>24)==127;
+            dispatch_semaphore_t slots=healthPeer?self->_httpsProbeSlots:self->_httpSlots;
+            if(dispatch_semaphore_wait(slots,DISPATCH_TIME_NOW)!=0){close(client);continue;}
             if(context)SSL_CTX_up_ref(context);
             dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED,0),^{
                 struct timeval timeout={5,0};setsockopt(client,SOL_SOCKET,SO_RCVTIMEO,&timeout,sizeof timeout);setsockopt(client,SOL_SOCKET,SO_SNDTIMEO,&timeout,sizeof timeout);
                 int one=1;setsockopt(client,SOL_SOCKET,SO_NOSIGPIPE,&one,sizeof one);
                 @try {@autoreleasepool {if(!context || sl_tls_begin(context,client))[self serveClient:client generation:generation];else {NSTimeInterval now=NSProcessInfo.processInfo.systemUptime;BOOL report=NO;@synchronized(self){if(now-self->_lastTLSFailureLog>15){self->_lastTLSFailureLog=now;report=YES;}}if(report)[self emit:@"HTTPS HANDSHAKE FAILED: HTTP fallback may still work. TLS connection did not complete; this is separate from DNS and viewer approval. No media session was reset."];}}}
-                @finally {if(context){sl_tls_end();SSL_CTX_free(context);}close(client);dispatch_semaphore_signal(self->_httpSlots);}
+                @finally {if(context){sl_tls_end();SSL_CTX_free(context);}close(client);dispatch_semaphore_signal(slots);}
             });
         }
         @synchronized(self){
@@ -545,11 +602,12 @@ static NSArray *txtStrings(const char *bytes,int length) {
     NSString *mime=@"text/plain; charset=utf-8",*status=@"200 OK",*extra=@"";NSData *body=[NSData data];
     NSRange headerEnd=[request rangeOfData:[@"\r\n\r\n" dataUsingEncoding:NSUTF8StringEncoding] options:0 range:NSMakeRange(0,request.length)];
     if(headerEnd.location==NSNotFound)return;
-    NSUInteger bodyOffset=headerEnd.location==NSNotFound?request.length:NSMaxRange(headerEnd);NSUInteger bodyLength=0;NSString *byteRange=nil,*origin=nil,*host=nil;NSMutableDictionary *wsHeaders=[NSMutableDictionary dictionary];BOOL duplicateWS=NO;BOOL localControl=NO,viewerHeaderValid=NO;
+    NSUInteger bodyOffset=headerEnd.location==NSNotFound?request.length:NSMaxRange(headerEnd);NSUInteger bodyLength=0;NSString *byteRange=nil,*origin=nil,*host=nil,*healthChallenge=nil;NSMutableDictionary *wsHeaders=[NSMutableDictionary dictionary];BOOL duplicateWS=NO;BOOL localControl=NO,viewerHeaderValid=NO;
     for(NSString *field in [line componentsSeparatedByString:@"\r\n"]){
         NSRange separator=[field rangeOfString:@":"];if(separator.location!=NSNotFound){NSString *name=[[field substringToIndex:separator.location] lowercaseString];if([@[@"upgrade",@"connection",@"sec-websocket-key",@"sec-websocket-version",@"origin",@"host"] containsObject:name]){if(wsHeaders[name])duplicateWS=YES;wsHeaders[name]=[[field substringFromIndex:NSMaxRange(separator)] stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceCharacterSet];}}
 
         if([field.lowercaseString hasPrefix:@"host:"])host=[[[field substringFromIndex:5] stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceCharacterSet] lowercaseString];
+        if([field.lowercaseString hasPrefix:@"x-screenlink-health:"])healthChallenge=[[field substringFromIndex:19] stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceCharacterSet];
         if([field.lowercaseString hasPrefix:@"x-screenlink-control:"] && [[[field substringFromIndex:21] stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceCharacterSet] isEqual:@"app"])localControl=YES;
         if([field.lowercaseString hasPrefix:@"content-length:"])bodyLength=(NSUInteger)MAX(0,[[field substringFromIndex:15] integerValue]);
         if([field.lowercaseString hasPrefix:@"origin:"])origin=[[field substringFromIndex:7] stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceCharacterSet];
@@ -574,7 +632,8 @@ static NSArray *txtStrings(const char *bytes,int length) {
     BOOL privacy=[parts.firstObject isEqual:@"POST"] && [url.path isEqual:@"/screen/privacy"];
     BOOL report=[parts.firstObject isEqual:@"POST"] && [url.path isEqual:@"/media/report"];
     BOOL current;@synchronized(self){current=_generation==generation;}
-    if(current && secureTransport && aliasClient && [url.path isEqual:@"/stream"]){
+    if(current&&sl_https_health_allowed(secureTransport,loopback,[parts.firstObject UTF8String],bodyLength,url.path.UTF8String,healthChallenge.UTF8String)){mime=@"text/plain";body=[healthChallenge dataUsingEncoding:NSUTF8StringEncoding];}
+    else if(current && secureTransport && aliasClient && [url.path isEqual:@"/stream"]){
         char accept[29];NSArray *connections=[[[(wsHeaders[@"connection"]?:@"") lowercaseString] stringByReplacingOccurrencesOfString:@" " withString:@""] componentsSeparatedByString:@","];
         BOOL authorized=[_localViewer allowsToken:token peer:peerHost now:localNow];
         BOOL upgrade=!duplicateWS&&bodyLength==0&&authorized&&[parts.firstObject isEqual:@"GET"]&&[origin isEqual:expectedOrigin]&&[[wsHeaders[@"upgrade"] lowercaseString] isEqual:@"websocket"]&&[connections containsObject:@"upgrade"]&&[wsHeaders[@"sec-websocket-version"] isEqual:@"13"]&&sl_ws_accept([wsHeaders[@"sec-websocket-key"] UTF8String],accept);
@@ -676,7 +735,7 @@ static NSArray *txtStrings(const char *bytes,int length) {
     } else {status=@"404 Not Found";}
     if(aliasClient && ([url.path isEqual:@"/media/state"] || [url.path hasPrefix:@"/media/resource/"]))body=SLRetokenLocalMediaData(body,mime,self.token,token);
     NSString *header=[NSString stringWithFormat:@"HTTP/1.1 %@\r\nContent-Type: %@\r\nContent-Length: %lu\r\nCache-Control: no-store\r\nConnection: close\r\nX-Content-Type-Options: nosniff\r\n%@\r\n",status,mime,(unsigned long)body.length,extra];
-    NSData *h=[header dataUsingEncoding:NSUTF8StringEncoding];if(send_all(client,h.bytes,h.length))send_all(client,body.bytes,body.length);
+    NSData *h=[header dataUsingEncoding:NSUTF8StringEncoding];if(send_all(client,h.bytes,h.length)&&send_all(client,body.bytes,body.length)&&secureTransport&&!loopback){@synchronized(self){if(generation==_generation)_lastExternalHTTPSResponse=NSProcessInfo.processInfo.systemUptime;}}
 }
 - (void)screenSocket:(int)client generation:(NSUInteger)generation token:(NSString *)token peer:(NSString *)peer {
     NSString *epoch=nil;uint64_t after=0;
@@ -730,6 +789,7 @@ static NSArray *txtStrings(const char *bytes,int length) {
     }
 }
 - (void)stop {
+    dispatch_source_t monitor;@synchronized(self){monitor=_httpsWatchdog;_httpsWatchdog=nil;_httpsHealth=(SLHTTPSHealthPolicy){0};_lastExternalHTTPSResponse=0;}if(monitor)dispatch_source_cancel(monitor);
     void (^closeRTC)(void)=^{[self->_rtcMedia stop];self->_rtcMedia=nil;};if(NSThread.isMainThread)closeRTC();else dispatch_sync(dispatch_get_main_queue(),closeRTC);
     [_localViewer reset];[_screenStream reset];
 #if !SL_BROADCAST_EXTENSION
@@ -755,5 +815,6 @@ static NSArray *txtStrings(const char *bytes,int length) {
     @synchronized(self){_jpeg=nil;_frames=0;_nextJPEG=0;_frameTime=0;_decodedFrames=0;_lastDecodedTime=0;_jpegDemandUntil=0;_compressedFrames=0;_lastCompressedTime=0;}
 }
 @end
+
 
 
