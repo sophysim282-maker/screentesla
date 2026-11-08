@@ -1,4 +1,4 @@
-name: Build80 HTTPS keep-alive
+name: Build80 HTTPS keep-alive (with TLS reuse test)
 on:
   push:
     branches: ['release/build80-keep-alive']

@@ -26,6 +26,8 @@ build/tls-test/identity/test build/tls-test/identity/good.ipa build/tls-test/ide
 build/tls-test/web-watch
 cc -std=c11 -Wall -Wextra -Werror tools/test_local_dns.c -o build/tls-test/local-dns
 build/tls-test/local-dns
+cc -std=c11 -Wall -Wextra -Werror -I"$openssl_root/include" -L"$openssl_root/lib" -Wl,-rpath,"$openssl_root/lib" tools/test_keep_alive_tls.c App/LocalTLS.c -lssl -lcrypto -pthread -o build/tls-test/keep-alive
+build/tls-test/keep-alive build/tls-test/cert.pem build/tls-test/key.pem
 cc -std=c11 -Wall -Wextra -Werror -I"$openssl_root/include" -L"$openssl_root/lib" -Wl,-rpath,"$openssl_root/lib" tools/test_local_websocket.c App/LocalWebSocket.c -lcrypto -o build/test-local-websocket
 build/test-local-websocket
 mkdir -p build
