@@ -21,6 +21,8 @@ static UIView *find(UIView *v,NSString *identifier){if([v.accessibilityIdentifie
   assert(actions.count==4&&[actions[0][@"quality"] isEqual:@"720"]&&fabs([actions[1][@"volume"] doubleValue]-.4)<.01&&[actions[2][@"seek"] doubleValue]==150&&[actions[3][@"paused"] boolValue]&&CFGetTypeID((__bridge CFTypeRef)actions[3][@"paused"])==CFBooleanGetTypeID());
   UIScrollView *scroll=(id)find(home,@"home.scroll");[scroll setContentOffset:CGPointMake(0,560) animated:NO];
   NSString *marker=[NSHomeDirectory() stringByAppendingPathComponent:@"Documents/phone-controls-passed.txt"];[@"PHONE_UI_PASSED" writeToFile:marker atomically:YES encoding:NSUTF8StringEncoding error:nil];
+  // Build 86 preview: return to the top after the controls screenshot to show the 3D stage and Start button.
+  dispatch_after(dispatch_time(DISPATCH_TIME_NOW,6*NSEC_PER_SEC),dispatch_get_main_queue(),^{[scroll setContentOffset:CGPointMake(0,-scroll.adjustedContentInset.top) animated:YES];});
  });return YES;
 }
 @end

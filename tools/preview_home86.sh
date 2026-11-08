@@ -18,9 +18,6 @@ xcrun simctl boot "$device" || true
 xcrun simctl bootstatus "$device" -b
 xcrun simctl install "$device" "$app"
 xcrun simctl ui "$device" appearance dark
-xcrun simctl io "$device" recordVideo --codec=h264 --force build/ui/home-motion-dark.mp4 &
-recorder=$!
-sleep 1
 xcrun simctl launch "$device" local.screenlink.preview86
 container="$(xcrun simctl get_app_container "$device" local.screenlink.preview86 data)"
 for attempt in $(seq 1 90); do
@@ -29,19 +26,22 @@ for attempt in $(seq 1 90); do
 done
 xcrun simctl io "$device" screenshot build/ui/home-check.png || true
 if ! test "$(cat "$container/Documents/phone-controls-passed.txt" 2>/dev/null)" = PHONE_UI_PASSED; then
-  kill -INT "$recorder" 2>/dev/null || true; wait "$recorder" 2>/dev/null || true
   echo "PREVIEW DID NOT PASS. Running: $(xcrun simctl spawn "$device" launchctl list 2>/dev/null | grep -c preview86 || true)"
   find ~/Library/Logs/DiagnosticReports -name '*ScreenLinkPreview*' -mmin -30 -print -exec head -80 {} \; 2>/dev/null || true
   xcrun simctl spawn "$device" log show --last 3m --style compact --predicate 'process == "ScreenLinkPreview"' 2>/dev/null | tail -60 || true
   exit 1
 fi
-sleep 4
-xcrun simctl io "$device" screenshot build/ui/home-dark.png
-sleep 4
+xcrun simctl io "$device" recordVideo --codec=h264 --force build/ui/home-motion-dark.mp4 &
+recorder=$!
+sleep 2
+xcrun simctl io "$device" screenshot build/ui/home-controls-dark.png
+sleep 9
+xcrun simctl io "$device" screenshot build/ui/home-top-dark.png
+sleep 6
 kill -INT "$recorder"; wait "$recorder" || true
 xcrun simctl ui "$device" appearance light
-sleep 2
-xcrun simctl io "$device" screenshot build/ui/home-light.png
+sleep 3
+xcrun simctl io "$device" screenshot build/ui/home-top-light.png
 xcrun simctl terminate "$device" local.screenlink.preview86
 ls -la build/ui
 echo 'HOME_PREVIEW_PASSED: Cosmic Glass Home runs in the simulator; controls work; motion video and screenshots captured.'
