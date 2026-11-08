@@ -587,7 +587,19 @@ static NSArray *txtStrings(const char *bytes,int length) {
     else if(current && secureTransport && aliasClient && [url.path isEqual:@"/local-viewer/disconnect"] && [parts.firstObject isEqual:@"POST"] && [origin isEqual:expectedOrigin] && [_localViewer allowsToken:token peer:peerHost now:localNow]){[_localViewer reset];[self setScreenHidden:YES];mime=@"application/json";body=[@"{}" dataUsingEncoding:NSUTF8StringEncoding];}
     else if(current && localPlayerControl){
         id object=[NSJSONSerialization JSONObjectWithData:[request subdataWithRange:NSMakeRange(bodyOffset,bodyLength)] options:0 error:nil];
-        BOOL accepted=[self applyPhoneViewerControl:object];status=accepted?@"200 OK":@"400 Bad Request";mime=@"application/json";body=[NSJSONSerialization dataWithJSONObject:accepted?[self nativeMediaState]:@{@"error":@"Invalid or unavailable player control"} options:0 error:nil];
+        NSDictionary *request=[object isKindOfClass:NSDictionary.class]?object:nil;
+        if(request[@"action"]){
+            BOOL accepted=request.count==1 && !origin.length && [host isEqual:@"127.0.0.1:8080"] &&
+                self.isRunning && _screenStream && [_viewerControls performWidgetAction:request[@"action"] media:[_media state]];
+            status=accepted?@"200 OK":@"400 Bad Request";
+            mime=@"application/json";
+            body=[NSJSONSerialization dataWithJSONObject:@{@"accepted":@(accepted)} options:0 error:nil];
+        }else{
+            BOOL accepted=[self applyPhoneViewerControl:request];
+            status=accepted?@"200 OK":@"400 Bad Request";
+            mime=@"application/json";
+            body=[NSJSONSerialization dataWithJSONObject:accepted?[self nativeMediaState]:@{@"error":@"Invalid or unavailable player control"} options:0 error:nil];
+        }
     }
     else if(current && localViewerControl){
         id object=[NSJSONSerialization JSONObjectWithData:[request subdataWithRange:NSMakeRange(bodyOffset,bodyLength)] options:0 error:nil];

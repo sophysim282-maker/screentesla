@@ -58,6 +58,8 @@ targets:
       embed: true
     - sdk: ActivityKit.framework
       weak: true
+    - sdk: AppIntents.framework
+      weak: true
     - sdk: ReplayKit.framework
     - target: ScreenLinkLocalTunnel
       embed: true
@@ -77,8 +79,8 @@ targets:
       path: App/Info.plist
       properties:
         CFBundleDisplayName: ScreenLink
-        CFBundleShortVersionString: 0.20.31
-        CFBundleVersion: '68'
+        CFBundleShortVersionString: 0.20.32
+        CFBundleVersion: '69'
         UILaunchScreen: {}
         NSSupportsLiveActivities: true
         CFBundleURLTypes:
@@ -128,8 +130,8 @@ targets:
       path: Tunnel/Info.plist
       properties:
         CFBundleDisplayName: ScreenLink Local VPN
-        CFBundleShortVersionString: 0.20.31
-        CFBundleVersion: '68'
+        CFBundleShortVersionString: 0.20.32
+        CFBundleVersion: '69'
         NSExtension:
           NSExtensionPointIdentifier: com.apple.networkextension.packet-tunnel
           NSExtensionPrincipalClass: PacketTunnelProvider
@@ -198,8 +200,8 @@ targets:
       path: Broadcast/Info.plist
       properties:
         CFBundleDisplayName: ScreenLink Screen
-        CFBundleShortVersionString: 0.20.31
-        CFBundleVersion: '68'
+        CFBundleShortVersionString: 0.20.32
+        CFBundleVersion: '69'
         NSLocalNetworkUsageDescription: Share the live iPhone screen and AirPlay media with your hotspot viewer during a screen broadcast.
         NSBonjourServices:
         - _airplay._tcp
@@ -229,12 +231,18 @@ targets:
     - sdk: WidgetKit.framework
     - sdk: SwiftUI.framework
     - sdk: ActivityKit.framework
+    - sdk: AppIntents.framework
     info:
       path: Widgets/Info.plist
       properties:
         CFBundleDisplayName: ScreenLink
-        CFBundleShortVersionString: 0.20.31
-        CFBundleVersion: '68'
+        CFBundleShortVersionString: 0.20.32
+        CFBundleVersion: '69'
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+          NSExceptionDomains:
+            127.0.0.1:
+              NSExceptionAllowsInsecureHTTPLoads: true
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
 schemes:
