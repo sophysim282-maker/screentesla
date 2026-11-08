@@ -1,0 +1,108 @@
+name: Build67 live website verification and cloud package
+on:
+  push:
+    branches: ['release/build67-live-website']
+    paths: ['.github/workflows/live-website67.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  browser:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: sophysim282-maker/screentesla
+          ref: 4c4246ba84d49f0a2dcfdee03e5568a3a832db39
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Browser dependencies
+        run: |
+          npm install --no-save playwright@1.55.0
+          npx playwright install --with-deps chromium
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          python3 tools/fetch_canvas.py
+          curl --fail --location --retry 3 https://storage.googleapis.com/chrome-for-testing-public/140.0.7339.207/linux64/chrome-linux64.zip -o /tmp/chrome140.zip
+          unzip -q /tmp/chrome140.zip -d /tmp/screenlink-chrome140
+          echo "SCREENLINK_CHROME_BIN=/tmp/screenlink-chrome140/chrome-linux64/chrome" >> "$GITHUB_ENV"
+      - name: Reproduce buffered-player loss, verify live recovery and retire installed caches
+        run: |
+          mkdir -p build
+          curl --fail --location https://raw.githubusercontent.com/sophysim282-maker/screentesla/0f24708601cb28fc30e328a97b4ff04909e4dd88/App/CanvasShell.js -o /tmp/build64-shell.js
+          curl --fail --location https://raw.githubusercontent.com/sophysim282-maker/screentesla/0f24708601cb28fc30e328a97b4ff04909e4dd88/App/CanvasServiceWorker.js -o /tmp/build64-worker.js
+          curl --fail --location https://raw.githubusercontent.com/sophysim282-maker/screentesla/a3a1c730d236db46840395380902fa0748347594/App/CanvasServiceWorker.js -o /tmp/build65-worker.js
+          if SCREENLINK_TEST_SHELL_OVERRIDE=/tmp/build64-shell.js node tools/test_live_reconnect.cjs > build/baseline-regression.txt 2>&1; then
+            echo "Baseline unexpectedly retained the buffered player"; exit 1
+          fi
+          python3 -c "assert 'A temporary HTTPS outage must not destroy buffered video' in open('build/baseline-regression.txt').read()"
+          cat build/baseline-regression.txt
+          node tools/test_live_reconnect.cjs
+          node tools/test_website_recovery.cjs App
+          node tools/test_retire_offline_ui.cjs /tmp/build64-worker.js
+          node tools/test_retire_offline_ui.cjs /tmp/build65-worker.js
+      - name: Glass UI and existing fullscreen behavior
+        run: |
+          node --check App/CanvasShell.js
+          node tools/test_glass_ui.cjs
+          node tools/test_video_fullscreen.cjs
+          node tools/test_video_lateness.cjs App/CanvasPlayer.js
+          node tools/test_video_continuity.cjs App/CanvasPlayer.js
+          ffprobe -v error -show_entries stream=codec_type -of csv=p=0 App/CarAmbient.mp4 > build/ambient-streams.txt
+          test "$(cat build/ambient-streams.txt)" = video
+      - name: Real Canvas video and sound with privacy and reconnection checks
+        run: |
+          mkdir -p build/pure
+          ffmpeg -v error -f lavfi -i testsrc2=size=640x360:rate=60 -t 12 -c:v libx264 -preset ultrafast -tune zerolatency -x264-params aud=1:keyint=120:scenecut=0 -f h264 build/source.h264
+          cc tools/test_fmp4.c -o build/mux
+          build/mux build/source.h264 build/live.mp4
+          ffmpeg -v error -f lavfi -i testsrc2=size=640x360:rate=30 -f lavfi -i sine=frequency=440:sample_rate=48000 -t 10 -c:v libx264 -preset ultrafast -tune zerolatency -g 60 -c:a aac -hls_time 2 -hls_playlist_type vod -hls_segment_filename build/pure/part%02d.ts build/pure/master.m3u8
+          ffmpeg -v error -f lavfi -i testsrc2=size=640x360:rate=30 -f lavfi -i sine=frequency=440:sample_rate=48000 -t 10 -c:v libx264 -preset ultrafast -g 60 -c:a aac -hls_time 2 -hls_segment_type fmp4 -hls_playlist_type vod -hls_segment_filename build/pure/fragment%02d.m4s build/pure/fragmented.m3u8
+          python3 tools/create_packed_audio_fixture.py build/pure
+          node --require ./tools/test_browser_engine.cjs tools/test_pure_canvas.cjs App build/pure build/live.mp4
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ScreenLink-build67-website-previews
+          path: build/ui/*.png
+          retention-days: 7
+
+  native:
+    needs: browser
+    runs-on: macos-15-intel
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 4c4246ba84d49f0a2dcfdee03e5568a3a832db39
+          persist-credentials: false
+      - name: Verify build64 engines and native listeners unchanged
+        run: |
+          python3 - <<'PY'
+          import pathlib,urllib.request
+          base='https://raw.githubusercontent.com/sophysim282-maker/screentesla/0f24708601cb28fc30e328a97b4ff04909e4dd88/'
+          for file in ['App/CanvasPlayer.js','App/CanvasScreen.js','App/MediaCast.m','App/BoundedDownload.m','App/YouTubePiP.m','App/LocalVPN.m','Tunnel/PacketTunnelProvider.m','Widgets/ScreenLinkWidgets.swift','App/Receiver.m','App/LocalTLS.c','App/LocalViewerApproval.m']:
+              assert urllib.request.urlopen(base+file,timeout=30).read()==pathlib.Path(file).read_bytes(),'Accepted build64 implementation changed: '+file
+          print('Build64 playback, audio, receiver, TLS listeners, PiP, VPN and widgets unchanged; no build66 watchdog')
+          PY
+      - name: Cloud Mac tests and iPhone compilation
+        run: |
+          brew install xcodegen autoconf automake libtool openssl@3
+          bash tools/build.sh
+          xcrun --sdk macosx clang -fobjc-arc -IShared tools/test_widget_routes.m -framework Foundation -o build/widget-routes
+          build/widget-routes
+      - name: Verify raw package has no personalized identity
+        run: |
+          python3 - <<'PY'
+          import zipfile
+          with zipfile.ZipFile('build/ScreenLink-AirPlay-Lab-unsigned.ipa') as z:
+              assert not any('/PrivateTLS/' in n or n.endswith('.mobileprovision') for n in z.namelist())
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ScreenLink-build67-RAW-NOT-FOR-INSTALL
+          path: build/ScreenLink-AirPlay-Lab-unsigned.ipa
+          retention-days: 2
