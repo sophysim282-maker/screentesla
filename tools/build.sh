@@ -142,7 +142,7 @@ assert b['NSExtension']['RPBroadcastProcessMode']=='RPBroadcastProcessModeSample
 assert b['CFBundleVersion']==parent['CFBundleVersion']
 assert b['CFBundleIdentifier'].startswith(parent['CFBundleIdentifier']+'.')
 assert (broadcast/b['CFBundleExecutable']).is_file()
-for name in ['SplitViewer.html','MapPlayer.html','MediaPlayer.html','HLSPlayer.js']:
+for name in ['SplitViewer.html','MapPlayer.html','MediaPlayer.html','HLSPlayer.js','BrowserVideoPlayer.js']:
     assert (broadcast/name).is_file(),name
 widget=next(p for p in plugins if p.name=='ScreenLinkWidgets.appex')
 w=plistlib.loads((widget/'Info.plist').read_bytes())
@@ -154,7 +154,7 @@ assert w.get('CFBundlePackageType')=='XPC!'
 widget_binary=(widget/w['CFBundleExecutable']).read_bytes()
 for kind in [b'ScreenLink.Controls',b'ScreenLink.CarPlayer',b'CarPlayerIntent',b'start-youtube',b'disconnect-all']:
     assert kind in widget_binary, 'Widget control route/configuration missing: '+str(kind)
-assert parent['CFBundleVersion']=='70' and parent['CFBundleShortVersionString']=='0.20.33'
+assert parent['CFBundleVersion']=='71' and parent['CFBundleShortVersionString']=='0.20.34'
 assert parent.get('CFBundleIcons',{}).get('CFBundlePrimaryIcon',{}).get('CFBundleIconName')=='AppIcon'
 assert (app/'Assets.car').is_file() and (app/'ScreenLinkCover.png').is_file()
 assert parent['NSSupportsLiveActivities']
