@@ -7,13 +7,20 @@ on:
 permissions:
   contents: read
 jobs:
-  native:
-    runs-on: macos-15-intel
-    timeout-minutes: 35
+  browser:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Browser dependencies
+        run: |
+          npm install --no-save playwright@1.55.0
+          npx playwright install --with-deps chromium
       - name: Verify car page, reconnect and unchanged player behavior
         run: |
           node --check App/CanvasShell.js
@@ -24,6 +31,13 @@ jobs:
           node tools/test_video_continuity.cjs App/CanvasPlayer.js
           git fetch --depth=1 origin release/build64-glass
           git diff --exit-code FETCH_HEAD -- App/CanvasPlayer.js App/MediaCast.m
+  native:
+    runs-on: macos-15-intel
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - name: Verify widget commands and loopback transport
         run: |
           mkdir -p build
