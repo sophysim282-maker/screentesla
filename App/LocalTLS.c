@@ -52,3 +52,19 @@ ssize_t sl_tls_write(int fd,const void *bytes,size_t size){
 }
 void sl_tls_end(void){if(session){SSL_free(session);session=NULL;}}
 const char *sl_tls_last_error(void){return lastError[0]?lastError:"unknown";}
+// Build 71: explain why an imported website certificate can or cannot be used.
+int sl_tls_identity_check(const char *chain,const char *key,char *detail,size_t size){
+ const char *problem=NULL;SSL_CTX *ctx=SSL_CTX_new(TLS_server_method());
+ if(!ctx)problem="TLS is unavailable.";
+ else if(SSL_CTX_use_certificate_chain_file(ctx,chain)!=1)problem="The certificate file is not valid.";
+ else if(SSL_CTX_use_PrivateKey_file(ctx,key,SSL_FILETYPE_PEM)!=1)problem="The private key file is not valid.";
+ else if(SSL_CTX_check_private_key(ctx)!=1)problem="The private key does not belong to this certificate.";
+ X509 *cert=ctx&&!problem?SSL_CTX_get0_certificate(ctx):NULL;
+ if(!problem&&!cert)problem="The certificate file is not valid.";
+ if(!problem&&X509_check_host(cert,"car.tesla4khmer.com",0,0,NULL)!=1)problem="This certificate is not for car.tesla4khmer.com.";
+ if(!problem&&X509_cmp_current_time(X509_get0_notBefore(cert))>=0)problem="This certificate is not valid yet.";
+ if(!problem&&X509_cmp_current_time(X509_get0_notAfter(cert))<=0)problem="This certificate has expired. Renew it for car.tesla4khmer.com.";
+ if(problem){snprintf(detail,size,"%s",problem);}
+ else{BIO *bio=BIO_new(BIO_s_mem());char when[64]="unknown date";if(bio&&ASN1_TIME_print(bio,X509_get0_notAfter(cert))){int n=BIO_read(bio,when,(int)sizeof when-1);if(n>0)when[n]=0;}BIO_free(bio);snprintf(detail,size,"Certificate for car.tesla4khmer.com, valid until %s.",when);}
+ SSL_CTX_free(ctx);ERR_clear_error();return problem==NULL;
+}

@@ -16,6 +16,13 @@ build/tls-test/test build/tls-test/cert.pem build/tls-test/key.pem
 cc -std=c11 -Wall -Wextra -Werror -I"$openssl_root/include" -L"$openssl_root/lib" -Wl,-rpath,"$openssl_root/lib" tools/test_tls_failure_reason.c App/LocalTLS.c -lssl -lcrypto -o build/tls-test/failure-reason
 build/tls-test/failure-reason build/tls-test/cert.pem build/tls-test/key.pem
 cc -std=c11 -Wall -Wextra -Werror tools/test_web_watch.c -o build/tls-test/web-watch
+mkdir -p build/tls-test/identity/out
+"$openssl_root/bin/openssl" req -x509 -newkey rsa:2048 -nodes -days 30 -subj '/CN=other.example' -addext 'subjectAltName=DNS:other.example' -keyout build/tls-test/identity/wrong-key.pem -out build/tls-test/identity/wrong-cert.pem 2>/dev/null
+python3 tools/make_identity_ipa.py build/tls-test/identity/good.ipa build/tls-test/cert.pem build/tls-test/key.pem good
+python3 tools/make_identity_ipa.py build/tls-test/identity/raw.ipa build/tls-test/cert.pem build/tls-test/key.pem raw
+python3 tools/make_identity_ipa.py build/tls-test/identity/wrong.ipa build/tls-test/identity/wrong-cert.pem build/tls-test/identity/wrong-key.pem good
+cc -std=c11 -Wall -Wextra -Werror -I"$openssl_root/include" -L"$openssl_root/lib" -Wl,-rpath,"$openssl_root/lib" tools/test_identity_import.c App/ZipEntry.c App/LocalTLS.c -lssl -lcrypto -lz -o build/tls-test/identity/test
+build/tls-test/identity/test build/tls-test/identity/good.ipa build/tls-test/identity/raw.ipa build/tls-test/identity/out build/tls-test/identity/wrong.ipa
 build/tls-test/web-watch
 cc -std=c11 -Wall -Wextra -Werror -I"$openssl_root/include" -L"$openssl_root/lib" -Wl,-rpath,"$openssl_root/lib" tools/test_local_websocket.c App/LocalWebSocket.c -lcrypto -o build/test-local-websocket
 build/test-local-websocket
@@ -154,7 +161,7 @@ assert w.get('CFBundlePackageType')=='XPC!'
 widget_binary=(widget/w['CFBundleExecutable']).read_bytes()
 for kind in [b'ScreenLink.Controls',b'ScreenLink.CarPlayer',b'CarPlayerIntent',b'start-youtube',b'disconnect-all']:
     assert kind in widget_binary, 'Widget control route/configuration missing: '+str(kind)
-assert parent['CFBundleVersion']=='71' and parent['CFBundleShortVersionString']=='0.20.34'
+assert parent['CFBundleVersion']=='72' and parent['CFBundleShortVersionString']=='0.20.35'
 assert parent.get('CFBundleIcons',{}).get('CFBundlePrimaryIcon',{}).get('CFBundleIconName')=='AppIcon'
 assert (app/'Assets.car').is_file() and (app/'ScreenLinkCover.png').is_file()
 assert parent['NSSupportsLiveActivities']

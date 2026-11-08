@@ -1,5 +1,6 @@
 #import "Receiver.h"
 #import "LocalTLS.h"
+#import "IdentityStore.h"
 #import "LocalWebSocket.h"
 #import "VPNDiscovery.h"
 #import "AnnexB.h"
@@ -509,7 +510,7 @@ static NSArray *txtStrings(const char *bytes,int length) {
         }
         SSL_CTX *context=NULL;
         if(tls){
-            NSString *directory=[NSBundle.mainBundle.bundlePath stringByAppendingPathComponent:@"PrivateTLS"];
+            NSString *directory=[SLIdentityStore activeDirectory];
             context=sl_tls_context([[directory stringByAppendingPathComponent:@"fullchain.pem"] fileSystemRepresentation],[[directory stringByAppendingPathComponent:@"private.key"] fileSystemRepresentation]);
             if(!context){healthy=NO;[self emit:@"LISTENER RECOVERY: HTTPS identity unavailable; listener could not be restored."];continue;}
         }
@@ -536,10 +537,10 @@ static NSArray *txtStrings(const char *bytes,int length) {
 - (BOOL)startWeb {
     [self resetWebWatch];[self startWebWatchTimer];
     if(![self startListener:8080 context:NULL])return NO;
-    NSString *directory=[NSBundle.mainBundle.bundlePath stringByAppendingPathComponent:@"PrivateTLS"];
+    NSString *directory=[SLIdentityStore activeDirectory];
     SSL_CTX *context=sl_tls_context([[directory stringByAppendingPathComponent:@"fullchain.pem"] fileSystemRepresentation],[[directory stringByAppendingPathComponent:@"private.key"] fileSystemRepresentation]);
     if(context){if([self startListener:443 context:context])[self emit:@"LOCAL HTTPS READY: https://car.tesla4khmer.com/ — approve the viewer on this phone. Open /capabilities to check browser APIs."];else [self emit:@"HTTPS port 443 unavailable. HTTP viewer remains available."];SSL_CTX_free(context);}
-    else [self emit:@"Local HTTPS not started: certificate missing, expired, wrong hostname or mismatched key. HTTP viewer remains available."];
+    else [self emit:[SLIdentityStore hasIdentity]?@"Local HTTPS not started: website certificate expired, wrong hostname or mismatched key. HTTP viewer remains available. Open Developer → Import website certificate.":@"Local HTTPS not started: no website certificate in this build. Open Developer → Import website certificate and pick your earlier ScreenLink IPA. HTTP viewer remains available."];
     return YES;
 }
 - (BOOL)startListener:(unsigned short)port context:(SSL_CTX *)context {

@@ -10,4 +10,5 @@ ssize_t sl_tls_read(int fd,void *bytes,size_t size);
 ssize_t sl_tls_write(int fd,const void *bytes,size_t size);
 void sl_tls_end(void);
 const char *sl_tls_last_error(void);
+int sl_tls_identity_check(const char *chain,const char *key,char *detail,size_t size);
 #endif
