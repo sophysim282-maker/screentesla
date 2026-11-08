@@ -224,6 +224,13 @@ static SLVideoSettings videoSettings(SLVideoProfile profile) {
     pthread_mutex_lock(&webWatchLock);double gap=sl_web_watch_secure(&webWatch,NSProcessInfo.processInfo.systemUptime);pthread_mutex_unlock(&webWatchLock);
     if(gap>=0)[self emit:[NSString stringWithFormat:@"WEBSITE BACK: car HTTPS requests resumed after %.0f s of silence.",gap]];
 }
+// Build 75: playback problems reported by the authenticated car page.
+- (void)logCarPlayer:(id)lines {
+    if(![lines isKindOfClass:NSArray.class])return;NSUInteger count=0;
+    for(id line in lines){if(![line isKindOfClass:NSString.class]||count>=6)continue;count++;
+        NSString *text=[[line componentsSeparatedByCharactersInSet:NSCharacterSet.controlCharacterSet] componentsJoinedByString:@" "];
+        if(text.length>220)text=[text substringToIndex:220];[self emit:[@"CAR PLAYER: " stringByAppendingString:text]];}
+}
 - (void)noteHTTPRequest {pthread_mutex_lock(&webWatchLock);webWatch.http++;pthread_mutex_unlock(&webWatchLock);}
 - (instancetype)init { if((self=[super init])) { _socket=-1;_httpsSocket=-1;_localViewer=[LocalViewerApproval new];_h264=[H264Stream new];_media=[MediaCast new];_viewerControls=[ViewerControls new];
 #if SL_BROADCAST_EXTENSION
@@ -697,7 +704,7 @@ static NSArray *txtStrings(const char *bytes,int length) {
     else if([url.path isEqual:@"/media/state"]){mime=@"application/json";NSMutableDictionary *state=[[self nativeMediaState] mutableCopy];state[@"screenLocked"]=@(self.screenCaptureLocked||self.mediaOnly);body=[NSJSONSerialization dataWithJSONObject:state options:0 error:NULL];}
     else if(report){
         NSData *json=[request subdataWithRange:NSMakeRange(bodyOffset,bodyLength)];id object=[NSJSONSerialization JSONObjectWithData:json options:0 error:NULL];
-        if([object isKindOfClass:NSDictionary.class]){[_media report:object];[_viewerControls acknowledge:object];mime=@"application/json";body=[@"{}" dataUsingEncoding:NSUTF8StringEncoding];}else status=@"400 Bad Request";
+        if([object isKindOfClass:NSDictionary.class]){[self logCarPlayer:object[@"carLog"]];[_media report:object];[_viewerControls acknowledge:object];mime=@"application/json";body=[@"{}" dataUsingEncoding:NSUTF8StringEncoding];}else status=@"400 Bad Request";
     }
     else if([url.path hasPrefix:@"/media/resource/"]){
         NSDictionary *part;if(dispatch_semaphore_wait(_mediaSlots,dispatch_time(DISPATCH_TIME_NOW,2*NSEC_PER_SEC)))part=@{@"code":@503};else{@try{part=[_media resource:[url.path substringFromIndex:16] range:byteRange];}@finally{dispatch_semaphore_signal(_mediaSlots);}}NSInteger code=[part[@"code"] integerValue];
