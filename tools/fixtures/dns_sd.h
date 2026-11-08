@@ -7,7 +7,7 @@ typedef struct FakeDNSRef *DNSServiceRef;
 typedef void *DNSRecordRef;
 typedef uint32_t DNSServiceFlags, DNSServiceProtocol;
 typedef int32_t DNSServiceErrorType;
-enum {kDNSServiceFlagsAdd=2,kDNSServiceFlagsUnique=32,kDNSServiceFlagsNoAutoRename=8,kDNSServiceInterfaceIndexLocalOnly=0xffffffff,kDNSServiceType_A=1,kDNSServiceClass_IN=1,kDNSServiceProtocol_IPv4=1,kDNSServiceErr_DefunctConnection=-65569,kDNSServiceErr_ServiceNotRunning=-65563};
+enum {kDNSServiceFlagsAdd=2,kDNSServiceFlagsUnique=32,kDNSServiceFlagsNoAutoRename=8,kDNSServiceInterfaceIndexLocalOnly=0xffffffff,kDNSServiceType_A=1,kDNSServiceClass_IN=1,kDNSServiceProtocol_IPv4=1,kDNSServiceErr_DefunctConnection=-65569,kDNSServiceErr_PolicyDenied=-65570,kDNSServiceErr_ServiceNotRunning=-65563};
 typedef void (*AddressReply)(DNSServiceRef,DNSRecordRef,DNSServiceFlags,DNSServiceErrorType,void *);
 typedef void (*ServiceReply)(DNSServiceRef,DNSServiceFlags,DNSServiceErrorType,const char *,const char *,const char *,void *);
 typedef void (*BrowseReply)(DNSServiceRef,DNSServiceFlags,uint32_t,DNSServiceErrorType,const char *,const char *,const char *,void *);
@@ -22,3 +22,4 @@ DNSServiceErrorType DNSServiceResolve(DNSServiceRef *,DNSServiceFlags,uint32_t,c
 DNSServiceErrorType DNSServiceGetAddrInfo(DNSServiceRef *,DNSServiceFlags,uint32_t,DNSServiceProtocol,const char *,LookupReply,void *);
 void DNSServiceRefDeallocate(DNSServiceRef);
 #endif
+

@@ -11,7 +11,7 @@
     BOOL _resolvedPeer;
     NSUInteger _generation;
     NSDictionary *_profile;
-    BOOL _needsRecovery,_retryScheduled;
+    BOOL _needsRecovery,_retryScheduled,_policyDenied;
     NSUInteger _retryCount;
 }
 - (void)report:(NSString *)message;
@@ -73,7 +73,7 @@ static NSData *encodedTXT(NSArray<NSString *> *strings) {
     NSAssert(NSThread.isMainThread,@"Discovery must use the main queue");
     if([_profile isEqual:profile]&&!_needsRecovery&&_addressConnection&&_airplay&&_raop)return YES;
     if(![_profile isEqual:profile])_retryCount=0;
-    _profile=[profile copy];[self closeReferences];_needsRecovery=NO;
+    _profile=[profile copy];[self closeReferences];_needsRecovery=NO;_policyDenied=NO;
     _expectedName=profile[@"name"];_expectedPeer=profile[@"peer"];_resolvedPeer=NO;
     NSString *peer=profile[@"peer"],*host=profile[@"host"],*name=profile[@"name"];
     NSData *airplayTXT=encodedTXT(profile[@"airplayTXT"]),*raopTXT=encodedTXT(profile[@"raopTXT"]);
@@ -129,6 +129,14 @@ static NSData *encodedTXT(NSArray<NSString *> *strings) {
 }
 - (void)serviceFailed:(DNSServiceRef)service error:(DNSServiceErrorType)error {
     if(service&&service!=_addressConnection&&service!=_airplay&&service!=_raop&&service!=_verifyBrowse&&service!=_verifyResolve&&service!=_verifyAddress)return;
+    if(error==kDNSServiceErr_PolicyDenied){
+        // dnssd may reject the first operation before the permission alert is
+        // answered. These references are not a healthy registration. Keep them
+        // until the callback returns, then rebuild on explicit refresh/foreground.
+        // Never repeatedly reprompt or spin while permission remains denied.
+        if(!_policyDenied)[self report:@"AIRPLAY DISCOVERY BLOCKED (-65570): iOS denied local-network discovery. Check Settings > Privacy & Security > Local Network > ScreenLink. If already enabled, return here and tap Start to retry fresh discovery; the VPN being connected does not prove AirPlay publication."];
+        _policyDenied=YES;_needsRecovery=YES;return;
+    }
     if(error!=kDNSServiceErr_DefunctConnection&&error!=kDNSServiceErr_ServiceNotRunning)return;
     _needsRecovery=YES;
     if(!_profile||_retryScheduled||_retryCount>=3)return;
@@ -136,14 +144,14 @@ static NSData *encodedTXT(NSArray<NSString *> *strings) {
     // Never deallocate a DNSServiceRef inside its own callback.
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW,NSEC_PER_SEC),dispatch_get_main_queue(),^{
         VPNDiscovery *owner=weak;if(!owner||generation!=owner->_generation)return;
-        owner->_retryScheduled=NO;owner->_retryCount++;[owner recoverIfNeeded];
+        owner->_retryScheduled=NO;if(owner->_policyDenied)return;owner->_retryCount++;[owner recoverIfNeeded];
     });
 }
 - (BOOL)recoverIfNeeded {
     NSAssert(NSThread.isMainThread,@"Discovery must use the main queue");
     if(!_profile)return NO;
     if(!_needsRecovery&&_addressConnection&&_airplay&&_raop)return YES;
-    [self report:@"DISCOVERY RECOVERY: replacing defunct Bonjour handles; AirPlay listener and viewer authorization are preserved."];
+    [self report:_policyDenied?@"DISCOVERY RECOVERY: retrying previously policy-denied Bonjour publication; video, AirPlay listener, VPN and website authorization are preserved. iOS may still deny access.":@"DISCOVERY RECOVERY: replacing defunct Bonjour handles; AirPlay listener and viewer authorization are preserved."];
     return [self startWithProfile:_profile];
 }
 - (void)recoverOnForeground {
@@ -158,6 +166,7 @@ static NSData *encodedTXT(NSArray<NSString *> *strings) {
     if(_raop){DNSServiceRefDeallocate(_raop);_raop=NULL;}
     if(_addressConnection){DNSServiceRefDeallocate(_addressConnection);_addressConnection=NULL;}
 }
-- (void)stop {_profile=nil;_needsRecovery=NO;_retryCount=0;[self closeReferences];}
+- (void)stop {_profile=nil;_needsRecovery=NO;_policyDenied=NO;_retryCount=0;[self closeReferences];}
 - (void)dealloc { [self closeReferences]; }
 @end
+

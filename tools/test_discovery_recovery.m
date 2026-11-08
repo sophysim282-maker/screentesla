@@ -29,11 +29,19 @@ int main(void){@autoreleasepool{
  DNSServiceRef current=&refs[5];current->service(current,0,-65569,"test","_airplay._tcp","local.",current->context);
  [d stop];NSUInteger stopped=created;drain(1.2);assert(created==stopped&&closed==created); // stop revokes pending retry
  assert([d startWithProfile:p]);current=&refs[stopped+1];current->service(current,0,-65569,"test","_airplay._tcp","local.",current->context);drain(1.2);assert(created==stopped+8);
- current=&refs[created-3];current->service(current,0,-65570,"test","_airplay._tcp","local.",current->context);NSUInteger before=created;[d recoverOnForeground];drain(1.2);assert(created==before); // policy denied never treated as defunct
+ current=&refs[created-3];NSUInteger deniedClosed=closed;current->service(current,0,kDNSServiceErr_PolicyDenied,"test","_airplay._tcp","local.",current->context);NSUInteger before=created;
+ NSCAssert([[d valueForKey:@"needsRecovery"] boolValue],@"POLICY_DENIED_HANDLES_REUSED");assert(closed==deniedClosed);
+ drain(1.2);assert(created==before); // no automatic denied-permission loop
+ [d recoverOnForeground];assert(created==before+4&&closed==deniedClosed+4);assert(![[d valueForKey:@"needsRecovery"] boolValue]);
+ [d recoverOnForeground];assert(created==before+4); // preserve healthy discovery
+ current=&refs[created-3];current->service(current,0,kDNSServiceErr_PolicyDenied,"test","_airplay._tcp","local.",current->context);before=created;
+ assert([d recoverIfNeeded]);assert(created==before+4); // explicit Start/Refresh, no app restart
+ current->service(current,0,kDNSServiceErr_PolicyDenied,"test","_airplay._tcp","local.",current->context);assert(![[d valueForKey:@"needsRecovery"] boolValue]); // stale denial ignored
  [d stop];failCreate=YES;assert(![d startWithProfile:p]);drain(4.2);assert([[d valueForKey:@"retryCount"] unsignedIntegerValue]==3);NSUInteger generation=[[d valueForKey:@"generation"] unsignedIntegerValue];drain(1.2);assert([[d valueForKey:@"generation"] unsignedIntegerValue]==generation);
  failCreate=NO;[d recoverOnForeground];assert([d recoverIfNeeded]);[d stop];assert(closed==created);
  failBrowse=YES;assert([d startWithProfile:p]);assert([[d valueForKey:@"needsRecovery"] boolValue]);failBrowse=NO;[d recoverOnForeground];assert(![[d valueForKey:@"needsRecovery"] boolValue]);
  failResolve=YES;[d foundService:"test" type:"_airplay._tcp" domain:"local."];assert([[d valueForKey:@"needsRecovery"] boolValue]);failResolve=NO;[d recoverOnForeground];
  failLookup=YES;[d resolveHost:"test.local." port:7000];assert([[d valueForKey:@"needsRecovery"] boolValue]);failLookup=NO;[d recoverOnForeground];assert(![[d valueForKey:@"needsRecovery"] boolValue]);[d stop];drain(1.2);assert(closed==created);
- puts("Discovery recovery passed: defunct callback/foreground, healthy preservation, callback deferral, stale generation, stop during retry, bounded daemon failure, policy-denied distinction and retry after foreground.");
+ puts("Discovery recovery passed: defunct callback/foreground, healthy preservation, callback deferral, stale generation, stop during retry, bounded daemon failure, policy-denied foreground/explicit retry without loops, denied callback deferral, stale denial isolation.");
 }return 0;}
+
