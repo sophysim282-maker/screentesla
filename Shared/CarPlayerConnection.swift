@@ -17,6 +17,7 @@ struct CarPlayerState: Decodable {
     var volume: Double
     var eq: String
     var car: Bool
+    var epoch: String?
 }
 
 enum CarPlayerConnection {

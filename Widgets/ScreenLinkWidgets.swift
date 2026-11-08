@@ -167,71 +167,168 @@ private struct ResumeWidget: Widget {
     }
 }
 
-private struct MotionBadge: View {
-    let phase: Int
+// Build 85 "ScreenLink Mission": original characters (no third-party characters or logos).
+// iOS animates the island only on state changes and through self-running timers, so the
+// stage changes slide in with transitions and the countdown / video ring run by themselves.
+private struct MissionTheme {
+    let cruise: String, name: String
+    static let all = [MissionTheme(cruise: "🚀", name: "Rocket"), MissionTheme(cruise: "🛸", name: "UFO"),
+                      MissionTheme(cruise: "🏎️", name: "Roadster"), MissionTheme(cruise: "☄️", name: "Comet")]
+    static func of(_ index: Int?) -> MissionTheme { all[((index ?? 0) % all.count + all.count) % all.count] }
+}
+
+private struct Mission {
+    let state: ScreenLinkActivityAttributes.ContentState
+    let stale: Bool
+    var stage: String { stale ? "landed" : (state.stage ?? (state.running ? "cruise" : "landed")) }
+    var theme: MissionTheme { MissionTheme.of(state.theme) }
+    var icon: String {
+        switch stage {
+        case "countdown": return theme.cruise
+        case "liftoff": return "🔥"
+        case "paused": return "🛰️"
+        case "signal": return "📡"
+        case "landed": return "🪂"
+        default: return theme.cruise
+        }
+    }
+    var title: String {
+        switch stage {
+        case "countdown": return "Countdown"
+        case "liftoff": return "Liftoff!"
+        case "paused": return "Hovering · paused"
+        case "signal": return "Signal lost"
+        case "landed": return stale ? "Open ScreenLink" : "Landed"
+        default: return "\(theme.name) in orbit"
+        }
+    }
+    var color: Color {
+        switch stage {
+        case "liftoff": return .orange
+        case "signal": return .orange
+        case "paused": return .yellow
+        case "landed": return .gray
+        case "countdown": return .cyan
+        default: return .mint
+        }
+    }
+    var playing: Bool { (stage == "cruise" || stage == "liftoff") && state.videoStart != nil && state.videoEnd != nil }
+}
+
+private struct MissionIcon: View {
+    let mission: Mission
+    var size: CGFloat = 20
     var body: some View {
-        Image(systemName: "car.side.fill")
-            .foregroundStyle(.mint)
-            .accessibilityLabel("ScreenLink Roadster")
+        Text(mission.icon)
+            .font(.system(size: size))
+            .id("\(mission.stage)-\(mission.state.theme ?? 0)")
+            .transition(.push(from: .bottom))
+            .accessibilityLabel(mission.title)
+    }
+}
+
+private struct MissionRing: View {
+    let mission: Mission
+    var body: some View {
+        Group {
+            if mission.playing, let start = mission.state.videoStart, let end = mission.state.videoEnd, end > start {
+                ProgressView(timerInterval: start...end, countsDown: false) { EmptyView() } currentValueLabel: { EmptyView() }
+                    .progressViewStyle(.circular)
+            } else if mission.stage == "paused" {
+                ProgressView(value: mission.state.progress ?? 0).progressViewStyle(.circular)
+            } else if mission.stage == "countdown", let end = mission.state.countdownEnd, end > Date() {
+                Text(timerInterval: Date()...end, countsDown: true).monospacedDigit().font(.caption2.bold()).frame(width: 34)
+            } else {
+                Text(mission.stage == "signal" ? "!" : mission.stage == "landed" ? "■" : "•").font(.caption2.bold())
+            }
+        }
+        .tint(mission.color)
+        .foregroundStyle(mission.color)
+    }
+}
+
+private struct MissionTrack: View {
+    let mission: Mission
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            if mission.playing, let start = mission.state.videoStart, let end = mission.state.videoEnd, end > start {
+                ProgressView(timerInterval: start...end, countsDown: false) { EmptyView() } currentValueLabel: { EmptyView() }
+                    .tint(mission.color)
+                HStack {
+                    Text("✦ · ✧ · ✦").font(.caption2).foregroundStyle(.white.opacity(0.5))
+                    Spacer()
+                    Text(timerInterval: Date()...end, countsDown: true).font(.caption2.monospacedDigit()).foregroundStyle(.white.opacity(0.8))
+                }
+            } else if mission.stage == "paused" {
+                ProgressView(value: mission.state.progress ?? 0).tint(mission.color)
+            } else if mission.stage == "countdown", let end = mission.state.countdownEnd, end > Date() {
+                HStack(spacing: 4) {
+                    Text("T-").font(.caption.bold())
+                    Text(timerInterval: Date()...end, countsDown: true).font(.caption.bold().monospacedDigit())
+                    Spacer()
+                    Text("Waiting for YouTube").font(.caption2).foregroundStyle(.white.opacity(0.7))
+                }.foregroundStyle(mission.color)
+            } else {
+                Text(mission.stage == "signal" ? "Car not reachable · retrying" : mission.state.status).font(.caption2).foregroundStyle(.white.opacity(0.75)).lineLimit(1)
+            }
+        }
     }
 }
 
 private struct ScreenLinkLiveActivity: Widget {
-    private func label(_ context: ActivityViewContext<ScreenLinkActivityAttributes>) -> String {
-        context.isStale ? "Open ScreenLink" : context.state.status
-    }
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: ScreenLinkActivityAttributes.self) { context in
+            let mission = Mission(state: context.state, stale: context.isStale)
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("ScreenLink · YouTube").font(.headline)
-                    Text(label(context)).font(.subheadline).foregroundStyle(context.isStale ? .orange : .mint)
-                    Text("Local hotspot · no recording").font(.caption).foregroundStyle(.secondary)
+                    MissionIcon(mission: mission, size: 34)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("ScreenLink Mission").font(.caption.bold()).foregroundStyle(.white.opacity(0.7))
+                        Text(mission.title).font(.headline).foregroundStyle(mission.color)
+                            .contentTransition(.opacity)
+                    }
+                    Spacer()
+                    MissionRing(mission: mission).frame(width: 30, height: 30)
                 }
-                Spacer()
-                VStack(spacing: 5) {
-                    MotionBadge(phase: context.state.phase).font(.title2)
-                    if context.state.running && !context.isStale { Text(context.state.started, style: .timer).font(.caption.monospacedDigit()) }
-                }
-                }
+                MissionTrack(mission: mission)
                 QuickActions()
-            }.padding(16)
-            .activityBackgroundTint(Color(red: 0.04, green: 0.07, blue: 0.13))
+            }
+            .padding(16)
+            .animation(.spring(duration: 0.8), value: mission.stage)
+            .activityBackgroundTint(Color(red: 0.03, green: 0.05, blue: 0.12))
             .activitySystemActionForegroundColor(.white)
             .foregroundStyle(.white)
             .widgetURL(resumeURL)
         } dynamicIsland: { context in
-            DynamicIsland {
+            let mission = Mission(state: context.state, stale: context.isStale)
+            return DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
-                    VStack(alignment: .leading) {
-                        Text("ScreenLink").font(.headline)
-                        Text("YouTube only").font(.caption).foregroundStyle(.secondary)
-                    }
+                    MissionIcon(mission: mission, size: 38).padding(.leading, 4)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
-                    MotionBadge(phase: context.state.phase).font(.title3)
+                    MissionRing(mission: mission).frame(width: 34, height: 34).padding(.trailing, 4)
+                }
+                DynamicIslandExpandedRegion(.center) {
+                    VStack(spacing: 1) {
+                        Text("ScreenLink Mission").font(.caption2).foregroundStyle(.white.opacity(0.6))
+                        Text(mission.title).font(.headline).foregroundStyle(mission.color).lineLimit(1)
+                    }
                 }
                 DynamicIslandExpandedRegion(.bottom) {
                     VStack(spacing: 8) {
-                    HStack {
-                        Image(systemName: context.state.running && !context.isStale ? "airplayvideo" : "pause.circle")
-                        Text(label(context)).font(.caption.bold())
-                        Spacer()
-                        if context.state.running && !context.isStale { Text(context.state.started, style: .timer).font(.caption.monospacedDigit()) }
-                    }
-                    QuickActions()
+                        MissionTrack(mission: mission)
+                        QuickActions()
                     }
                 }
             } compactLeading: {
-                Text("🏎️").accessibilityLabel("ScreenLink Roadster")
+                MissionIcon(mission: mission, size: 16)
             } compactTrailing: {
-                Text(context.isStale ? "!" : (context.state.running ? "YT" : "Ⅱ")).font(.caption2.bold()).foregroundStyle(.mint)
+                MissionRing(mission: mission).frame(width: 18, height: 18)
             } minimal: {
-                Image(systemName: "car.side.fill").accessibilityLabel("ScreenLink")
+                MissionIcon(mission: mission, size: 15)
             }
             .widgetURL(resumeURL)
-            .keylineTint(.mint)
+            .keylineTint(mission.color)
         }
     }
 }
