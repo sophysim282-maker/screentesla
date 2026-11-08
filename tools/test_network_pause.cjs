@@ -33,6 +33,12 @@ const server=https.createServer({key:fs.readFileSync(temp+'/key'),cert:fs.readFi
  const page=await (await browser.newContext({ignoreHTTPSErrors:true})).newPage();
  await page.goto(base+'/video?wait='+(process.env.PAUSE_AT||12));
  await page.waitForFunction(()=>ScreenLinkCanvasStatus().engine==='webcodecs'&&ScreenLinkCanvasStatus().mediaPosition>(Number(new URLSearchParams(location.search).get('wait'))||12)&&ScreenLinkCanvasStatus().audioState==='running',null,{timeout:150000});
+ if(process.env.STARTUP){
+  const st=await page.evaluate(()=>ScreenLinkCanvasStatus());const freezes=st.mediaStats.videoHiccups+st.mediaStats.rebufferCount;
+  console.log('STARTUP_FIRST_'+(process.env.PAUSE_AT||12)+'S',{freezes,holds:st.mediaStats.videoHiccups,rebuffers:st.mediaStats.rebufferCount,videoAhead:+st.encodedVideoLead.toFixed(1)});
+  if(expectFreeze)assert(freezes>0,'Old player expected to freeze at start');else assert.equal(freezes,0,'No freeze at the start of the video');
+  console.log(expectFreeze?'OLD_PLAYER_FREEZES_AT_START':'STARTUP_PASSED: no freeze in the first seconds');return;
+ }
  const before=await page.evaluate(()=>ScreenLinkCanvasStatus());
  const PAUSE=Number(process.env.PAUSE_MS||6000);pausedUntil=Date.now()+PAUSE;setTimeout(()=>{for(const f of held.splice(0))f();},PAUSE);
  await page.waitForTimeout(PAUSE+500);

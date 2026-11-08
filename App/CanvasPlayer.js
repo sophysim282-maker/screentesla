@@ -31,7 +31,7 @@ function playlist(text,url){
 // Prefer actual source resolution. A 6 Mbps ceiling can otherwise select 240p
 // when the source's 720p/1080p variants use a higher bitrate.
 // Build 76 read-ahead: seconds of encoded media downloaded ahead of the playhead.
-const READ_AHEAD_VIDEO=20,READ_AHEAD_AUDIO=12,READ_AHEAD_SEGMENTS=8;
+const READ_AHEAD_VIDEO=20,READ_AHEAD_AUDIO=12,READ_AHEAD_SEGMENTS=8,VIDEO_PARALLEL_DOWNLOADS=2;
 function chooseVariant(levels,quality='hd'){
  const height=level=>Number((level.RESOLUTION||'').split('x')[1])||0,width=level=>Number((level.RESOLUTION||'').split('x')[0])||0;
  // Build 78: cap by picture size, not only height. Ultra-wide 2560x1072 is "1072p" but
@@ -390,12 +390,16 @@ class CanvasPlayer {
     // network no longer empties the video. One download at a time per lane keeps
     // the phone's media slots free; decoding below stays 2 s (video) / 4 s (audio)
     // ahead exactly as before, so decoder and canvas timing are unchanged.
-    const downloadAhead=kind==='audio'?READ_AHEAD_AUDIO:READ_AHEAD_VIDEO,downloads=new Map();let consumed=0;
+    const downloadAhead=kind==='audio'?READ_AHEAD_AUDIO:READ_AHEAD_VIDEO,downloads=new Map();let consumed=0,inFlight=0;
+    // Build 79: video keeps two segment downloads in flight. YouTube paces each
+    // request near playback speed, so one-at-a-time could not build a lead at the
+    // start of a video (picture holds in the first 10-15 s). Audio stays at one.
+    const parallel=kind==='audio'?1:VIDEO_PARALLEL_DOWNLOADS;
     const downloader=(async()=>{
      for(let next=0;next<segments.length;next++){
-      while(serial===this.serial&&!this.closed&&next>consumed&&(next-consumed>=READ_AHEAD_SEGMENTS||segments[next].start>this.currentTime+downloadAhead))await sleep(50);
+      while(serial===this.serial&&!this.closed&&(inFlight>=parallel||next>consumed&&(next-consumed>=READ_AHEAD_SEGMENTS||segments[next].start>this.currentTime+downloadAhead)))await sleep(next<=consumed?5:50);
       if(serial!==this.serial||this.closed)return;
-      const job=fetchAt(next);downloads.set(next,job);await job;
+      inFlight++;const job=fetchAt(next);downloads.set(next,job);job.then(()=>{inFlight--;});
      }
     })();
     for(let index=0;index<segments.length;index++){
