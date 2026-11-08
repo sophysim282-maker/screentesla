@@ -30,6 +30,8 @@ function playlist(text,url){
 }
 // Prefer actual source resolution. A 6 Mbps ceiling can otherwise select 240p
 // when the source's 720p/1080p variants use a higher bitrate.
+// Build 76 read-ahead: seconds of encoded media downloaded ahead of the playhead.
+const READ_AHEAD_VIDEO=20,READ_AHEAD_AUDIO=12,READ_AHEAD_SEGMENTS=8;
 function chooseVariant(levels,quality='hd'){
  const height=level=>Number((level.RESOLUTION||'').split('x')[1])||0;
  let candidates=levels.filter(level=>!height(level)||height(level)<=1080),wanted=Number(quality);
@@ -364,7 +366,7 @@ class CanvasPlayer {
 
  }
  async preparedSegment(segment,serial,owners){
-  while(serial===this.serial&&!this.closed&&!this.segmentCache.has(segment)&&this.segmentCache.size>=6)await sleep(10);
+  while(serial===this.serial&&!this.closed&&!this.segmentCache.has(segment)&&this.segmentCache.size>=2*READ_AHEAD_SEGMENTS+4)await sleep(10);
   if(serial!==this.serial||this.closed)throw new DOMException('Playback replaced','AbortError');
   let entry=this.segmentCache.get(segment);
   if(!entry){entry={remaining:new Set(owners),promise:this.prepareSegment(segment,serial).then(data=>{if(serial===this.serial&&!this.closed&&owners.includes('video'))this.preparedVideoEnd=Math.max(this.preparedVideoEnd,segment.start+segment.duration);return {data};},error=>({error}))};this.segmentCache.set(segment,entry);this.stats.maxSegmentCache=Math.max(this.stats.maxSegmentCache,this.segmentCache.size);}
@@ -380,16 +382,29 @@ class CanvasPlayer {
    const consume=async(list,kind,owners,allowEmpty=false)=>{
     const segments=list.segments.filter(s=>s.start+s.duration>this.position);
     const fetchAt=index=>this.preparedSegment(segments[index],serial,owners).then(value=>value,error=>({result:{error}}));
-    let pending=segments.length?fetchAt(0):null;
+    // Build 76: download ahead like HLS.js on 240.3.3.3, so a few seconds of slow
+    // network no longer empties the video. One download at a time per lane keeps
+    // the phone's media slots free; decoding below stays 2 s (video) / 4 s (audio)
+    // ahead exactly as before, so decoder and canvas timing are unchanged.
+    const downloadAhead=kind==='audio'?READ_AHEAD_AUDIO:READ_AHEAD_VIDEO,downloads=new Map();let consumed=0;
+    const downloader=(async()=>{
+     for(let next=0;next<segments.length;next++){
+      while(serial===this.serial&&!this.closed&&next>consumed&&(next-consumed>=READ_AHEAD_SEGMENTS||segments[next].start>this.currentTime+downloadAhead))await sleep(50);
+      if(serial!==this.serial||this.closed)return;
+      const job=fetchAt(next);downloads.set(next,job);await job;
+     }
+    })();
     for(let index=0;index<segments.length;index++){
-     const segment=segments[index];
+     const segment=segments[index];consumed=index;
      while(serial===this.serial&&!this.closed&&segment.start>this.currentTime+(kind==='audio'?4:2))await sleep(30);
      if(serial!==this.serial||this.closed)return;
-     const {entry,result}=await pending;if(serial!==this.serial||this.closed)return;if(result.error)throw result.error;
+     while(serial===this.serial&&!this.closed&&!downloads.has(index))await sleep(10);
+     if(serial!==this.serial||this.closed)return;
+     const {entry,result}=await downloads.get(index);downloads.delete(index);if(serial!==this.serial||this.closed)return;if(result.error)throw result.error;
      if(kind==='video')this.preparedVideoEnd=Math.max(this.preparedVideoEnd,segment.start+segment.duration);
-     pending=index+1<segments.length?fetchAt(index+1):null;
      try{await this.decodeSegment(segment,kind,serial,result.data,allowEmpty);}finally{this.releaseSegment(segment,entry,kind);}
     }
+    await downloader;
     // Drain only at end of rendition, including final reordered video frames.
     if(serial===this.serial&&!this.closed){
      const decoder=this.decoders.get(kind);
