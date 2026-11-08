@@ -121,13 +121,16 @@ function demux(bytes,init){
 }
 class CanvasPlayer {
  static supported(){return !!(self.isSecureContext&&self.VideoDecoder&&self.AudioDecoder&&self.EncodedVideoChunk&&self.EncodedAudioChunk);}
- constructor(canvas,{onerror=()=>{},quality='hd',audioContext=null,bufferSeconds=0}={}){
+ constructor(canvas,{onerror=()=>{},quality='hd',audioContext=null,bufferSeconds=0,decoderPreference='auto'}={}){
+  // Build 74: hardware decoding first; after repeated decoder stalls switch to the
+  // browser's software decoder for this session instead of freezing again.
+  this.videoAcceleration=decoderPreference==='software'?'prefer-software':'prefer-hardware';this.adaptiveDecoder=decoderPreference==='auto';this.decoderStallTimes=[];
   this.canvas=canvas;this.ctx=canvas.getContext('2d',{alpha:false});if(!this.ctx)throw Error('Canvas rendering unavailable');
   this.audioContext=audioContext;this.ownsAudioContext=!audioContext;this.audioTail=null;
   this.bufferSeconds=Math.max(0,Math.min(2,Number(bufferSeconds)||0));this.bufferReadyAt=0;this.preparedVideoEnd=0;
   this.quality=quality;this.offeredHeights=[];this.selectedHeight=0;this.onerror=onerror;this.paused=true;this.muted=true;this.duration=0;this.readyState=0;this.ended=false;this.error=null;this.closed=false;
   this.frames=[];this.audio=[];this.nodes=new Set();this.timelines=new Map();this.segmentDiagnostics=[];this.segmentCache=new Map();this.playbackEvents=[];this.audioEnd=0;this.lastAudioSampleRate=0;this.hasAudio=false;this.videoStarved=false;this.position=0;this.videoEnd=0;this.anchor=0;this.running=false;this.serial=0;this.videoNeedsKey=false;this.videoRecoveryAt=-Infinity;this.lastVideoDrawAt=performance.now();this.lastDrawnVideoTimestamp=-Infinity;this.videoGeneration=0;this.videoRecoveryWindow=0;this.videoRecoveryCount=0;this.videoRetryAfter=0;this.decoders=new Map();this.configs=new Map();this.initializers=new Map();
-  this.stats={drawn:0,dropped:0,decoded:0,audioDecoded:0,maxFrames:0,maxAudio:0,audioScheduled:0,audioLate:0,audioJoined:0,audioRestored:0,bufferWaitMs:0,rebufferCount:0,timestampResets:0,directAudioCopies:0,audioGapMs:0,maxAudioNodes:0,videoHiccups:0,audioUnderruns:0,staleAudioDropped:0,maxSegmentCache:0,audioDecoderFlushes:0,videoRecoveries:0,staleVideoDropped:0,videoQueueTimeouts:0};
+  this.stats={drawn:0,dropped:0,decoded:0,audioDecoded:0,maxFrames:0,maxAudio:0,audioScheduled:0,audioLate:0,audioJoined:0,audioRestored:0,bufferWaitMs:0,rebufferCount:0,timestampResets:0,directAudioCopies:0,audioGapMs:0,maxAudioNodes:0,videoHiccups:0,audioUnderruns:0,staleAudioDropped:0,maxSegmentCache:0,audioDecoderFlushes:0,videoRecoveries:0,staleVideoDropped:0,videoQueueTimeouts:0,softwareDecoderFallback:false};
   this.profileStart=performance.now();this.profileBuckets=[];this.profileEvents=[];this.lastProfilePaintAt=0;
   this.profileDocument=self.document||null;this.profileVisibilityReset=()=>{this.lastProfilePaintAt=0;};
   this.profileDocument?.addEventListener?.('visibilitychange',this.profileVisibilityReset);
@@ -224,7 +227,7 @@ class CanvasPlayer {
  fail(error){if(this.closed||error?.name==='AbortError')return;this.error={code:3,message:error.message||String(error)};this.pause();this.onerror(error);}
  async configure(track,kind,serial){
   if(kind==='video'&&Math.min(track.video.width,track.video.height)>1080)throw Error('Source exceeds the 1080p playback limit.');
-  const config=kind==='video'?{codec:track.codec,codedWidth:track.video.width,codedHeight:track.video.height,description:track.description,hardwareAcceleration:'prefer-hardware'}:{codec:track.codec,sampleRate:track.audio.sample_rate,numberOfChannels:track.audio.channel_count,description:track.description};
+  const config=kind==='video'?{codec:track.codec,codedWidth:track.video.width,codedHeight:track.video.height,description:track.description,hardwareAcceleration:this.videoAcceleration}:{codec:track.codec,sampleRate:track.audio.sample_rate,numberOfChannels:track.audio.channel_count,description:track.description};
   if(config.codec.toLowerCase()==='opus'){config.codec='opus';delete config.description;}
   const key=JSON.stringify({...config,description:config.description?Array.from(config.description):[]});
   if(this.configs.get(kind)===key&&this.decoders.get(kind)?.state==='configured')return this.decoders.get(kind);
@@ -277,6 +280,10 @@ class CanvasPlayer {
   this.videoGeneration++;const now=performance.now();
   if(now-this.videoRecoveryWindow>10000){this.videoRecoveryWindow=now;this.videoRecoveryCount=0;}
   if(++this.videoRecoveryCount>4)this.videoRetryAfter=now+3000;
+  if(this.adaptiveDecoder&&this.videoAcceleration==='prefer-hardware'&&['output-stall','queue-timeout','end-flush-timeout','decode-error'].includes(reason)){
+   this.decoderStallTimes=this.decoderStallTimes.filter(t=>now-t<60000);this.decoderStallTimes.push(now);
+   if(this.decoderStallTimes.length>=2){this.videoAcceleration='prefer-software';this.stats.softwareDecoderFallback=true;this.recordPlayback('decoder-software-fallback',this.currentTime);}
+  }
   const decoder=this.decoders.get('video');this.decoders.delete('video');this.configs.delete('video');
   if(decoder&&decoder.state!=='closed')decoder.close();
   for(const frame of this.frames)frame.close();this.frames=[];this.videoNeedsKey=true;
