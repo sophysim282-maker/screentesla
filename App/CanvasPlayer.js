@@ -33,8 +33,12 @@ function playlist(text,url){
 // Build 76 read-ahead: seconds of encoded media downloaded ahead of the playhead.
 const READ_AHEAD_VIDEO=20,READ_AHEAD_AUDIO=12,READ_AHEAD_SEGMENTS=8;
 function chooseVariant(levels,quality='hd'){
- const height=level=>Number((level.RESOLUTION||'').split('x')[1])||0;
- let candidates=levels.filter(level=>!height(level)||height(level)<=1080),wanted=Number(quality);
+ const height=level=>Number((level.RESOLUTION||'').split('x')[1])||0,width=level=>Number((level.RESOLUTION||'').split('x')[0])||0;
+ // Build 78: cap by picture size, not only height. Ultra-wide 2560x1072 is "1072p" but
+ // carries ~1.4x the data of 1920x1080 and kept the read-ahead buffer from filling.
+ const pixels=level=>width(level)*height(level),limit=Number(quality)===720?1280*720:1920*1088;
+ let candidates=levels.filter(level=>!height(level)||(height(level)<=1080&&(!width(level)||pixels(level)<=limit))),wanted=Number(quality);
+ if(!candidates.length)candidates=levels.filter(level=>!height(level)||height(level)<=1080);
  if(!candidates.length)throw Error('YouTube offered no source at or below 1080p.');
  if(wanted>0){const preferred=candidates.filter(level=>height(level)>0&&height(level)<=Math.min(1080,wanted));if(preferred.length)candidates=preferred;}
  const known=candidates.filter(level=>height(level)>0);if(known.length)candidates=known;
