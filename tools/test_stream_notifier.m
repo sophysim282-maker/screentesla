@@ -8,6 +8,7 @@ int main(void){@autoreleasepool{
  assert([r(@"PIP NOT ACTIVE: the saved PiP request is not a running floating window.")[@"id"] isEqual:@"pip-missing"]);
  assert([r(@"PiP is inactive and background grace expired. Receiver remains armed")[@"id"] isEqual:@"grace"]);
  assert([r(@"WEBSITE SILENT: no HTTPS request from the car for 6 s.")[@"id"] isEqual:@"car-silent"]);
+ assert([r(@"YOUTUBE SENT SOUND ONLY: YouTube is using ScreenLink as a speaker")[@"id"] isEqual:@"sound-only"]);
  assert([r(@"Built-in VPN disconnected. Reconnect here before using iPhone VPN discovery.")[@"id"] isEqual:@"vpn"]);
  assert([r(@"Local HTTPS not started: no website certificate in this build.")[@"id"] isEqual:@"cert"]);
  assert([r(@"AIRPLAY DISCOVERY BLOCKED: Local Network permission")[@"id"] isEqual:@"localnet"]);

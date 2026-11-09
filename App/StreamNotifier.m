@@ -14,6 +14,8 @@
     @"body":@"Open ScreenLink and wait for “YOUTUBE PiP ACTIVE” before leaving, so iOS keeps the stream alive.",@"cooldown":@120},
   @{@"prefix":@"PiP is inactive and background grace expired",@"id":@"grace",@"title":@"ScreenLink may be paused",
     @"body":@"iOS can pause ScreenLink now and the car would stop. Tap to keep streaming.",@"cooldown":@60},
+  @{@"prefix":@"YOUTUBE SENT SOUND ONLY",@"id":@"sound-only",@"title":@"YouTube sent sound only",
+    @"body":@"The car gets no video. In YouTube, tap AirPlay and choose ScreenLink VPN Phone again, or play the video again.",@"cooldown":@60},
   @{@"prefix":@"WEBSITE SILENT",@"id":@"car-silent",@"title":@"Car screen lost the connection",
     @"body":@"Keep the car on your iPhone hotspot Wi-Fi. If it does not come back, reload car.tesla4khmer.com/video on the car.",@"cooldown":@120},
   @{@"prefix":@"Built-in VPN disconnected",@"id":@"vpn",@"title":@"ScreenLink VPN is off",
