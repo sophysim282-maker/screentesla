@@ -25,7 +25,8 @@ const server=https.createServer({key:fs.readFileSync(temp+'/key'),cert:fs.readFi
   res.statusCode=404;res.end();
  };
  // During the pause every phone request hangs, as in the car log (WEBSITE SILENT).
- if(Date.now()<pausedUntil)held.push(serve);else serve();
+ // Build 94: BLACKOUT=1 drops every connection instead (the car's "Failed to fetch").
+ if(Date.now()<pausedUntil){if(process.env.BLACKOUT)req.socket.destroy();else held.push(serve);}else serve();
 });
 (async()=>{let browser;try{
  await new Promise(r=>server.listen(0,'127.0.0.1',r));const base='https://127.0.0.1:'+server.address().port;
@@ -45,7 +46,9 @@ const server=https.createServer({key:fs.readFileSync(temp+'/key'),cert:fs.readFi
  const after=await page.evaluate(()=>ScreenLinkCanvasStatus());
  const holds=after.mediaStats.videoHiccups-before.mediaStats.videoHiccups,rebuffers=after.mediaStats.rebufferCount-before.mediaStats.rebufferCount,advanced=after.mediaPosition-before.mediaPosition,pictures=after.mediaStats.drawn-before.mediaStats.drawn;
  const result={videoAheadBefore:+before.encodedVideoLead.toFixed(1),advanced:+advanced.toFixed(1),pictures,holds,rebuffers};
+ if(process.env.BLACKOUT){await page.waitForTimeout(4000);const later=await page.evaluate(()=>({error:ScreenLinkCanvasStatus().lastPlaybackError?.message||ScreenLinkCanvasStatus().mediaError||'',retries:ScreenLinkCanvasStatus().mediaStats?.fetchRetries||0}));result.playerError=later.error;result.fetchRetries=later.retries;
+  if(!expectFreeze)assert.equal(later.error,'','Player must not give up during a short blackout');}
  console.log('DURING_PAUSE',result);
- if(expectFreeze){assert(holds>0||rebuffers>0||pictures<100,'Old player expected to freeze');console.log('OLD_PLAYER_FREEZES_AS_IN_CAR');}
+ if(expectFreeze){assert(holds>0||rebuffers>0||pictures<100||result.playerError,'Old player expected to freeze');console.log('OLD_PLAYER_FREEZES_AS_IN_CAR');}
  else{assert.equal(holds,0,'No picture hold during the pause');assert.equal(rebuffers,0,'No rebuffer during the pause');assert(advanced>PAUSE/1000-.5,'Playback keeps running');assert(pictures>PAUSE/1000*22,'About 30 pictures per second keep drawing');console.log('NETWORK_PAUSE_PASSED: phone pause absorbed by read-ahead; picture and sound continued.');}
 }finally{await browser?.close();server.close();fs.rmSync(temp,{recursive:true,force:true});}})().catch(e=>{console.error(e);process.exit(1);});

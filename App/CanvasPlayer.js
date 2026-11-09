@@ -199,7 +199,10 @@ class CanvasPlayer {
     this.stats.fetchRetries=(this.stats.fetchRetries||0)+1;this.lastTransportError={message:error.message,time:Date.now(),attempt:attempt+1};
     // Retry the same bytes. Keep decoders, PCM, frames and the playback clock.
     // The normal buffer scheduler pauses only when usable media actually runs out.
-    if(attempt>=5){const e=Error('Phone/media transport unavailable after retries: '+error.message);e.kind='transport';throw e;}
+    // Build 94: ride through short Wi-Fi blackouts. The car lost the phone for 1-15 s at a time
+    // (requests never reached the phone) and 5 retries (~6 s) gave up while 20 s of video was
+    // still buffered. Now retries continue for about 30 s (2 s apart) before giving up.
+    if(attempt>=17){const e=Error('Phone/media transport unavailable after retries: '+error.message);e.kind='transport';throw e;}
    }finally{clearTimeout(timer);outer.removeEventListener('abort',cancel);}
    await sleep(Math.min(2000,250*Math.pow(2,attempt)));
   }
