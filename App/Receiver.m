@@ -1,6 +1,13 @@
 #import "Receiver.h"
 #import "LocalTLS.h"
 #import "IdentityStore.h"
+// Build 87: ScreenLink Maps (Swift, main app only) exposes its latest map picture and directions.
+@protocol SLMapFeedAPI
++ (NSData *)frameData;
++ (NSData *)backgroundData;
++ (NSData *)stateData;
++ (void)command:(NSString *)action params:(NSDictionary<NSString *,NSString *> *)params;
+@end
 #import "LocalWebSocket.h"
 #import "VPNDiscovery.h"
 #import "AnnexB.h"
@@ -721,6 +728,22 @@ static NSArray *txtStrings(const char *bytes,int length) {
     else if([url.path isEqual:@"/screen/init.mp4"]){NSDictionary *part=[_screenStream initialization];body=part[@"data"]?:NSData.data;mime=@"video/mp4";extra=[NSString stringWithFormat:@"X-Stream-Epoch: %@\r\n",part[@"epoch"]?:@""];if(!body.length)status=@"503 Service Unavailable";}
     else if([url.path isEqual:@"/screen/segments"]){NSDictionary *part=[_screenStream readAfter:after epoch:epoch?:@""];if([part[@"reset"] boolValue])status=@"409 Conflict";else{body=part[@"data"]?:NSData.data;if(!body.length)status=@"204 No Content";}mime=@"video/mp4";extra=[NSString stringWithFormat:@"X-Stream-Epoch: %@\r\nX-Last-ID: %@\r\n",part[@"epoch"]?:@"",part[@"id"]?:@0];}
     else if([url.path isEqual:@"/split"] || [url.path isEqual:@"/map"]){mime=@"text/html; charset=utf-8";NSString *path=[NSBundle.mainBundle pathForResource:[url.path isEqual:@"/split"]?@"SplitViewer":@"MapPlayer" ofType:@"html"];body=path?[NSData dataWithContentsOfFile:path]:NSData.data;}
+    else if([url.path hasPrefix:@"/map/"]){
+        // Build 87: small navigation map for the (rear-seat) car screen; same approval/token as media.
+        Class feed=NSClassFromString(@"SLMapFeed");
+        if(!feed){status=@"404 Not Found";}
+        else if([url.path isEqual:@"/map/frame.jpg"]||[url.path isEqual:@"/map/bg.jpg"]){
+            NSData *jpeg=[url.path isEqual:@"/map/frame.jpg"]?[(id<SLMapFeedAPI>)feed frameData]:[(id<SLMapFeedAPI>)feed backgroundData];
+            if(jpeg.length){mime=@"image/jpeg";body=jpeg;}else status=@"204 No Content";
+        }
+        else if([url.path isEqual:@"/map/state"]){mime=@"application/json";body=[(id<SLMapFeedAPI>)feed stateData];}
+        else if([url.path isEqual:@"/map/cmd"]){
+            NSMutableDictionary *params=[NSMutableDictionary dictionary];for(NSURLQueryItem *item in url.queryItems)if(![item.name isEqual:@"token"]&&item.value)params[item.name]=item.value;
+            NSString *action=params[@"a"]?:@"";if(action.length&&action.length<40)[(id<SLMapFeedAPI>)feed command:action params:params];
+            mime=@"application/json";body=[@"{\"ok\":true}" dataUsingEncoding:NSUTF8StringEncoding];
+        }
+        else status=@"404 Not Found";
+    }
     else if([url.path isEqual:@"/media/state"]){mime=@"application/json";NSMutableDictionary *state=[[self nativeMediaState] mutableCopy];state[@"screenLocked"]=@(self.screenCaptureLocked||self.mediaOnly);body=[NSJSONSerialization dataWithJSONObject:state options:0 error:NULL];}
     else if(report){
         NSData *json=[request subdataWithRange:NSMakeRange(bodyOffset,bodyLength)];id object=[NSJSONSerialization JSONObjectWithData:json options:0 error:NULL];

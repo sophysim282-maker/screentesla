@@ -2,6 +2,10 @@ name: ScreenLinkAirPlayLab
 options:
   deploymentTarget:
     iOS: '15.0'
+packages:
+  GoogleMaps:
+    url: https://github.com/googlemaps/ios-maps-sdk
+    from: 9.0.0
 settings:
   base:
     PRODUCT_BUNDLE_IDENTIFIER: local.screenlink.airplaylab
@@ -31,9 +35,11 @@ targets:
   ScreenLinkAirPlayLab:
     type: application
     platform: iOS
+    deploymentTarget: '16.0'
     sources:
     - path: Shared
     - path: Activity
+    - path: Maps
     - path: RTC
     - path: App
     - path: Vendor/RPiPlay/lib
@@ -57,6 +63,8 @@ targets:
       embed: true
     - target: ScreenLinkWidgets
       embed: true
+    - package: GoogleMaps
+      product: GoogleMaps
     - sdk: ActivityKit.framework
       weak: true
     - sdk: AppIntents.framework
@@ -81,8 +89,8 @@ targets:
       path: App/Info.plist
       properties:
         CFBundleDisplayName: ScreenLink
-        CFBundleShortVersionString: 0.20.49
-        CFBundleVersion: '86'
+        CFBundleShortVersionString: 0.20.50
+        CFBundleVersion: '87'
         UILaunchScreen: {}
         NSSupportsLiveActivities: true
         CFBundleURLTypes:
@@ -92,6 +100,10 @@ targets:
         UIBackgroundModes:
         - audio
         - processing
+        - location
+        NSLocationWhenInUseUsageDescription: ScreenLink Maps uses your location for navigation on the car screen.
+        NSMicrophoneUsageDescription: ScreenLink Maps uses the microphone for voice search.
+        NSSpeechRecognitionUsageDescription: ScreenLink Maps turns your voice into a search.
         BGTaskSchedulerPermittedIdentifiers:
         - local.screenlink.airplaylab.casting.*
         - local.screenlink.airplaylab.3TY7CJCWLP.casting.*
@@ -132,8 +144,8 @@ targets:
       path: Tunnel/Info.plist
       properties:
         CFBundleDisplayName: ScreenLink Local VPN
-        CFBundleShortVersionString: 0.20.49
-        CFBundleVersion: '86'
+        CFBundleShortVersionString: 0.20.50
+        CFBundleVersion: '87'
         NSExtension:
           NSExtensionPointIdentifier: com.apple.networkextension.packet-tunnel
           NSExtensionPrincipalClass: PacketTunnelProvider
@@ -202,8 +214,8 @@ targets:
       path: Broadcast/Info.plist
       properties:
         CFBundleDisplayName: ScreenLink Screen
-        CFBundleShortVersionString: 0.20.49
-        CFBundleVersion: '86'
+        CFBundleShortVersionString: 0.20.50
+        CFBundleVersion: '87'
         NSLocalNetworkUsageDescription: Share the live iPhone screen and AirPlay media with your hotspot viewer during a screen broadcast.
         NSBonjourServices:
         - _airplay._tcp
@@ -238,8 +250,8 @@ targets:
       path: Widgets/Info.plist
       properties:
         CFBundleDisplayName: ScreenLink
-        CFBundleShortVersionString: 0.20.49
-        CFBundleVersion: '86'
+        CFBundleShortVersionString: 0.20.50
+        CFBundleVersion: '87'
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
           NSExceptionDomains:

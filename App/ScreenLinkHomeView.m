@@ -145,6 +145,8 @@ static UIColor *SLRGB(CGFloat r,CGFloat g,CGFloat b){return [UIColor colorWithRe
   self.statusGlow=[SLGlowBorder new];self.statusGlow.translatesAutoresizingMaskIntoConstraints=NO;[card.contentView addSubview:self.statusGlow];[NSLayoutConstraint activateConstraints:@[[self.statusGlow.topAnchor constraintEqualToAnchor:card.contentView.topAnchor],[self.statusGlow.bottomAnchor constraintEqualToAnchor:card.contentView.bottomAnchor],[self.statusGlow.leadingAnchor constraintEqualToAnchor:card.contentView.leadingAnchor],[self.statusGlow.trailingAnchor constraintEqualToAnchor:card.contentView.trailingAnchor]]];
   self.startButton=[self button:@"Start YouTube + PiP" symbol:@"play.fill" action:@selector(startTapped) filled:YES];self.startButton.accessibilityIdentifier=@"home.start";[self makeStartButtonAlive];[stack addArrangedSubview:self.startButton];
   UILabel *recording=[self label:@"No screen recording" style:UIFontTextStyleFootnote];recording.textAlignment=NSTextAlignmentCenter;recording.textColor=UIColor.secondaryLabelColor;[stack addArrangedSubview:recording];
+  // Build 87: ScreenLink Maps (navigation; the car screen shows a small map beside the video).
+  UIButton *maps=[self button:@"Navigation map" symbol:@"map.fill" action:@selector(mapTapped) filled:NO];maps.accessibilityIdentifier=@"home.maps";[stack addArrangedSubview:maps];
   self.disconnectButton=[self button:@"Disconnect All" symbol:@"power" action:@selector(disconnectTapped) filled:NO];self.disconnectButton.accessibilityIdentifier=@"home.disconnect";[stack addArrangedSubview:self.disconnectButton];
   UIStackView *controls=[UIStackView new];controls.axis=UILayoutConstraintAxisVertical;controls.spacing=12;controls.layoutMargins=UIEdgeInsetsMake(18,18,18,18);controls.layoutMarginsRelativeArrangement=YES;controls.backgroundColor=[UIColor.secondarySystemGroupedBackgroundColor colorWithAlphaComponent:.62];controls.layer.cornerRadius=26;controls.layer.borderWidth=.5;controls.layer.borderColor=[UIColor colorWithWhite:1 alpha:.14].CGColor;self.playerQuality.selectedSegmentTintColor=nil;
   [controls addArrangedSubview:[self label:@"Car player controls" style:UIFontTextStyleHeadline]];
@@ -198,6 +200,7 @@ static UIColor *SLRGB(CGFloat r,CGFloat g,CGFloat b){return [UIColor colorWithRe
 }
 - (void)themeTapped {BOOL dark=self.traitCollection.userInterfaceStyle!=UIUserInterfaceStyleDark;self.overrideUserInterfaceStyle=dark?UIUserInterfaceStyleDark:UIUserInterfaceStyleLight;[NSUserDefaults.standardUserDefaults setInteger:dark?2:1 forKey:@"ScreenLinkAppearance"];UIAccessibilityPostNotification(UIAccessibilityAnnouncementNotification,dark?@"Dark appearance":@"Light appearance");}
 - (void)startTapped {self.idleAllowed=NO;[self stopAmbient];if(self.startAction)self.startAction();}
+- (void)mapTapped {if(self.mapAction)self.mapAction();}
 - (void)disconnectTapped {if(self.disconnectAction)self.disconnectAction();}
 - (void)developerTapped {[self stopAmbient];if(self.developerAction)self.developerAction();}
 - (void)copyTapped {if(self.copyAction)self.copyAction();UIAccessibilityPostNotification(UIAccessibilityAnnouncementNotification,@"Website link copied");}
