@@ -1,5 +1,5 @@
 // Build 71: the HTTPS car website plays YouTube with the browser's own video
-// player (HLS.js + <video>, as on http://240.3.3.3:8080) drawn on the canvas.
+// player (HLS.js + <video>, as on http://3.3.3.3:8080) drawn on the canvas.
 // Usage: node tools/test_browser_video.cjs App <hls fixture dir>
 const fs=require('fs'),path=require('path'),https=require('https'),assert=require('assert'),os=require('os'),{execFileSync}=require('child_process'),{chromium}=require('playwright');
 const app=process.argv[2],fixtures=process.argv[3],temp=fs.mkdtempSync(path.join(os.tmpdir(),'screenlink-browser-video-'));

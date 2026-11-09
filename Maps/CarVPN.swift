@@ -1,11 +1,11 @@
 import Foundation
 import NetworkExtension
 
-// Build 87: Car Maps inside ScreenLink. ScreenLink already owns the 240.3.3.3 VPN, and iOS
+// Build 87: Car Maps inside ScreenLink. ScreenLink already owns the 3.3.3.3 VPN, and iOS
 // runs only one VPN at a time, so this keeps Car Maps' screens unchanged but only reports
 // ScreenLink's VPN status. Turning it on or off is done by ScreenLink (Start / Disconnect).
 final class CarVPN: ObservableObject {
-    static let address = "240.3.3.3"
+    static let address = "3.3.3.3"
     @Published var status: NEVPNStatus = .invalid
     @Published var error: String?
     private var observer: NSObjectProtocol?

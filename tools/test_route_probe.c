@@ -2,7 +2,7 @@
 #include <assert.h>
 #include <stdio.h>
 int main(void){
-    uint32_t bridge=0xac140a01u,client=0xac140a04u,mask=0xffffff00u,alias=0xf0030303u;
+    uint32_t bridge=0xac140a01u,client=0xac140a04u,mask=0xffffff00u,alias=0x03030303u;
     assert(sl_route_probe_peer(client,bridge,bridge,mask,0));
     assert(!sl_route_probe_peer(client,alias,bridge,mask,0));
     assert(sl_route_probe_peer(client,alias,bridge,mask,1));

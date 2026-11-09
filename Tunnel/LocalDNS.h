@@ -5,12 +5,12 @@
 #include <string.h>
 /* Build 77: the VPN answers name lookups for car.tesla4khmer.com itself, so the
    car's website no longer depends on an internet DNS answer (which failed with
-   "server IP address could not be found" while https://240.3.3.3 still worked).
+   "server IP address could not be found" while https://3.3.3.3 still worked).
    Only UDP queries sent to SL_DNS_SERVER:53 are handled; everything else is left
-   alone. A -> 240.3.3.3, AAAA -> no IPv6 (NOERROR, empty), other names REFUSED.
+   alone. A -> 3.3.3.3, AAAA -> no IPv6 (NOERROR, empty), other names REFUSED.
    The packet is rewritten in place as the reply; returns the reply length or 0. */
 static const uint8_t SL_DNS_SERVER[4]={10,7,0,53};
-static const uint8_t SL_DNS_ANSWER[4]={240,3,3,3};
+static const uint8_t SL_DNS_ANSWER[4]={3,3,3,3};
 static inline uint16_t sl_dns_ip_checksum(const uint8_t *p,size_t n){
     uint32_t sum=0;for(size_t i=0;i+1<n;i+=2)sum+=(uint32_t)(p[i]<<8|p[i+1]);
     while(sum>>16)sum=(sum&0xffff)+(sum>>16);

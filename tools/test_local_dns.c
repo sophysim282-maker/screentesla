@@ -20,7 +20,7 @@ int main(void){
     uint8_t *d=p+28;assert(sl_dns_ip_checksum(p,20)==0);assert(p[12]==10&&p[13]==7&&p[14]==0&&p[15]==53);assert(p[16]==172&&p[19]==2);
     assert(p[20]==0&&p[21]==53&&p[22]==0xd4&&p[23]==0x31);assert(d[0]==0x12&&d[1]==0x34&&(d[2]&0x80)&&(d[2]&0x04)&&(d[2]&0x01)&&(d[3]&0x0f)==0);
     assert(d[7]==1&&d[11]==0);assert(!memcmp(p+r-4,SL_DNS_ANSWER,4));assert((size_t)((p[2]<<8)|p[3])==r);
-    puts("A car.tesla4khmer.com -> 240.3.3.3 (with EDNS, header checksum valid)");
+    puts("A car.tesla4khmer.com -> 3.3.3.3 (with EDNS, header checksum valid)");
     n=query(p,"CAR.Tesla4Khmer.COM",1,0,53);r=SLAnswerLocalDNS(p,n,sizeof p);assert(r>0&&!memcmp(p+r-4,SL_DNS_ANSWER,4));puts("case-insensitive name");
     n=query(p,"car.tesla4khmer.com",28,0,53);r=SLAnswerLocalDNS(p,n,sizeof p);assert(r>0&&p[28+7]==0&&(p[28+3]&0x0f)==0);puts("AAAA -> no IPv6, NOERROR");
     n=query(p,"www.google.com",1,0,53);r=SLAnswerLocalDNS(p,n,sizeof p);assert(r>0&&(p[28+3]&0x0f)==5&&p[28+7]==0);puts("other name -> REFUSED");

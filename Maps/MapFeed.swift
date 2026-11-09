@@ -1,7 +1,7 @@
 import Foundation
 
 // Build 87: Car Maps inside ScreenLink. Car Maps used its own web server on port 8080
-// and its own 240.3.3.3 VPN, which collide with ScreenLink. This keeps Car Maps' code
+// and its own 3.3.3.3 VPN, which collide with ScreenLink. This keeps Car Maps' code
 // unchanged by giving it a `CarServer` with the same interface that only stores the
 // latest map picture and directions. ScreenLink's own server (Receiver.m) serves them to
 // the car at /map/frame.jpg, /map/bg.jpg, /map/state and /map/cmd over the one VPN.
