@@ -26,8 +26,9 @@ final class VoiceSearch: ObservableObject {
         let locale = Locale(identifier: Settings.speechLocales[language] ?? "en-US")
         guard let rec = SFSpeechRecognizer(locale: locale) ?? SFSpeechRecognizer(), rec.isAvailable else { return }
         let session = AVAudioSession.sharedInstance()
-        try? session.setCategory(.record, mode: .measurement, options: .duckOthers)
-        try? session.setActive(true, options: .notifyOthersOnDeactivation)
+        // Build 91: record while ScreenLink keeps playing (".record" stopped PiP and AirPlay).
+        try? session.setCategory(.playAndRecord, mode: .default, options: [.mixWithOthers, .defaultToSpeaker, .allowBluetoothA2DP])
+        try? session.setActive(true)
 
         let req = SFSpeechAudioBufferRecognitionRequest()
         req.shouldReportPartialResults = true

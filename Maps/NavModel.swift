@@ -104,9 +104,15 @@ final class NavModel: NSObject, ObservableObject, CLLocationManagerDelegate {
         Self.voiceAudio()
     }
 
+    /// Build 91 (ScreenLink Maps): ScreenLink's PiP and AirPlay receiver own the audio session
+    /// (playback / moviePlayback / mixWithOthers, see YouTubePiP.m). Car Maps used to switch it to
+    /// voicePrompt + duckOthers, which interrupted PiP and dropped YouTube AirPlay when the map opened.
+    /// Voice directions now use the same session and simply mix over the video sound.
     static func voiceAudio() {
-        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .voicePrompt,
-                                                         options: [.duckOthers, .mixWithOthers])
+        let session = AVAudioSession.sharedInstance()
+        if session.category != .playback || session.mode != .moviePlayback || !session.categoryOptions.contains(.mixWithOthers) {
+            try? session.setCategory(.playback, mode: .moviePlayback, options: [.mixWithOthers])
+        }
     }
 
     // MARK: - Text for screens
