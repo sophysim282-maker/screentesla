@@ -70,7 +70,7 @@ jobs:
           python3 tools/create_packed_audio_fixture.py build/pure
           node --require ./tools/test_browser_engine.cjs tools/test_pure_canvas.cjs App build/pure build/live.mp4
   native:
-    runs-on: macos-15-intel
+    runs-on: macos-15
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
