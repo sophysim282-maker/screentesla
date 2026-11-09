@@ -2,10 +2,20 @@
 """Pinned WebRTC community binary, compiled from upstream WebRTC; verify before use."""
 import hashlib,urllib.request,zipfile,io,tempfile,subprocess,sys
 from pathlib import Path
+
+def fetch(url,timeout=60,tries=6):
+    """Retry temporary registry/network errors (e.g. HTTP 504) with backoff; integrity is still checked."""
+    import time,urllib.error
+    for attempt in range(tries):
+        try: return urllib.request.urlopen(url,timeout=timeout).read()
+        except (urllib.error.URLError,TimeoutError,ConnectionError) as error:
+            if attempt==tries-1: raise
+            print(f'Download retry {attempt+1} after: {error}',flush=True);time.sleep(5*(attempt+1))
+
 root=Path(__file__).resolve().parent.parent
 url='https://github.com/stasel/WebRTC/releases/download/156.0.0/WebRTC-M156.xcframework.zip'
 digest='43c2a6f7a650185bbc911d7605a979589671886e8fc0ac283f54fdf3f511dc46'
-archive=urllib.request.urlopen(url,timeout=120).read()
+archive=fetch(url,timeout=120)
 assert hashlib.sha256(archive).hexdigest()==digest,'WebRTC archive integrity mismatch'
 with zipfile.ZipFile(io.BytesIO(archive)) as z:
     for member in z.infolist():
