@@ -1,4 +1,4 @@
-name: DNS check car.tesla4khmer.com (TTL recheck)
+name: DNS check car.tesla4khmer.com (TTL recheck 2)
 on:
   push:
     branches: ['tools/dns-check']
