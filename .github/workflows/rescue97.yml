@@ -1,5 +1,5 @@
 name: Build97 rescue page
-# Build 97: saved rescue page; Developer title shows the real app version.
+# Build 97: rescue page, real version title, quiet car warnings while video plays.
 on:
   push:
     branches: ['release/build97-rescue-page']

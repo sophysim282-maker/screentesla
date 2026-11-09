@@ -12,3 +12,8 @@ reloaded the website while its name lookup failed, and no page code could run to
 - tools/test_rescue_page.cjs: online reload uses the phone page, unreachable reload shows the
   saved page and runs its script, API never cached, saved copy follows the newest page.
 - The car must open the website once while connected, so the copy is saved.
+
+Also in build 97:
+- Developer screen title reads the real app version from Info.plist (it was stuck at 0.20.54 / 91).
+- Car page shows "HTTPS interrupted" only when the picture has stopped for 4 s; while the
+  saved video keeps playing through a short drop, it stays quiet.
