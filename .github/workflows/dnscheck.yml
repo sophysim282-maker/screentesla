@@ -1,0 +1,23 @@
+name: DNS check car.tesla4khmer.com
+on:
+  push:
+    branches: ['tools/dns-check']
+    paths: ['.github/workflows/dnscheck.yml']
+jobs:
+  dns:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Look up the car domain everywhere
+        run: |
+          sudo apt-get install -y dnsutils >/dev/null 2>&1 || true
+          echo "== Name servers for tesla4khmer.com"; dig +short NS tesla4khmer.com
+          echo "== SOA"; dig +short SOA tesla4khmer.com
+          for ns in $(dig +short NS tesla4khmer.com); do
+            echo "== Authoritative $ns"; dig +noall +answer car.tesla4khmer.com ANY @$ns; dig +noall +answer car.tesla4khmer.com A @$ns; dig +noall +answer car.tesla4khmer.com AAAA @$ns; dig +noall +answer car.tesla4khmer.com CNAME @$ns
+          done
+          for r in 8.8.8.8 1.1.1.1 9.9.9.9 208.67.222.222; do
+            echo "== Resolver $r (5 tries)"
+            for i in 1 2 3 4 5; do dig +noall +answer +comments car.tesla4khmer.com A @$r | grep -E "status:|IN" ; done
+            dig +noall +answer car.tesla4khmer.com AAAA @$r
+          done
+          echo "== Main site for comparison"; dig +noall +answer tesla4khmer.com A @8.8.8.8
