@@ -9,6 +9,9 @@
 @property(nonatomic) BOOL stopRequested;
 @property(nonatomic) NSUInteger quietSamples;
 @property(nonatomic,strong) NSArray *ownedConnections;
+@property(nonatomic) NSUInteger dnsWatchSerial;
+@property(nonatomic) NSInteger dnsAnswersSeen;
+@property(nonatomic) BOOL dnsWatchReplied;
 @end
 @implementation LocalVPN
 - (instancetype)init {
@@ -82,7 +85,7 @@
         if(notification.object!=self.manager.connection&&![self.ownedConnections containsObject:notification.object])return;
         if(self.stopRequested){NEVPNConnection *connection=notification.object;if(connection.status!=NEVPNStatusDisconnected&&connection.status!=NEVPNStatusInvalid)[connection stopVPNTunnel];return;}
         switch(self.manager.connection.status) {
-            case NEVPNStatusConnected:[self report:@"BUILT-IN VPN CONNECTED: 10.7.1.1 ↔ 10.7.0.1. LocalDevVPN is not required. The VPN does not extend the receiver app's background runtime."];[self complete:YES];[self routeProbeStatus];break;
+            case NEVPNStatusConnected:[self report:@"BUILT-IN VPN CONNECTED: 10.7.1.1 ↔ 10.7.0.1. LocalDevVPN is not required. The VPN does not extend the receiver app's background runtime."];[self complete:YES];[self routeProbeStatus];[self startDNSWatch];break;
             case NEVPNStatusDisconnected:case NEVPNStatusInvalid:[self report:@"Built-in VPN disconnected. Reconnect here before using iPhone VPN discovery."];break;
             case NEVPNStatusReasserting:[self report:@"Built-in VPN reconnecting…"];break;
             default:break;
@@ -98,6 +101,30 @@
         dispatch_async(dispatch_get_main_queue(),^{[self report:[@"VPN ROUTE PROBE STATUS: " stringByAppendingString:value?:@"Invalid response"]];});
     }];
     if(!sent)[self report:[NSString stringWithFormat:@"Route probe status failed: %@",error.localizedDescription?:@"message not sent"]];
+}
+// Build 92: CAR DNS log. Every 5 s, ask the VPN how many name questions for
+// car.tesla4khmer.com it answered, and log new ones. If the website loses the phone and no
+// new CAR DNS line appears around that time, the car did not ask the phone for the name.
+- (void)startDNSWatch {
+    self.dnsWatchSerial++;self.dnsAnswersSeen=-1;self.dnsWatchReplied=NO;
+    NSUInteger serial=self.dnsWatchSerial;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW,(int64_t)(3*NSEC_PER_SEC)),dispatch_get_main_queue(),^{[self dnsWatchTick:serial];});
+}
+- (void)dnsWatchTick:(NSUInteger)serial {
+    if(serial!=self.dnsWatchSerial||!self.connected)return;
+    NETunnelProviderSession *session=(NETunnelProviderSession *)self.manager.connection;
+    [session sendProviderMessage:[@"dns-status" dataUsingEncoding:NSUTF8StringEncoding] returnError:nil responseHandler:^(NSData *data){
+        NSDictionary *reply=data.length?[NSJSONSerialization JSONObjectWithData:data options:0 error:nil]:nil;
+        dispatch_async(dispatch_get_main_queue(),^{
+            if(serial!=self.dnsWatchSerial)return;
+            if(![reply isKindOfClass:NSDictionary.class]){return;}
+            NSInteger total=[reply[@"localDNSAnswers"] integerValue];
+            if(!self.dnsWatchReplied){self.dnsWatchReplied=YES;[self report:[NSString stringWithFormat:@"CAR DNS WATCH: VPN answers car.tesla4khmer.com → 3.3.3.3 (kept 1 day). %ld answered so far.",(long)total]];}
+            else if(total>self.dnsAnswersSeen)[self report:[NSString stringWithFormat:@"CAR DNS: car.tesla4khmer.com → 3.3.3.3 answered by the phone VPN (%ld new, %ld total).",(long)(total-self.dnsAnswersSeen),(long)total]];
+            self.dnsAnswersSeen=total;
+        });
+    }];
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW,(int64_t)(5*NSEC_PER_SEC)),dispatch_get_main_queue(),^{[self dnsWatchTick:serial];});
 }
 - (void)waitForOwnManagers:(NSArray<NETunnelProviderManager *> *)managers generation:(NSUInteger)generation remaining:(NSUInteger)remaining completion:(void (^)(BOOL))completion {
     if(generation!=self.attempt)return;

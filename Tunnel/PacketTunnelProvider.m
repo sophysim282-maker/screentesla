@@ -46,7 +46,7 @@
             if(protocols[i].intValue!=AF_INET)continue;
             NSMutableData *packet=[packets[i] mutableCopy];
             const uint8_t *bytes=packet.bytes;
-            if(owner.routeProbe && packet.length>=20 && (bytes[0]>>4)==4 && bytes[16]==240 && bytes[17]==3 && bytes[18]==3 && bytes[19]==3){
+            if(owner.routeProbe && packet.length>=20 && (bytes[0]>>4)==4 && bytes[16]==3 && bytes[17]==3 && bytes[18]==3 && bytes[19]==3){
                 owner.virtualPacketsSeen++;if(bytes[9]==6)owner.virtualTCPPackets++;if(bytes[9]==17)owner.virtualUDPPackets++;
             }
             // Probe traffic observed in packetFlow is counted, not reflected or relayed.
@@ -67,6 +67,7 @@
     NSString *command=[[NSString alloc]initWithData:messageData encoding:NSUTF8StringEncoding];
     BOOL aliasPresent=NO;struct ifaddrs *head=NULL;
     if(getifaddrs(&head)==0){for(struct ifaddrs *p=head;p;p=p->ifa_next)if(p->ifa_addr && p->ifa_addr->sa_family==AF_INET && ntohl(((struct sockaddr_in *)p->ifa_addr)->sin_addr.s_addr)==0x03030303u)aliasPresent=YES;freeifaddrs(head);}
+    if([command isEqual:@"dns-status"]){if(completionHandler)completionHandler([NSJSONSerialization dataWithJSONObject:@{@"localDNSAnswers":@(self.localDNSAnswers)} options:0 error:nil]);return;}
     NSDictionary *result=[command isEqual:@"route-probe-status"]?@{@"settingsAccepted":@(self.reading),@"experimentalAliasRequested":@(self.routeProbe),@"aliasPresentInInterfaces":@(aliasPresent),@"virtualPacketsSeen":@(self.virtualPacketsSeen),@"virtualTCPPackets":@(self.virtualTCPPackets),@"virtualUDPPackets":@(self.virtualUDPPackets),@"localDNSAnswers":@(self.localDNSAnswers),@"teslaReachabilityVerified":@NO}:@{@"error":@"unknown command"};
     if(completionHandler)completionHandler([NSJSONSerialization dataWithJSONObject:result options:0 error:nil]);
 }

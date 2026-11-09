@@ -3,7 +3,8 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
-/* Build 77: the VPN answers name lookups for car.tesla4khmer.com itself, so the
+/* Build 92: the answer may be kept for 1 day (TTL 86400, was 60 s).
+   Build 77: the VPN answers name lookups for car.tesla4khmer.com itself, so the
    car's website no longer depends on an internet DNS answer (which failed with
    "server IP address could not be found" while https://3.3.3.3 still worked).
    Only UDP queries sent to SL_DNS_SERVER:53 are handled; everything else is left
@@ -43,7 +44,7 @@ static inline size_t SLAnswerLocalDNS(uint8_t *p,size_t n,size_t capacity){
     d[2]=0x80|opcode|0x04|(d[2]&0x01); /* QR, AA, keep RD */
     d[3]=0x80|(car?0:5);                 /* RA, NOERROR or REFUSED */
     d[6]=0;d[7]=answerA?1:0;d[8]=d[9]=d[10]=d[11]=0;
-    if(answerA){uint8_t *a=d+question;const uint8_t rr[16]={0xc0,0x0c,0,1,0,1,0,0,0,60,0,4,SL_DNS_ANSWER[0],SL_DNS_ANSWER[1],SL_DNS_ANSWER[2],SL_DNS_ANSWER[3]};memcpy(a,rr,16);}
+    if(answerA){uint8_t *a=d+question;const uint8_t rr[16]={0xc0,0x0c,0,1,0,1,0,1,0x51,0x80,0,4,SL_DNS_ANSWER[0],SL_DNS_ANSWER[1],SL_DNS_ANSWER[2],SL_DNS_ANSWER[3]};memcpy(a,rr,16);}
     uint8_t tmp[4];memcpy(tmp,u,2);memcpy(u,u+2,2);memcpy(u+2,tmp,2);
     size_t udpLen=8+reply;u[4]=(uint8_t)(udpLen>>8);u[5]=(uint8_t)udpLen;u[6]=u[7]=0; /* UDP checksum optional on IPv4 */
     memcpy(tmp,p+12,4);memcpy(p+12,p+16,4);memcpy(p+16,tmp,4);

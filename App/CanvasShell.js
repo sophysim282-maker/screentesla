@@ -40,7 +40,17 @@ function collectCarLog(p){
  if(lastConnectionError&&lastConnectionError!==lastReportedConnectionError){lastReportedConnectionError=lastConnectionError;carLogLine('connection was interrupted: '+String(lastConnectionError.message||'').slice(0,100)+' at '+new Date(lastConnectionError.time).toLocaleTimeString()+(lastConnectionError.failures?' after '+lastConnectionError.failures+' failed checks':''));}
  if(fresh||Date.now()-lastCarSummaryAt>60000){lastCarSummaryAt=Date.now();const s=p.stats||{};carLogLine('summary: '+(activeEngine||'?')+' '+(p.videoAcceleration||'')+' · '+$('mediaCanvas').width+'x'+$('mediaCanvas').height+' · quality '+$('quality').value+' · at '+at(p.currentTime)+' · pictures '+(s.drawn||0)+' · decoder restarts '+(s.videoRecoveries||0)+' · picture holds '+(s.videoHiccups||0)+' · rebuffers '+(s.rebufferCount||0)+' · sound gaps '+(s.audioUnderruns||0)+(s.softwareDecoderFallback?' · SOFTWARE DECODER':''));}
 }
-function connectionNotice(phase,message){connectionPhase=phase;status.textContent=message+(phase==='reconnecting'||phase==='offline'?errorDetail():'');document.body.dataset.connection=phase;}
+// Build 92: "lost phone" report and backup button. When the page loses the phone, remember
+// when and why; after reconnecting, send one CAR PLAYER line with the lost period. After 20 s
+// lost, show a button that opens the backup address (the HTTP fallback player at 3.3.3.3:8080).
+let lostSince=0,lostReason='',switchTimer=0;const backupURL='http://3.3.3.3:8080/';
+function clockText(t){return new Date(t).toLocaleTimeString();}
+function switchButton(){let b=$('backupSwitch');if(b)return b;b=document.createElement('a');b.id='backupSwitch';b.href=backupURL;b.textContent='Phone not reachable · Switch to 3.3.3.3';b.hidden=true;b.setAttribute('style','position:fixed;left:50%;bottom:28px;transform:translateX(-50%);z-index:9999;padding:18px 30px;border-radius:16px;background:#e8453c;color:#fff;font:600 22px system-ui,sans-serif;text-decoration:none;box-shadow:0 8px 30px rgba(0,0,0,.45)');b.addEventListener('click',()=>{try{carLogLine('backup button tapped after '+Math.round((Date.now()-lostSince)/1000)+' s lost');}catch{}});document.body.appendChild(b);return b;}
+function trackConnection(phase,message){
+ if(phase==='reconnecting'||phase==='offline'){if(!lostSince){lostSince=Date.now();lostReason=String(lastConnectionError?.message||message||'').slice(0,90);clearTimeout(switchTimer);switchTimer=setTimeout(()=>{if(lostSince)switchButton().hidden=false;},20000);}}
+ else if(phase==='connected'&&lostSince){const from=lostSince,now=Date.now();lostSince=0;clearTimeout(switchTimer);const b=$('backupSwitch');if(b)b.hidden=true;carLogLine('lost phone '+clockText(from)+'–'+clockText(now)+' ('+Math.round((now-from)/1000)+' s) · '+lostReason);}
+}
+function connectionNotice(phase,message){trackConnection(phase,message);connectionPhase=phase;status.textContent=message+(phase==='reconnecting'||phase==='offline'?errorDetail():'');document.body.dataset.connection=phase;}
 let phoneVolume=1,phoneEQ='normal',phoneSettingsRevision=0,phonePlaybackRevision=0;
 function readPhoneControls(next){
  const control=next.viewerControls;if(!control)return false;
