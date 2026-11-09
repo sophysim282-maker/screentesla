@@ -1,5 +1,5 @@
 name: Build97 rescue page
-# Build 97: saved rescue copy of the car page, so a failed name lookup on reload shows the page and reconnects.
+# Build 97: saved rescue copy of the car page (test updated: page files may be cached, never tokens).
 on:
   push:
     branches: ['release/build97-rescue-page']
