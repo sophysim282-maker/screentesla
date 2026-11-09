@@ -11,7 +11,7 @@
     int _reverse;
     void *_reverseConnection;
     NSString *_appleSession,*_epoch,*_primary,*_uuid;
-    NSMutableDictionary *_resources,*_identifiers,*_cache,*_pending;
+    NSMutableDictionary *_resources,*_identifiers,*_cache,*_pending,*_late;
     NSMutableDictionary *_playlistLinks,*_playlistTimes,*_inflight;
     NSMutableArray *_retiredLinks;
     NSMutableOrderedSet *_selectedPlaylists;
@@ -32,7 +32,7 @@ static BOOL virtualURL(NSURL *url){return [url.scheme.lowercaseString isEqual:@"
 static BOOL stablePlaylist(NSData *data){NSString *text=[[NSString alloc]initWithData:data encoding:NSUTF8StringEncoding];return [text hasPrefix:@"#EXTM3U"] && ([text containsString:@"#EXT-X-ENDLIST"] || [text containsString:@"#EXT-X-STREAM-INF:"] || [text containsString:@"#EXT-X-I-FRAME-STREAM-INF:"]);}
 static BOOL sendBytes(int fd,NSData *data){const char *p=data.bytes;NSUInteger n=data.length;while(n){ssize_t k=send(fd,p,n,0);if(k<0 && errno==EINTR)continue;if(k<=0)return NO;p+=k;n-=(NSUInteger)k;}return YES;}
 @implementation MediaCast
-- (instancetype)init{if((self=[super init])){_ready=[NSCondition new];_events=dispatch_queue_create("ScreenLink.media.events",DISPATCH_QUEUE_SERIAL);_reverse=-1;_resources=[NSMutableDictionary dictionary];_identifiers=[NSMutableDictionary dictionary];_cache=[NSMutableDictionary dictionary];_pending=[NSMutableDictionary dictionary];_prefetch=[NSMutableOrderedSet orderedSet];_playlistLinks=[NSMutableDictionary dictionary];_playlistTimes=[NSMutableDictionary dictionary];_inflight=[NSMutableDictionary dictionary];_retiredLinks=[NSMutableArray array];_selectedPlaylists=[NSMutableOrderedSet orderedSet];_epoch=NSUUID.UUID.UUIDString;}return self;}
+- (instancetype)init{if((self=[super init])){_ready=[NSCondition new];_events=dispatch_queue_create("ScreenLink.media.events",DISPATCH_QUEUE_SERIAL);_reverse=-1;_resources=[NSMutableDictionary dictionary];_identifiers=[NSMutableDictionary dictionary];_cache=[NSMutableDictionary dictionary];_late=[NSMutableDictionary dictionary];_pending=[NSMutableDictionary dictionary];_prefetch=[NSMutableOrderedSet orderedSet];_playlistLinks=[NSMutableDictionary dictionary];_playlistTimes=[NSMutableDictionary dictionary];_inflight=[NSMutableDictionary dictionary];_retiredLinks=[NSMutableArray array];_selectedPlaylists=[NSMutableOrderedSet orderedSet];_epoch=NSUUID.UUID.UUIDString;}return self;}
 - (void)log:(NSString *)text{if(self.status)self.status(text);}
 - (BOOL)active{[_ready lock];BOOL value=_active;[_ready unlock];return value;}
 - (BOOL)videoIsLive{[_ready lock];BOOL value=_active && _readyToPlay && NSProcessInfo.processInfo.systemUptime-_heartbeat<10;[_ready unlock];return value;}
@@ -123,7 +123,7 @@ static BOOL sendBytes(int fd,NSData *data){const char *p=data.bytes;NSUInteger n
     NSDictionary *params=@{@"FCUP_Response_ClientInfo":@1,@"FCUP_Response_ClientRef":@40030004,@"FCUP_Response_RequestID":@(request),@"FCUP_Response_URL":url,@"sessionID":@1,@"FCUP_Response_Headers":headers};
     [self sendEvent:@{@"sessionID":@1,@"type":@"unhandledURLRequest",@"request":params} session:session];
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW,12*NSEC_PER_SEC),_events,^{
-        [self->_ready lock];BOOL expired=[self->_pending[url] isEqual:@(request)];if(expired){[self->_pending removeObjectForKey:url];[self->_ready broadcast];}[self->_ready unlock];
+        [self->_ready lock];BOOL expired=[self->_pending[url] isEqual:@(request)];if(expired){[self->_pending removeObjectForKey:url];self->_late[url]=@(request);[self->_ready broadcast];}[self->_ready unlock];
         if(expired){[self log:@"MEDIA: a playlist request timed out; retaining the current session for retry."];[self drivePrefetch];}
     });
 }
@@ -144,7 +144,7 @@ static BOOL sendBytes(int fd,NSData *data){const char *p=data.bytes;NSUInteger n
     if(event){[self sendEvent:@{@"category":@"video",@"state":event} session:session];[self log:[NSString stringWithFormat:@"MEDIA BROWSER %@: video-only playback state reported.",event.uppercaseString]];}
 }
 - (void)connectionClosed:(void *)connection{[_ready lock];if(connection==_reverseConnection){if(_reverse>=0)close(_reverse);_reverse=-1;_reverseConnection=NULL;[_pending removeAllObjects];[_ready broadcast];}[_ready unlock];}
-- (void)stop{[_ready lock];_active=NO;_readyToPlay=NO;_primary=nil;_sourceHeights=@[];_epoch=NSUUID.UUID.UUIDString;[_resources removeAllObjects];[_identifiers removeAllObjects];[_playlistLinks removeAllObjects];[_playlistTimes removeAllObjects];[_inflight removeAllObjects];[_retiredLinks removeAllObjects];[_selectedPlaylists removeAllObjects];[_pending removeAllObjects];[_prefetch removeAllObjects];[_cache removeAllObjects];if(_reverse>=0)close(_reverse);_reverse=-1;_reverseConnection=NULL;[_ready broadcast];[_ready unlock];}
+- (void)stop{[_ready lock];[_late removeAllObjects];_active=NO;_readyToPlay=NO;_primary=nil;_sourceHeights=@[];_epoch=NSUUID.UUID.UUIDString;[_resources removeAllObjects];[_identifiers removeAllObjects];[_playlistLinks removeAllObjects];[_playlistTimes removeAllObjects];[_inflight removeAllObjects];[_retiredLinks removeAllObjects];[_selectedPlaylists removeAllObjects];[_pending removeAllObjects];[_prefetch removeAllObjects];[_cache removeAllObjects];if(_reverse>=0)close(_reverse);_reverse=-1;_reverseConnection=NULL;[_ready broadcast];[_ready unlock];}
 - (void)reply:(http_response_t **)response status:(int)code type:(NSString *)type data:(NSData *)data{
     *response=http_response_init("HTTP/1.1",code,code==200?"OK":(code==101?"Switching Protocols":"Request Failed"));
     if(type)http_response_add_header(*response,"Content-Type",type.UTF8String);
@@ -190,6 +190,10 @@ static BOOL sendBytes(int fd,NSData *data){const char *p=data.bytes;NSUInteger n
         if([type isEqual:@"unhandledURLResponse"]){
             NSString *location=[params[@"FCUP_Response_URL"] isKindOfClass:NSString.class]?params[@"FCUP_Response_URL"]:nil;NSData *data=[params[@"FCUP_Response_Data"] isKindOfClass:NSData.class]?params[@"FCUP_Response_Data"]:nil;
             [_ready lock];NSNumber *expected=location?_pending[location]:nil;BOOL valid=[session isEqual:_appleSession] && expected && [expected isEqual:params[@"FCUP_Response_RequestID"]];
+            // Build 95: YouTube in the background often answers a playlist request just after the
+            // 12 s timeout. Keep that late answer (same session and request) instead of rejecting it,
+            // so the car's next try gets it at once instead of waiting through the same timeout again.
+            BOOL late=!valid && location && [session isEqual:_appleSession] && [_late[location] isEqual:params[@"FCUP_Response_RequestID"]];if(late){valid=YES;[_late removeObjectForKey:location];}
             if(valid){NSInteger code=params[@"FCUP_Response_StatusCode"]?[params[@"FCUP_Response_StatusCode"] integerValue]:200;
                 // Some YouTube FCUP completions use status 0 for a delivered
                 // playlist. Promote only a validated HLS body, never an empty,
