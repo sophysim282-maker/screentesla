@@ -1,5 +1,5 @@
 name: Build97 rescue page
-# Build 97: saved rescue copy of the car page (test updated: page files may be cached, never tokens).
+# Build 97: saved rescue copy of the car page (tests updated for the rescue page).
 on:
   push:
     branches: ['release/build97-rescue-page']
