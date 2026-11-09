@@ -212,6 +212,16 @@ static SLVideoSettings videoSettings(SLVideoProfile profile) {
     }
 }
 @implementation Receiver
+// Build 96: while the car stays silent, say so every 30 s (one line was easy to miss) and
+// show what the phone can check itself: is the Personal Hotspot up, and is 3.3.3.3 present.
+static double webStillLogAt;
+static NSString *slNetworkSnapshot(void){
+    struct ifaddrs *head=NULL;NSMutableArray *hotspot=[NSMutableArray array];BOOL alias=NO;
+    if(getifaddrs(&head)==0){for(struct ifaddrs *p=head;p;p=p->ifa_next){if(!p->ifa_addr||p->ifa_addr->sa_family!=AF_INET)continue;uint32_t a=ntohl(((struct sockaddr_in *)p->ifa_addr)->sin_addr.s_addr);
+        if(a==0x03030303u)alias=YES;
+        if(!strncmp(p->ifa_name,"bridge",6)){char t[INET_ADDRSTRLEN]={0};inet_ntop(AF_INET,&((struct sockaddr_in *)p->ifa_addr)->sin_addr,t,sizeof t);[hotspot addObject:[NSString stringWithFormat:@"%s %s",p->ifa_name,t]];}}freeifaddrs(head);}
+    return [NSString stringWithFormat:@"Personal Hotspot: %@. VPN address 3.3.3.3: %@.",hotspot.count?[@"ON (" stringByAppendingString:[[hotspot componentsJoinedByString:@", "] stringByAppendingString:@")"]]:@"OFF or no car joined",alias?@"present":@"MISSING"];
+}
 - (void)resetWebWatch {pthread_mutex_lock(&webWatchLock);memset(&webWatch,0,sizeof webWatch);webBusyLogAt=webTLSLogAt=webHostLogAt=0;pthread_mutex_unlock(&webWatchLock);}
 - (void)startWebWatchTimer {
     static dispatch_source_t timer;static dispatch_once_t once;webWatchOwner=self;
@@ -221,9 +231,14 @@ static SLVideoSettings videoSettings(SLVideoProfile profile) {
         dispatch_source_set_event_handler(timer,^{
             Receiver *owner=webWatchOwner;if(!owner||!owner.isRunning)return;
             pthread_mutex_lock(&webWatchLock);
-            BOOL report=sl_web_watch_tick(&webWatch,NSProcessInfo.processInfo.systemUptime,6);
+            double nowWatch=NSProcessInfo.processInfo.systemUptime;
+            BOOL report=sl_web_watch_tick(&webWatch,nowWatch,6);
+            double silentFor=webWatch.silent&&webWatch.lastSecure>0?nowWatch-webWatch.lastSecure:0;
+            BOOL still=!report&&silentFor>=30&&sl_web_watch_allow(&webStillLogAt,nowWatch,30);if(report)webStillLogAt=nowWatch;
             unsigned long http=webWatch.http-webWatch.httpMark,tls=webWatch.tlsFailures-webWatch.tlsMark,busy=webWatch.busy-webWatch.busyMark,host=webWatch.wrongHost-webWatch.wrongHostMark;
             pthread_mutex_unlock(&webWatchLock);
+            if(still)[owner emit:[NSString stringWithFormat:@"WEBSITE STILL LOST: no request from the car for %.0f s (%d connections open). %@ If the hotspot is ON, the car left it or its browser stopped; check the car's Wi-Fi icon and try http://3.3.3.3:8080 on the car.",silentFor,atomic_load(&webOpenConnections),slNetworkSnapshot()]];
+            if(report)[owner emit:[@"CAR LINK DETAIL: " stringByAppendingString:slNetworkSnapshot()]];
             if(report)[owner emit:[NSString stringWithFormat:@"WEBSITE SILENT: no HTTPS request from the car for 6 s. Since its last HTTPS request: %lu HTTP (3.3.3.3) requests, %lu HTTPS handshake failures, %lu wrong-address HTTPS requests, %lu connections refused because all slots were busy; %d connections open now. If the HTTPS numbers are all 0, the car is not reaching the phone over HTTPS (name lookup or network). Before stopping, open https://car.tesla4khmer.com/capabilities?check=1 on the car and copy this log.",http,tls,host,busy,atomic_load(&webOpenConnections)]];
         });
         dispatch_resume(timer);

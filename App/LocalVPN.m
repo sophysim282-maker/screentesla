@@ -12,6 +12,7 @@
 @property(nonatomic) NSUInteger dnsWatchSerial;
 @property(nonatomic) NSInteger dnsAnswersSeen;
 @property(nonatomic) BOOL dnsWatchReplied;
+@property(nonatomic) NSUInteger dnsWatchMisses;
 @end
 @implementation LocalVPN
 - (instancetype)init {
@@ -106,7 +107,7 @@
 // car.tesla4khmer.com it answered, and log new ones. If the website loses the phone and no
 // new CAR DNS line appears around that time, the car did not ask the phone for the name.
 - (void)startDNSWatch {
-    self.dnsWatchSerial++;self.dnsAnswersSeen=-1;self.dnsWatchReplied=NO;
+    self.dnsWatchSerial++;self.dnsAnswersSeen=-1;self.dnsWatchReplied=NO;self.dnsWatchMisses=0;
     NSUInteger serial=self.dnsWatchSerial;
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW,(int64_t)(3*NSEC_PER_SEC)),dispatch_get_main_queue(),^{[self dnsWatchTick:serial];});
 }
@@ -117,7 +118,7 @@
         NSDictionary *reply=data.length?[NSJSONSerialization JSONObjectWithData:data options:0 error:nil]:nil;
         dispatch_async(dispatch_get_main_queue(),^{
             if(serial!=self.dnsWatchSerial)return;
-            if(![reply isKindOfClass:NSDictionary.class]){return;}
+            if(![reply isKindOfClass:NSDictionary.class]){self.dnsWatchMisses++;if(self.dnsWatchMisses==3)[self report:@"CAR DNS WATCH: the VPN does not answer status requests (no provider response), so name lookups cannot be counted on this phone. This does not stop the website."];return;}
             NSInteger total=[reply[@"localDNSAnswers"] integerValue];
             if(!self.dnsWatchReplied){self.dnsWatchReplied=YES;[self report:[NSString stringWithFormat:@"CAR DNS WATCH: VPN answers car.tesla4khmer.com → 3.3.3.3 (kept 1 day). %ld answered so far.",(long)total]];}
             else if(total>self.dnsAnswersSeen)[self report:[NSString stringWithFormat:@"CAR DNS: car.tesla4khmer.com → 3.3.3.3 answered by the phone VPN (%ld new, %ld total).",(long)(total-self.dnsAnswersSeen),(long)total]];
