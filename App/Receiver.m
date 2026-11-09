@@ -765,6 +765,9 @@ static NSArray *txtStrings(const char *bytes,int length) {
         else if([url.path isEqual:@"/map/cmd"]){
             NSMutableDictionary *params=[NSMutableDictionary dictionary];for(NSURLQueryItem *item in url.queryItems)if(![item.name isEqual:@"token"]&&item.value)params[item.name]=item.value;
             NSString *action=params[@"a"]?:@"";if(action.length&&action.length<40)[(id<SLMapFeedAPI>)feed command:action params:params];
+            // Build 98: the car says whether it can draw the map itself. Log only changes.
+            if([action isEqual:@"carmap"]){static NSString *lastCarMap;NSString *why=[params[@"why"] isKindOfClass:NSString.class]&&[params[@"why"] length]?params[@"why"]:@"unknown";if(why.length>60)why=[why substringToIndex:60];NSString *now=[params[@"ok"] isEqual:@"1"]?@"ok":[@"failed: " stringByAppendingString:why];
+                if(![now isEqual:lastCarMap]){lastCarMap=now;[self emit:[now isEqual:@"ok"]?@"CAR MAP: the car draws the Google map itself, so it keeps working when ScreenLink is in the background or the iPhone is locked.":[NSString stringWithFormat:@"CAR MAP %@. The car uses the phone's map pictures instead. Fix: in Google Cloud enable Maps JavaScript API for your key and allow the website https://car.tesla4khmer.com/*.",now]];}}
             mime=@"application/json";body=[@"{\"ok\":true}" dataUsingEncoding:NSUTF8StringEncoding];
         }
         else status=@"404 Not Found";

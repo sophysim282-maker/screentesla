@@ -14,6 +14,18 @@ final class CarLink: ObservableObject {
     static var liveMapUsable: Bool {
         UIApplication.shared.applicationState == .active && MapController.shared.carMap.window != nil && !blackMode
     }
+    // Build 98: the car can draw the map itself (Google Maps JavaScript). While it does, the phone
+    // only sends GPS + route and skips drawing map pictures, which also works in the background.
+    static var carDrawsMapAt = Date.distantPast
+    static var carDrawsMap: Bool { Date().timeIntervalSince(carDrawsMapAt) < 30 }
+    static var carMapOn: Bool {
+        get { UserDefaults.standard.object(forKey: "carMapOn") as? Bool ?? true }
+        set { UserDefaults.standard.set(newValue, forKey: "carMapOn") }
+    }
+    static var carMapKey: String {
+        let own = UserDefaults.standard.string(forKey: "carMapKey") ?? ""
+        return own.isEmpty ? (UserDefaults.standard.string(forKey: "googleKey") ?? "") : own
+    }
     @Published var carConnected = false
     let server = CarServer(port: 8080)
     private var timer: Timer?
@@ -34,7 +46,7 @@ final class CarLink: ObservableObject {
             var st = state()
             st.merge(self.bgMeta) { a, _ in a }
             self.server.setState(st)
-            guard connected else { return }
+            guard connected, Self.carMapOn, !Self.carDrawsMap else { return }
             if Self.liveMapUsable {
                 self.snapshot()
             } else {

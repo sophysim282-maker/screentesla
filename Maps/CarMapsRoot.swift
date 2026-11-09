@@ -66,7 +66,25 @@ struct CarMapsRoot: View {
             }
             .padding(.leading, 12).padding(.top, 6)
             .accessibilityLabel("Back to ScreenLink. Navigation keeps running.")
+            // Build 98: one switch for the small map on the car screen.
+            HStack { Spacer(); CarMapSwitch() }.padding(.trailing, 12).padding(.top, 6)
         }
+    }
+}
+
+struct CarMapSwitch: View {
+    @State private var on = CarLink.carMapOn
+    var body: some View {
+        Button {
+            on.toggle(); CarLink.carMapOn = on
+        } label: {
+            Label(on ? "Car map ON" : "Car map OFF", systemImage: on ? "map.fill" : "map")
+                .font(.subheadline.weight(.semibold))
+                .padding(.horizontal, 12).padding(.vertical, 8)
+                .background(on ? Color.green.opacity(0.85) : Color.gray.opacity(0.6), in: Capsule())
+                .foregroundColor(.white)
+        }
+        .accessibilityLabel(on ? "Car map is on. Tap to hide the map on the car screen." : "Car map is off. Tap to show the map on the car screen.")
     }
 }
 

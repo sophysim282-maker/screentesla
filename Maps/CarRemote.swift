@@ -43,6 +43,11 @@ extension NavModel {
             "lat": (carCoordinate ?? location?.coordinate)?.latitude ?? 0,
             "lng": (carCoordinate ?? location?.coordinate)?.longitude ?? 0,
             "bg": !CarLink.liveMapUsable,
+            // Build 98: the car draws the map itself from these (see CanvasShell.js updateCarMap).
+            "mapOn": CarLink.carMapOn,
+            "mapKey": CarLink.carMapKey,
+            "routeLine": carRouteLine(),
+            "routeId": routesVersion * 100 + routeIndex,
             "headingUp": MapController.shared.headingUp,
             "driveResults": driveResults.map { ["name": $0.name, "address": $0.address] },
             "modes": modeSeconds.mapValues { $0 < 0 ? "—" : NavModel.timeText($0) },
@@ -63,6 +68,14 @@ extension NavModel {
             d["place"] = pl
         }
         return d
+    }
+
+    /// Encoded route line for the car map, cached per route (the state is built 12 times a second).
+    private static var routeLineCache: (id: Int, line: String) = (-1, "")
+    func carRouteLine() -> String {
+        let id = routesVersion * 1000 + routeIndex * 10 + (path == nil ? 0 : 1)
+        if Self.routeLineCache.id != id { Self.routeLineCache = (id, path?.encodedPath() ?? "") }
+        return Self.routeLineCache.line
     }
 
     func handleCar(_ a: String, _ p: [String: String]) {
@@ -102,6 +115,7 @@ extension NavModel {
         case "navsearch": searchWhileDriving(p["q"] ?? "")
         case "go": if driveResults.indices.contains(i) { goNow(driveResults[i]) }
         case "clearnear": driveResults = []; maps.recenter(self)
+        case "carmap": CarLink.carDrawsMapAt = p["ok"] == "1" ? Date() : .distantPast
         default: break
         }
     }
