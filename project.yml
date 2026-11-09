@@ -85,12 +85,13 @@ targets:
     - sdk: QuartzCore.framework
     - sdk: BackgroundTasks.framework
     - sdk: UniformTypeIdentifiers.framework
+    - sdk: UserNotifications.framework
     info:
       path: App/Info.plist
       properties:
         CFBundleDisplayName: ScreenLink
-        CFBundleShortVersionString: 0.20.51
-        CFBundleVersion: '88'
+        CFBundleShortVersionString: 0.20.52
+        CFBundleVersion: '89'
         UILaunchScreen: {}
         NSSupportsLiveActivities: true
         CFBundleURLTypes:
@@ -144,8 +145,8 @@ targets:
       path: Tunnel/Info.plist
       properties:
         CFBundleDisplayName: ScreenLink Local VPN
-        CFBundleShortVersionString: 0.20.51
-        CFBundleVersion: '88'
+        CFBundleShortVersionString: 0.20.52
+        CFBundleVersion: '89'
         NSExtension:
           NSExtensionPointIdentifier: com.apple.networkextension.packet-tunnel
           NSExtensionPrincipalClass: PacketTunnelProvider
@@ -174,6 +175,8 @@ targets:
       - YouTubePiP.m
       - ScreenLinkHomeView.h
       - ScreenLinkHomeView.m
+      - StreamNotifier.h
+      - StreamNotifier.m
       - BrandAssets.xcassets
       - ScreenLinkCover.png
       - Info.plist
@@ -214,8 +217,8 @@ targets:
       path: Broadcast/Info.plist
       properties:
         CFBundleDisplayName: ScreenLink Screen
-        CFBundleShortVersionString: 0.20.51
-        CFBundleVersion: '88'
+        CFBundleShortVersionString: 0.20.52
+        CFBundleVersion: '89'
         NSLocalNetworkUsageDescription: Share the live iPhone screen and AirPlay media with your hotspot viewer during a screen broadcast.
         NSBonjourServices:
         - _airplay._tcp
@@ -250,8 +253,8 @@ targets:
       path: Widgets/Info.plist
       properties:
         CFBundleDisplayName: ScreenLink
-        CFBundleShortVersionString: 0.20.51
-        CFBundleVersion: '88'
+        CFBundleShortVersionString: 0.20.52
+        CFBundleVersion: '89'
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
           NSExceptionDomains:
