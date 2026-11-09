@@ -12,6 +12,7 @@ const server=https.createServer({key:fs.readFileSync(temp+'/key'),cert:fs.readFi
  if(u.searchParams.get('token')!==token){res.statusCode=403;return res.end('{}');}
  if(u.pathname==='/screen/privacy'){req.resume();res.setHeader('Content-Type','application/json');return res.end(JSON.stringify({hidden:true,privacyRevision:1}));}
  if(u.pathname==='/map/state'){res.setHeader('Content-Type','application/json');return res.end(JSON.stringify(mapState));}
+ if(u.pathname==='/map/bg.jpg'){res.setHeader('Content-Type','image/jpeg');return res.end(fs.readFileSync(path.join(app,'CarPoster.jpg')));}
  if(u.pathname==='/map/frame.jpg'){mapFrames++;res.setHeader('Content-Type','image/jpeg');return res.end(fs.readFileSync(path.join(app,'CarPoster.jpg')));}
  if(u.pathname==='/media/state'){res.setHeader('Content-Type','application/json');return res.end(JSON.stringify({viewerControls:controls,active:true,epoch:source,url:'/media/resource/'+source+'?token='+token,command:0,commandKind:'rate',paused:false,start:0,fraction:0}));}
  if(u.pathname==='/media/report'){let data='';req.on('data',d=>data+=d);req.on('end',()=>{const r=JSON.parse(data);reports.push(r);if(controls.playback&&r.viewerPlaybackRevision===controls.playback.revision)delete controls.playback;res.end('{}');});return;}
@@ -39,6 +40,13 @@ const status=page=>page.evaluate(()=>ScreenLinkCanvasStatus());
  await page.click('#mediaCanvas');await page.waitForTimeout(700);
  assert(!(await page.evaluate(()=>document.body.classList.contains('map-big'))),'Tap the small video swaps back');
  const after=(await status(page)).mediaPosition;assert(after>before+1,'Video keeps playing during the swap');
+ // Build 88: phone map screen closed / locked -> GPS-moved map picture keeps the rear map.
+ mapState={mapLive:false,bg:true,bgId:1,bgLat:11.5621,bgLng:104.9160,bgZoom:16,lat:11.5630,lng:104.9172,heading:90,screen:'drive',distance:'1.2 km',instruction:'Continue on Russian Blvd',eta:'14:40',remaining:'20 min'};
+ await page.waitForFunction(()=>!document.getElementById('mapMini').hidden&&!document.getElementById('mapBg').hidden&&document.getElementById('mapBgImg').naturalWidth>0&&/rotate\(/.test(document.getElementById('mapBgImg').style.transform),null,{timeout:8000});
+ const bg=await page.evaluate(()=>({car:!document.getElementById('mapBgCar').hidden,live:document.getElementById('mapMiniImg').style.visibility,text:document.getElementById('mapText').textContent,t:document.getElementById('mapBgImg').style.transform}));
+ assert(bg.car&&bg.live==='hidden'&&bg.text==='Continue on Russian Blvd'&&/rotate\(-90deg\)/.test(bg.t),'Background map with car marker, heading and directions: '+JSON.stringify(bg));
+ if(process.env.SHOT_DIR)await page.screenshot({path:process.env.SHOT_DIR+'/car-map-background.png'});
+ console.log('MAP_BACKGROUND_PASSED',bg);
  mapState={mapLive:false,screen:'browse'};await page.waitForFunction(()=>document.getElementById('mapMini').hidden,null,{timeout:6000});
  console.log('MAP_MINI_PASSED: small map with next turn and arrival beside the video, live pictures, tap to swap and back, hides when navigation stops; video kept playing.');
 }finally{await browser?.close();server.close();fs.rmSync(temp,{recursive:true,force:true});}})().catch(e=>{console.error(e);process.exit(1);});

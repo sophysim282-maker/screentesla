@@ -42,7 +42,7 @@ extension NavModel {
             "heading": carBearing,
             "lat": (carCoordinate ?? location?.coordinate)?.latitude ?? 0,
             "lng": (carCoordinate ?? location?.coordinate)?.longitude ?? 0,
-            "bg": UIApplication.shared.applicationState != .active,
+            "bg": !CarLink.liveMapUsable,
             "headingUp": MapController.shared.headingUp,
             "driveResults": driveResults.map { ["name": $0.name, "address": $0.address] },
             "modes": modeSeconds.mapValues { $0 < 0 ? "—" : NavModel.timeText($0) },

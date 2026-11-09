@@ -7,6 +7,13 @@ import GoogleMaps
 
 /// Sends the app's own map (pictures) + the directions (text) to the Tesla browser over local Wi-Fi.
 final class CarLink: ObservableObject {
+    // Build 88 (ScreenLink Maps): the live map can only be drawn while the Navigation map screen
+    // is on the phone. Otherwise (ScreenLink Home, another app, locked) use the GPS-moved
+    // background map, so the rear screen keeps a map. No screen recording is ever used.
+    static var blackMode = false
+    static var liveMapUsable: Bool {
+        UIApplication.shared.applicationState == .active && MapController.shared.carMap.window != nil && !blackMode
+    }
     @Published var carConnected = false
     let server = CarServer(port: 8080)
     private var timer: Timer?
@@ -28,8 +35,8 @@ final class CarLink: ObservableObject {
             st.merge(self.bgMeta) { a, _ in a }
             self.server.setState(st)
             guard connected else { return }
-            if UIApplication.shared.applicationState == .active {
-                if !self.useInAppCapture { self.snapshot() }
+            if Self.liveMapUsable {
+                self.snapshot()
             } else {
                 self.backgroundMap()
             }
@@ -50,7 +57,7 @@ final class CarLink: ObservableObject {
         // Some iPhones return a black picture for the map; then switch to in-app capture.
         if Self.isBlack(image) {
             blackFrames += 1
-            if blackFrames >= 5 { startInAppCapture() }
+            if blackFrames >= 5 { Self.blackMode = true }   // ScreenLink: GPS map picture instead of screen capture
             return
         }
         blackFrames = 0
