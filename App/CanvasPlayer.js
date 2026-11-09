@@ -32,7 +32,14 @@ function playlist(text,url){
 // when the source's 720p/1080p variants use a higher bitrate.
 // Build 76 read-ahead: seconds of encoded media downloaded ahead of the playhead.
 const READ_AHEAD_VIDEO=20,READ_AHEAD_AUDIO=12,READ_AHEAD_SEGMENTS=8,VIDEO_PARALLEL_DOWNLOADS=2;
+// Build 93: optional 1440p / 4K test. Only when the phone's quality is "1440" or "2160";
+// Auto, 720p and 1080p behave exactly as in build 83.
+const HIGH_QUALITY={1440:{height:1440,pixels:2560*1440},2160:{height:2160,pixels:3840*2176}};
 function chooseVariant(levels,quality='hd'){
+ const high=HIGH_QUALITY[Number(quality)];
+ if(high){const h=level=>Number((level.RESOLUTION||'').split('x')[1])||0,w=level=>Number((level.RESOLUTION||'').split('x')[0])||0;
+  const fit=levels.filter(level=>h(level)>0&&h(level)<=high.height&&(!w(level)||w(level)*h(level)<=high.pixels));
+  if(fit.length)return fit.sort((a,b)=>h(b)-h(a)||(Number(b.BANDWIDTH)||0)-(Number(a.BANDWIDTH)||0))[0];}
  const height=level=>Number((level.RESOLUTION||'').split('x')[1])||0,width=level=>Number((level.RESOLUTION||'').split('x')[0])||0;
  // Build 78: cap by picture size, not only height. Ultra-wide 2560x1072 is "1072p" but
  // carries ~1.4x the data of 1920x1080 and kept the read-ahead buffer from filling.
@@ -232,7 +239,7 @@ class CanvasPlayer {
  }
  fail(error){if(this.closed||error?.name==='AbortError')return;this.error={code:3,message:error.message||String(error)};this.pause();this.onerror(error);}
  async configure(track,kind,serial){
-  if(kind==='video'&&Math.min(track.video.width,track.video.height)>1080)throw Error('Source exceeds the 1080p playback limit.');
+  if(kind==='video'&&Math.min(track.video.width,track.video.height)>(HIGH_QUALITY[Number(this.quality)]?.height||1080))throw Error('Source exceeds the selected playback limit.');
   const config=kind==='video'?{codec:track.codec,codedWidth:track.video.width,codedHeight:track.video.height,description:track.description,hardwareAcceleration:this.videoAcceleration}:{codec:track.codec,sampleRate:track.audio.sample_rate,numberOfChannels:track.audio.channel_count,description:track.description};
   if(config.codec.toLowerCase()==='opus'){config.codec='opus';delete config.description;}
   const key=JSON.stringify({...config,description:config.description?Array.from(config.description):[]});

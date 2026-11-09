@@ -13,7 +13,7 @@ static BOOL number(id value){return [value isKindOfClass:NSNumber.class]&&CFGetT
 - (BOOL)update:(NSDictionary *)request media:(NSDictionary *)media{ @synchronized(self){
  if(![request isKindOfClass:NSDictionary.class]||!request.count)return NO;
  for(id key in request)if(![@[@"quality",@"volume",@"eq",@"paused",@"seek"] containsObject:key])return NO;
- if(request[@"quality"]&&![@[@"auto",@"720",@"1080"] containsObject:request[@"quality"]])return NO;
+ if(request[@"quality"]&&![@[@"auto",@"720",@"1080",@"1440",@"2160"] containsObject:request[@"quality"]])return NO;
  if(request[@"eq"]&&![@[@"normal",@"music"] containsObject:request[@"eq"]])return NO;
  if(request[@"volume"]&&(!number(request[@"volume"])||[request[@"volume"] doubleValue]<0||[request[@"volume"] doubleValue]>1))return NO;
  if(request[@"paused"]&&(![request[@"paused"] isKindOfClass:NSNumber.class]||CFGetTypeID((__bridge CFTypeRef)request[@"paused"])!=CFBooleanGetTypeID()))return NO;

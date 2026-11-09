@@ -152,7 +152,7 @@ static UIColor *SLRGB(CGFloat r,CGFloat g,CGFloat b){return [UIColor colorWithRe
   [controls addArrangedSubview:[self label:@"Car player controls" style:UIFontTextStyleHeadline]];
   self.playerHint=[self label:@"Choose videos in YouTube. These controls change the car player, not your phone’s YouTube quality. Quality depends on the source; tap the car once if sound needs permission." style:UIFontTextStyleFootnote];self.playerHint.textColor=UIColor.secondaryLabelColor;[controls addArrangedSubview:self.playerHint];
   [controls addArrangedSubview:[self label:@"Video quality" style:UIFontTextStyleSubheadline]];
-  self.playerQuality=[[UISegmentedControl alloc]initWithItems:@[@"Auto",@"720p",@"1080p"]];self.playerQuality.selectedSegmentIndex=0;self.playerQuality.accessibilityIdentifier=@"player.quality";[self.playerQuality addTarget:self action:@selector(playerQualityChanged) forControlEvents:UIControlEventValueChanged];[self.playerQuality.heightAnchor constraintGreaterThanOrEqualToConstant:44].active=YES;[controls addArrangedSubview:self.playerQuality];
+  self.playerQuality=[[UISegmentedControl alloc]initWithItems:@[@"Auto",@"720p",@"1080p",@"1440p",@"4K"]];self.playerQuality.selectedSegmentIndex=0;self.playerQuality.accessibilityIdentifier=@"player.quality";[self.playerQuality addTarget:self action:@selector(playerQualityChanged) forControlEvents:UIControlEventValueChanged];[self.playerQuality.heightAnchor constraintGreaterThanOrEqualToConstant:44].active=YES;[controls addArrangedSubview:self.playerQuality];
   UIStackView *playback=[UIStackView new];playback.spacing=8;playback.distribution=UIStackViewDistributionFillEqually;
   self.playerBack=[self button:@"10s" symbol:@"gobackward.10" action:@selector(playerBackTapped) filled:NO];self.playerBack.accessibilityLabel=@"Rewind car video ten seconds";
   self.playerPause=[self button:@"Play" symbol:@"playpause.fill" action:@selector(playerPauseTapped) filled:YES];self.playerPause.accessibilityIdentifier=@"player.pause";
@@ -205,7 +205,7 @@ static UIColor *SLRGB(CGFloat r,CGFloat g,CGFloat b){return [UIColor colorWithRe
 - (void)developerTapped {[self stopAmbient];if(self.developerAction)self.developerAction();}
 - (void)copyTapped {if(self.copyAction)self.copyAction();UIAccessibilityPostNotification(UIAccessibilityAnnouncementNotification,@"Website link copied");}
 - (void)sendPlayer:(NSDictionary *)request {if(self.playerAction)self.playerAction(request);}
-- (void)playerQualityChanged {[self sendPlayer:@{@"quality":@[@"auto",@"720",@"1080"][self.playerQuality.selectedSegmentIndex]}];}
+- (void)playerQualityChanged {[self sendPlayer:@{@"quality":@[@"auto",@"720",@"1080",@"1440",@"2160"][self.playerQuality.selectedSegmentIndex]}];}
 - (void)playerVolumeChanged {[self sendPlayer:@{@"volume":@(self.playerVolume.value)}];}
 - (void)playerEQChanged {[self sendPlayer:@{@"eq":self.playerEQ.selectedSegmentIndex==1?@"music":@"normal"}];}
 - (void)playerPauseTapped {[self sendPlayer:@{@"paused":[NSNumber numberWithBool:![self.playerState[@"paused"] boolValue]]}];}
@@ -220,7 +220,7 @@ static UIColor *SLRGB(CGFloat r,CGFloat g,CGFloat b){return [UIColor colorWithRe
  double duration=[state[@"duration"] doubleValue],position=[state[@"position"] doubleValue];self.playerSeek.enabled=enabled&&active&&duration>0;
  if(!self.playerSeek.tracking)self.playerSeek.value=duration>0?position/duration:0;
  if(!self.playerVolume.tracking&&settings[@"volume"])self.playerVolume.value=[settings[@"volume"] floatValue];
- NSUInteger quality=[@[@"auto",@"720",@"1080"] indexOfObject:settings[@"quality"]?:@"auto"];self.playerQuality.selectedSegmentIndex=quality==NSNotFound?0:quality;
+ NSUInteger quality=[@[@"auto",@"720",@"1080",@"1440",@"2160"] indexOfObject:settings[@"quality"]?:@"auto"];self.playerQuality.selectedSegmentIndex=quality==NSNotFound?0:quality;
  self.playerEQ.selectedSegmentIndex=[settings[@"eq"] isEqual:@"music"]?1:0;
  UIButtonConfiguration *config=self.playerPause.configuration;config.title=[state[@"paused"] boolValue]?@"Play":@"Pause";self.playerPause.configuration=config;
  self.playerPosition.text=active?[NSString stringWithFormat:@"%ld:%02ld / %ld:%02ld · %@",(long)(position/60),(long)position%60,(long)(duration/60),(long)duration%60,[state[@"ready"] boolValue]?@"Car playback reported":@"Waiting for car player"]:@"Choose a video in YouTube after connecting AirPlay.";

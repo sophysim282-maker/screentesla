@@ -9,4 +9,10 @@ assert.equal(pick(wide,'720'),'1280x536','720p stays within 1280x720 pixels');
 const normal=['256x144','640x360','1280x720','1920x1080','2560x1440'];
 assert.equal(pick(normal,'auto'),'1920x1080');assert.equal(pick(normal,'720'),'1280x720');assert.equal(pick(normal,'1080'),'1920x1080');
 assert.equal(pick(['1920x1080','2560x1080'],'auto'),'1920x1080');
-console.log('PASS: Auto/1080p cap at 1920x1088 pixels; 720p at 1280x720; normal 16:9 unchanged');
+// Build 93: optional 1440p / 4K test choices.
+const uhd=['640x360','1280x720','1920x1080','2560x1440','3840x2160'];
+assert.equal(pick(uhd,'auto'),'1920x1080','Auto still stops at 1080p');
+assert.equal(pick(uhd,'1440'),'2560x1440');assert.equal(pick(uhd,'2160'),'3840x2160');
+assert.equal(pick(wide,'2160'),'3840x1608');assert.equal(pick(wide,'1440'),'2560x1072');
+assert.equal(pick(normal,'2160'),'2560x1440','4K test falls back to the highest offered');
+console.log('PASS: Auto/1080p cap at 1920x1088 pixels; 720p at 1280x720; normal 16:9 unchanged; 1440p/4K test choices');
