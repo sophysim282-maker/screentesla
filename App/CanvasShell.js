@@ -187,7 +187,7 @@ window.addEventListener('pageshow',event=>{if(!event.persisted)return;setIdleArt
 function renderPerformance(){
  if(performanceFrozen||$('performancePanel').hidden)return;
  const profile=player?.performanceProfile?.()||previousPlaybackProfile;
- const lines=['Build: 0.20.61 / 98 · '+(activeEngine||requestedEngine)+' · '+(player?.videoAcceleration||requestedDecoder),'Playback: '+(player?.currentTime||0).toFixed(2)+' s','Page: '+(profile?.visibility||document.visibilityState||'unknown'),''];
+ const lines=['Build: 0.20.62 / 99 · '+(activeEngine||requestedEngine)+' · '+(player?.videoAcceleration||requestedDecoder),'Playback: '+(player?.currentTime||0).toFixed(2)+' s','Page: '+(profile?.visibility||document.visibilityState||'unknown'),''];
  const names=[['demuxMs','Demux ms'],['decoderWaitMs','Decoder feed wait ms'],['renderCallbackGapMs','Drawing callback gap ms'],['canvasDrawMs','Canvas draw call ms'],['videoQueueDepth','Pending decode requests']];
  for(const [key,label] of names){const m=profile?.metrics[key];lines.push(label+': '+(m?'mean '+m.mean.toFixed(2)+' | max '+m.max.toFixed(2)+' | n '+m.count:'no samples'));if(m)lines.push('  max at '+(m.maxAtMs/1000).toFixed(2)+'s, media '+m.mediaTime.toFixed(2)+'s');}
  lines.push('','Decode queue now: '+(profile?.videoQueueDepth||0),'Decoded frames queued: '+(profile?.framesQueued||0),'Video recoveries: '+(player?.stats.videoRecoveries||0),'Audio buffer underruns: '+(player?.stats.audioUnderruns||0));
@@ -208,7 +208,7 @@ async function retireOfflineUI(){
  }catch(error){lastConnectionError={message:'Rescue page setup: '+error.message,time:Date.now()};}
 }
 retireOfflineUI();
-self.ScreenLinkCanvasStatus=()=>({build:'0.20.61-98',engine:activeEngine||requestedEngine,videoDecoder:player?.videoAcceleration||null,connectionPhase,approvalPhase,phoneVolume,phoneEQ,phoneSettingsRevision,phonePlaybackRevision,volumeGain:player?.gain?.gain.value??null,eqLowGain:player?.low?.gain.value??null,minimalViewer:youtubeOnly&&!developerMode,lastRequestAt,lastSuccessAt,offlineUI:false,healthFailures,lastHealthyAt,reconnections,quality:$('quality').value,transportWaiting,decoderFaults,transportError:player?.lastTransportError||null,lastPlaybackError,lastConnectionError,recoveryAttempts:retryCount,mediaRunning:player?.running||false,mediaDuration:player?.duration||0,videoFramesQueued:player?.frames.length||0,audioPacketsQueued:player?.audio.length||0,secureContext:isSecureContext,connected,connectionPending:joining,viewerMode:youtubeOnly?'youtube':'split',screenFrames:screen.framesDrawn,screenHidden:screen.hold,screenQueue:screen.decoder?.decodeQueueSize||0,mediaEpoch,mediaPosition:player?.currentTime||0,mediaPaused:player?.paused??true,mediaWidth:$('mediaCanvas').width,mediaHeight:$('mediaCanvas').height,youtubeBufferSeconds:player?.bufferSeconds||0,encodedVideoLead:player?Math.max(0,player.preparedVideoEnd-player.currentTime):0,mediaStats:player?{...player.stats}:null,performance:player?.performanceProfile?.()||null,previousPlaybackProfile,playbackEvents:player?(player.playbackEvents||[]).map(e=>({...e})):[],segmentCache:player?.segmentCache?.size||0,audioSampleRate:player?.audioContext?.sampleRate||0,decodedAudioRate:player?.lastAudioSampleRate||player?.audio[0]?.sampleRate||0,segments:player?(player.segmentDiagnostics||[]).map(s=>({...s})):[],audioLead:player?.audioContext&&player.audioTail!==null?Math.max(0,player.audioTail-player.audioContext.currentTime):0,videoLead:player?Math.max(0,player.videoEnd-player.currentTime):0,audioState:audioContext?.state||'locked',audioNodes:player?.nodes.size||0,mediaError:player?.error?.message||'',socketOpen:ws?.readyState===WebSocket.OPEN});
+self.ScreenLinkCanvasStatus=()=>({build:'0.20.62-99',engine:activeEngine||requestedEngine,videoDecoder:player?.videoAcceleration||null,connectionPhase,approvalPhase,phoneVolume,phoneEQ,phoneSettingsRevision,phonePlaybackRevision,volumeGain:player?.gain?.gain.value??null,eqLowGain:player?.low?.gain.value??null,minimalViewer:youtubeOnly&&!developerMode,lastRequestAt,lastSuccessAt,offlineUI:false,healthFailures,lastHealthyAt,reconnections,quality:$('quality').value,transportWaiting,decoderFaults,transportError:player?.lastTransportError||null,lastPlaybackError,lastConnectionError,recoveryAttempts:retryCount,mediaRunning:player?.running||false,mediaDuration:player?.duration||0,videoFramesQueued:player?.frames.length||0,audioPacketsQueued:player?.audio.length||0,secureContext:isSecureContext,connected,connectionPending:joining,viewerMode:youtubeOnly?'youtube':'split',screenFrames:screen.framesDrawn,screenHidden:screen.hold,screenQueue:screen.decoder?.decodeQueueSize||0,mediaEpoch,mediaPosition:player?.currentTime||0,mediaPaused:player?.paused??true,mediaWidth:$('mediaCanvas').width,mediaHeight:$('mediaCanvas').height,youtubeBufferSeconds:player?.bufferSeconds||0,encodedVideoLead:player?Math.max(0,player.preparedVideoEnd-player.currentTime):0,mediaStats:player?{...player.stats}:null,performance:player?.performanceProfile?.()||null,previousPlaybackProfile,playbackEvents:player?(player.playbackEvents||[]).map(e=>({...e})):[],segmentCache:player?.segmentCache?.size||0,audioSampleRate:player?.audioContext?.sampleRate||0,decodedAudioRate:player?.lastAudioSampleRate||player?.audio[0]?.sampleRate||0,segments:player?(player.segmentDiagnostics||[]).map(s=>({...s})):[],audioLead:player?.audioContext&&player.audioTail!==null?Math.max(0,player.audioTail-player.audioContext.currentTime):0,videoLead:player?Math.max(0,player.videoEnd-player.currentTime):0,audioState:audioContext?.state||'locked',audioNodes:player?.nodes.size||0,mediaError:player?.error?.message||'',socketOpen:ws?.readyState===WebSocket.OPEN});
 for(const id of ['viewMode','quality','eq'])makeInline(id);
 function autoConnect(){if(!stopped&&!connected&&!joining)connect();if(!stopped)reconnectTimer=setTimeout(autoConnect,3000);}if(isSecureContext&&typeof VideoDecoder==='function')autoConnect();
 if(!isSecureContext||typeof VideoDecoder!=='function')status.textContent='This viewer needs HTTPS and WebCodecs support.';
@@ -235,32 +235,80 @@ window.addEventListener('resize',()=>{if(mapBgState&&!$('mapBg').hidden)placeMap
 // Build 98: the car draws the map itself (Google Maps JavaScript) from the phone's GPS and route.
 // The phone only sends small data, so the map keeps working when ScreenLink is in the background
 // or the iPhone is locked. If Google refuses the key, the old picture modes are used instead.
-let jsMap=null,jsMapState='off',jsMapKey='',jsMarker=null,jsRoute=null,jsRouteId='',jsReportAt=0,jsFailReason='';
+let jsMap=null,jsMapState='off',jsMapKey='',jsMarker=null,jsHalo=null,jsRoute=null,jsRouteEdge=null,jsDest=null,jsTraffic=null,jsRouteId='',jsReportAt=0,jsFailReason='',jsNight=null,jsType='',jsPose=null,jsGlide=0,jsIconKey='',jsArrow='';
 function decodePolyline(text){const out=[];let i=0,lat=0,lng=0;while(i<text.length){for(const axis of [0,1]){let shift=0,result=0,b;do{b=text.charCodeAt(i++)-63;result|=(b&31)<<shift;shift+=5;}while(b>=32&&i<=text.length);const d=result&1?~(result>>1):result>>1;if(axis)lng+=d;else lat+=d;}out.push({lat:lat/1e5,lng:lng/1e5});}return out;}
 function reportCarMap(ok,why){if(!connected||!token)return;jsReportAt=Date.now();raw('/map/cmd?token='+encodeURIComponent(token)+'&a=carmap&ok='+(ok?1:0)+(why?'&why='+encodeURIComponent(String(why).slice(0,60)):'')).catch(()=>{});}
+// Build 99: the car map looks like Google Maps navigation. Real Google day/night colours, live
+// traffic, a 3D view that turns with the car (vector map), the car in the lower part of the map,
+// a blue route with a dark edge, a red destination pin and a smooth glide between GPS points.
+// Google's night colours can only be chosen when a map is created, so the map is rebuilt on day/night.
+function buildCarMap(){
+ const g=google.maps,s=mapBgState||{},night=!!s.night,box=$('mapJs');
+ for(const old of [jsMarker,jsHalo,jsRoute,jsRouteEdge,jsDest,jsTraffic])old?.setMap?.(null);clearInterval(jsGlide);jsGlide=0;box.textContent='';
+ const options={center:{lat:s.lat||11.56,lng:s.lng||104.92},zoom:16,disableDefaultUI:true,gestureHandling:'none',keyboardShortcuts:false,clickableIcons:false,isFractionalZoomEnabled:true,backgroundColor:night?'#1d2430':'#e5e3df'};
+ if(g.RenderingType)options.renderingType=g.RenderingType.VECTOR;
+ if(g.ColorScheme)options.colorScheme=night?g.ColorScheme.DARK:g.ColorScheme.LIGHT;
+ else if(night)options.styles=[{elementType:'geometry',stylers:[{color:'#1d2430'}]},{elementType:'labels.text.fill',stylers:[{color:'#9aa6b8'}]},{elementType:'labels.text.stroke',stylers:[{color:'#11161e'}]},{featureType:'road',elementType:'geometry',stylers:[{color:'#323c4c'}]},{featureType:'water',elementType:'geometry',stylers:[{color:'#0e1a2b'}]}];
+ jsMap=new g.Map(box,options);jsNight=night;jsType='';jsRouteId='';jsIconKey='';
+ if(g.TrafficLayer){jsTraffic=new g.TrafficLayer();jsTraffic.setMap(jsMap);}
+ jsRouteEdge=new g.Polyline({map:jsMap,path:[],strokeColor:night?'#0b3d91':'#1557b0',strokeOpacity:1,strokeWeight:11,clickable:false,zIndex:1});
+ jsRoute=new g.Polyline({map:jsMap,path:[],strokeColor:night?'#669df6':'#1a73e8',strokeOpacity:1,strokeWeight:7,clickable:false,zIndex:2});
+ jsDest=new g.Marker({position:jsMap.getCenter(),clickable:false,zIndex:3});
+ jsHalo=new g.Marker({map:jsMap,position:jsMap.getCenter(),clickable:false,zIndex:4,icon:{path:g.SymbolPath.CIRCLE,scale:22,fillColor:'#1a73e8',fillOpacity:.18,strokeOpacity:0,strokeWeight:0}});
+ jsMarker=new g.Marker({map:jsMap,position:jsMap.getCenter(),clickable:false,zIndex:5});
+ $('mapMini').classList.toggle('map-night',night);
+}
 function loadCarMap(key){
  if(jsMapState!=='off'&&key===jsMapKey)return;jsMapKey=key;jsMapState='loading';
- window.gm_authFailure=()=>{jsMapState='failed';jsFailReason='Google refused the key for this website';$('mapJs').hidden=true;reportCarMap(false,jsFailReason);};
+ window.gm_authFailure=()=>{jsMapState='failed';jsFailReason='Google refused the key for this website';clearInterval(jsGlide);jsGlide=0;$('mapJs').hidden=true;reportCarMap(false,jsFailReason);};
  window.__slCarMapReady=()=>{try{
-  const night=!!mapBgState?.night,dark=[{elementType:'geometry',stylers:[{color:'#1d2430'}]},{elementType:'labels.text.fill',stylers:[{color:'#9aa6b8'}]},{elementType:'labels.text.stroke',stylers:[{color:'#11161e'}]},{featureType:'road',elementType:'geometry',stylers:[{color:'#323c4c'}]},{featureType:'water',elementType:'geometry',stylers:[{color:'#0e1a2b'}]},{featureType:'poi',stylers:[{visibility:'off'}]}];
-  jsMap=new google.maps.Map($('mapJs'),{center:{lat:mapBgState?.lat||11.56,lng:mapBgState?.lng||104.92},zoom:16,disableDefaultUI:true,gestureHandling:'none',keyboardShortcuts:false,clickableIcons:false,styles:night?dark:null,backgroundColor:night?'#1d2430':'#e5e3df'});
-  jsMarker=new google.maps.Marker({map:jsMap,position:jsMap.getCenter(),icon:{path:google.maps.SymbolPath.FORWARD_CLOSED_ARROW,scale:6,rotation:0,fillColor:'#2f7bff',fillOpacity:1,strokeColor:'#ffffff',strokeWeight:2},clickable:false});
-  jsRoute=new google.maps.Polyline({map:jsMap,path:[],strokeColor:'#2f7bff',strokeOpacity:.9,strokeWeight:7,clickable:false});
-  jsMapState='ready';reportCarMap(true);if(mapBgState)updateCarMap(mapBgState);
+  buildCarMap();jsMapState='ready';reportCarMap(true);if(mapBgState)updateCarMap(mapBgState);
  }catch(error){jsMapState='failed';jsFailReason='map start failed: '+error.message;reportCarMap(false,jsFailReason);}};
  const script=document.createElement('script');script.async=true;
  script.src='https://maps.googleapis.com/maps/api/js?key='+encodeURIComponent(key)+'&v=weekly&callback=__slCarMapReady';
  script.onerror=()=>{jsMapState='failed';jsFailReason='Google Maps could not load (car internet)';reportCarMap(false,jsFailReason);};
  document.head.appendChild(script);
 }
+// One picture of the map for a car position. While driving on a vector map: tilted, travel
+// direction up, and the car below the middle so more of the road ahead is seen (like Google).
+function carMapFrame(p){
+ if(jsMapState!=='ready'||!jsMap)return;
+ const g=google.maps,s=mapBgState||{},drive=s.screen==='drive'||!!s.navigating;
+ const vector=!!g.RenderingType&&jsMap.getRenderingType?.()===g.RenderingType.VECTOR;
+ const mapHeading=vector&&drive&&s.headingUp!==false?p.heading:0,tilt=vector&&drive?55:0,zoom=drive?(vector?17.5:17):15;
+ const here={lat:p.lat,lng:p.lng};let center=here;
+ if(drive){
+  const cos=Math.max(.01,Math.cos(p.lat*Math.PI/180)),ahead=($('mapJs').clientHeight||300)*(tilt?.26:.2)*156543.03392*cos/Math.pow(2,zoom),a=p.heading*Math.PI/180;
+  center={lat:p.lat+ahead*Math.cos(a)/111320,lng:p.lng+ahead*Math.sin(a)/(111320*cos)};
+ }
+ if(jsMap.moveCamera)jsMap.moveCamera({center,zoom,heading:mapHeading,tilt});else{if(jsMap.getZoom()!==zoom)jsMap.setZoom(zoom);jsMap.setCenter(center);}
+ jsMarker.setPosition(here);jsHalo.setPosition(here);
+ const big=document.body.classList.contains('map-big'),turn=Math.round(((p.heading-mapHeading)%360+360)%360),key=turn+(big?'b':'s');
+ if(key!==jsIconKey){jsIconKey=key;jsMarker.setIcon({path:'M0,-13 L10,11 L0,6 L-10,11 Z',scale:big?1.7:1.15,rotation:turn,fillColor:'#1a73e8',fillOpacity:1,strokeColor:'#ffffff',strokeWeight:big?3.5:2.5});}
+}
 function updateCarMap(s){
  if(jsMapState!=='ready'||!jsMap||!s.lat)return;
- const here={lat:s.lat,lng:s.lng},drive=s.screen==='drive'||!!s.navigating;
- jsMarker.setPosition(here);const icon=jsMarker.getIcon();icon.rotation=s.heading||0;jsMarker.setIcon(icon);
+ if(!!s.night!==jsNight){try{buildCarMap();}catch(error){jsMapState='failed';jsFailReason='map start failed: '+error.message;reportCarMap(false,jsFailReason);return;}}
+ const type=s.mapType==='satellite'?'hybrid':'roadmap';if(type!==jsType){jsType=type;jsMap.setMapTypeId?.(type);}
  const id=String(s.routeId??'')+':'+String(s.routeLine||'').length;
- if(id!==jsRouteId){jsRouteId=id;jsRoute.setPath(s.routeLine?decodePolyline(s.routeLine):[]);}
- const z=drive?17:15;if(jsMap.getZoom()!==z)jsMap.setZoom(z);jsMap.panTo(here);
+ if(id!==jsRouteId){jsRouteId=id;const path=s.routeLine?decodePolyline(s.routeLine):[];jsRoute.setPath(path);jsRouteEdge.setPath(path);if(path.length>1){jsDest.setPosition(path[path.length-1]);jsDest.setMap(jsMap);}else jsDest.setMap(null);}
+ const goal={lat:s.lat,lng:s.lng,heading:Number(s.heading)||0},from=jsPose,moved=from?Math.abs(goal.lat-from.lat)+Math.abs(goal.lng-from.lng):1;
+ clearInterval(jsGlide);jsGlide=0;
+ // Glide between GPS points (about 14 pictures a second, only while the car moves). Jumps and a
+ // hidden page are drawn once, so a parked car costs nothing next to the video.
+ if(!from||moved>.003||document.hidden||(moved<1e-7&&Math.abs(goal.heading-from.heading)<.5)){jsPose=goal;carMapFrame(goal);}
+ else{const swing=((goal.heading-from.heading+540)%360)-180,start=performance.now();
+  jsGlide=setInterval(()=>{const t=Math.min(1,(performance.now()-start)/800);jsPose={lat:from.lat+(goal.lat-from.lat)*t,lng:from.lng+(goal.lng-from.lng)*t,heading:((from.heading+swing*t)%360+360)%360};carMapFrame(jsPose);if(t>=1){clearInterval(jsGlide);jsGlide=0;}},70);}
  if(Date.now()-jsReportAt>10000)reportCarMap(true);
+}
+// Google-style turn arrows for the green banner (drawn here, no pictures to download).
+const MAP_ARROWS={up:'<path d="M12 3 5 10h4.5v11h5V10H19z"/>',right:'<path d="M5 21v-8.5A4.5 4.5 0 0 1 9.5 8H14V4l7 6.5-7 6.5v-4H10v8z"/>',uturn:'<path d="M4 21V10a6.5 6.5 0 0 1 13 0v3h3.5L14.5 20 8.5 13H12v-3a1.5 1.5 0 0 0-3 0v11z"/>',round:'<path d="M12 6a6 6 0 1 0 6 6h-3.5a2.5 2.5 0 1 1-2.5-2.5z"/><path d="M12 1.5 18 7.8l-6 6.2z"/>',pin:'<path d="M12 2a7 7 0 0 0-7 7c0 5 7 13 7 13s7-8 7-13a7 7 0 0 0-7-7zm0 9.5a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5z"/>'};
+function mapArrow(maneuver){
+ const m=String(maneuver||'');let shape='up',turn='';
+ if(m==='ARRIVE')shape='pin';else if(m.startsWith('UTURN'))shape='uturn';else if(m.startsWith('ROUNDABOUT'))shape='round';
+ else if(/SLIGHT_LEFT|RAMP_LEFT|FORK_LEFT/.test(m))turn='rotate(-45 12 12)';else if(/SLIGHT_RIGHT|RAMP_RIGHT|FORK_RIGHT/.test(m))turn='rotate(45 12 12)';
+ else if(/LEFT/.test(m)){shape='right';turn='translate(24 0) scale(-1 1)';}else if(/RIGHT/.test(m))shape='right';
+ return '<svg viewBox="0 0 24 24" aria-hidden="true"><g fill="currentColor" transform="'+turn+'">'+MAP_ARROWS[shape]+'</g></svg>';
 }
 async function mapStateLoop(){
  clearTimeout(mapStateTimer);let next=2000;
@@ -277,7 +325,8 @@ async function mapStateLoop(){
    $('mapMiniImg').style.visibility=mapLive?'visible':'hidden';$('mapBg').hidden=!bgMode;$('mapBgCar').hidden=!bgMode;
    if(bgMode)placeMapBg(s);
    $('mapTurn').hidden=!drive;$('mapEta').hidden=!drive;
-   if(drive){$('mapDist').textContent=s.distance||'';$('mapText').textContent=s.instruction||'';$('mapEta').textContent=[s.eta,s.remaining].filter(Boolean).join(' · ');}
+   if(drive){$('mapDist').textContent=s.distance||'';$('mapText').textContent=s.instruction||'';$('mapEtaTime').textContent=s.eta||'';$('mapEtaMore').textContent=[s.remaining,s.arrival].filter(Boolean).join(' · ');
+    const arrow=String(s.maneuver||'')+'|'+String(s.then||'');if(arrow!==jsArrow){jsArrow=arrow;$('mapArrow').innerHTML=mapArrow(s.maneuver);$('mapThen').hidden=!s.then;$('mapThenArrow').innerHTML=s.then?mapArrow(s.then):'';}}
    next=(useJs||mapLive||bgMode)?800:2500;
   }else{mapLive=false;$('mapMini').hidden=true;}
  }catch(e){next=3000;}
@@ -291,7 +340,7 @@ function mapFrameLoop(){
  img.src='/map/frame.jpg?token='+encodeURIComponent(token)+'&t='+Date.now();
 }
 const mapReplace=()=>setTimeout(()=>{if(mapBgState&&!$('mapBg').hidden)placeMapBg(mapBgState);},560);
-$('mapMini').addEventListener('click',()=>{document.body.classList.toggle('map-big');mapReplace();});
+$('mapMini').addEventListener('click',()=>{document.body.classList.toggle('map-big');mapReplace();if(jsPose)carMapFrame(jsPose);setTimeout(()=>{if(jsPose)carMapFrame(jsPose);},560);});
 $('mapMini').addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();document.body.classList.toggle('map-big');}});
 $('mediaCanvas').addEventListener('click',e=>{if(document.body.classList.contains('map-big')){document.body.classList.remove('map-big');e.stopPropagation();}},true);
 mapStateLoop();mapFrameLoop();

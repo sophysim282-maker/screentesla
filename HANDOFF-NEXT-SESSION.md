@@ -1,4 +1,4 @@
-# Handoff for the next Claude session (written 2026-11-10, after build 98)
+# Handoff for the next Claude session (written 2026-11-10, after build 99)
 
 Read this first. It replaces reading the old 400k-token conversation.
 
@@ -61,6 +61,15 @@ YouTube over AirPlay with no screen recording, and serves it to a car browser:
   - Test: `tools/test_car_map_js.cjs` (stubbed Google).
   - CI note: the `native` job uses `macos-15` (the Intel runner did not start on 2026-11-09).
     GitHub had "Internal server error" outages that day; just re-run with `gh workflow run`.
+
+- **99 (0.20.62) is SENT, NOT YET CAR-TESTED.** Branch `release/build99-google-map`, workflow
+  `googlemap99.yml`. Car map looks like Google Maps navigation (see `BUILD99.md`): 3D heading-up
+  vector map, real day/night colours, traffic, route edge + red pin, glide, turn arrows, arrival card.
+  Web-only change in the map section of `App/CanvasShell.js` / `.html`.
+  - Watch in the car log / by eye: does the video stay smooth while the map moves? If not, lower
+    the glide rate or remove the tilt. If the map is flat, Google gave a raster map (falls back
+    to build 98 behaviour).
+  - 98 and 99 can be car-tested together: 99 contains 98.
 
 ## Next ideas the user agreed with (not started)
 - **Smart helper (non-developers):**

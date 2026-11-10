@@ -29,7 +29,7 @@ const status=page=>page.evaluate(()=>ScreenLinkCanvasStatus());
  await page.goto(base+'/video');
  await page.waitForFunction(()=>ScreenLinkCanvasStatus().mediaStats?.drawn>20,null,{timeout:30000});
  await page.waitForFunction(()=>!document.getElementById('mapMini').hidden&&document.getElementById('mapMiniImg').naturalWidth>0,null,{timeout:10000});
- const mini=await page.evaluate(()=>{const m=document.getElementById('mapMini').getBoundingClientRect(),v=document.getElementById('mediaCanvas').getBoundingClientRect();return {mw:m.width,mh:m.height,vw:v.width,turn:document.getElementById('mapText').textContent,dist:document.getElementById('mapDist').textContent,eta:document.getElementById('mapEta').textContent,turnShown:!document.getElementById('mapTurn').hidden};});
+ const mini=await page.evaluate(()=>{const m=document.getElementById('mapMini').getBoundingClientRect(),v=document.getElementById('mediaCanvas').getBoundingClientRect();return {mw:m.width,mh:m.height,vw:v.width,turn:document.getElementById('mapText').textContent,dist:document.getElementById('mapDist').textContent,eta:document.getElementById('mapEtaTime').textContent+' · '+document.getElementById('mapEtaMore').textContent,turnShown:!document.getElementById('mapTurn').hidden};});
  assert(mini.mw>200&&mini.mw<mini.vw*0.5,'Small map sits in the corner of the video');assert.equal(mini.turn,'Turn right onto Norodom Blvd');assert.equal(mini.dist,'300 m');assert.equal(mini.eta,'14:32 · 12 min');assert(mini.turnShown);
  const f0=mapFrames;await page.waitForTimeout(1500);assert(mapFrames-f0>=4,'Map pictures keep refreshing: '+(mapFrames-f0));
  console.log('MAP_MINI_SHOWN',mini);if(process.env.SHOT_DIR)await page.screenshot({path:process.env.SHOT_DIR+'/car-map-small.png'});
