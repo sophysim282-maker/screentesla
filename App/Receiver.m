@@ -11,6 +11,7 @@
 // Build 105: map squares for the car, fetched by the phone (Maps/MapTiles.swift).
 @protocol SLMapTilesAPI
 + (NSData *)tile:(NSString *)path;
++ (NSString *)tileCache:(NSString *)path;
 @end
 #import "LocalWebSocket.h"
 #import "VPNDiscovery.h"
@@ -766,9 +767,10 @@ static NSArray *txtStrings(const char *bytes,int length) {
             if(jpeg.length){mime=@"image/jpeg";body=jpeg;}else status=@"204 No Content";
         }
         else if([url.path hasPrefix:@"/map/tile/"]){
-            // Build 105: one map square. The car may keep it for a day; the address carries a version.
-            Class tiles=NSClassFromString(@"SLMapTiles");NSData *tile=tiles?[(id<SLMapTilesAPI>)tiles tile:[url.path substringFromIndex:10]]:nil;
-            if(tile.length>3){const uint8_t *first=tile.bytes;mime=first[0]==0x89?@"image/png":@"image/jpeg";body=tile;cacheControl=@"private, max-age=86400";}else status=@"502 Bad Gateway";
+            // Build 105: one map square. The car may keep it only as long as Google allowed the phone to.
+            Class tiles=NSClassFromString(@"SLMapTiles");NSString *square=[url.path substringFromIndex:10];NSData *tile=tiles?[(id<SLMapTilesAPI>)tiles tile:square]:nil;
+            if(tile.length>3){const uint8_t *first=tile.bytes;mime=first[0]==0x89?@"image/png":@"image/jpeg";body=tile;NSString *allowed=[(id<SLMapTilesAPI>)tiles tileCache:square];
+                if([allowed isKindOfClass:NSString.class]&&allowed.length&&allowed.length<60&&[allowed rangeOfCharacterFromSet:NSCharacterSet.newlineCharacterSet].location==NSNotFound)cacheControl=allowed;}else status=@"502 Bad Gateway";
         }
         else if([url.path isEqual:@"/map/state"]){mime=@"application/json";body=[(id<SLMapFeedAPI>)feed stateData];}
         else if([url.path isEqual:@"/map/cmd"]){

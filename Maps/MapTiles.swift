@@ -12,7 +12,8 @@ final class SLMapTiles: NSObject {
     private static var lastTry = Date.distantPast
     private static var made = Date.distantPast
     private static var apiKey = ""
-    private static var cache: [String: Data] = [:]
+    // Squares are kept only for as long as Google's own answer allows (its Cache-Control header).
+    private static var cache: [String: (data: Data, until: Date, header: String)] = [:]
     private static var order: [String] = []
     private static var failures = 0
 
@@ -74,6 +75,21 @@ final class SLMapTiles: NSObject {
         }.resume()
     }
 
+    /// Seconds Google allows a square to be kept; 0 when it says no-store / no-cache or says nothing.
+    private static func maxAge(_ header: String) -> TimeInterval {
+        let h = header.lowercased()
+        guard !h.contains("no-store"), !h.contains("no-cache"), let r = h.range(of: "max-age=") else { return 0 }
+        let digits = h[r.upperBound...].prefix { $0.isNumber }
+        return min(86_400, TimeInterval(digits) ?? 0)
+    }
+
+    /// What the car may do with a square it just got: the same permission Google gave the phone.
+    @objc static func tileCache(_ path: String) -> String {
+        lock.lock(); defer { lock.unlock() }
+        guard let held = cache[path], held.until > Date() else { return "no-store" }
+        return "private, max-age=\(max(0, Int(held.until.timeIntervalSinceNow)))"
+    }
+
     /// One square, asked for by the phone's web server on its own connection thread (never the main
     /// thread). `path` is "z/x/y". Empty data = not available.
     @objc static func tile(_ path: String) -> Data {
@@ -83,7 +99,7 @@ final class SLMapTiles: NSObject {
         lock.lock()
         let token = session, key = apiKey, held = cache[name]
         lock.unlock()
-        if let held { return held }
+        if let held, held.until > Date() { return held.data }
         guard !token.isEmpty, let url = URL(string: "https://tile.googleapis.com/v1/2dtiles/\(name)?session=\(token)&key=\(key)") else { return Data() }
         var req = URLRequest(url: url)
         req.timeoutInterval = 5
@@ -91,18 +107,25 @@ final class SLMapTiles: NSObject {
         let done = DispatchSemaphore(value: 0)
         var result = Data()
         var code = 0
+        var allowed = ""
         URLSession.shared.dataTask(with: req) { data, resp, _ in
             code = (resp as? HTTPURLResponse)?.statusCode ?? 0
             if code == 200, let data { result = data }
+            allowed = (resp as? HTTPURLResponse)?.value(forHTTPHeaderField: "Cache-Control") ?? ""
             done.signal()
         }.resume()
         _ = done.wait(timeout: .now() + 6)
         lock.lock()
         if !result.isEmpty, token == session {
             failures = 0
-            cache[name] = result
-            order.append(name)
-            if order.count > 300 { cache[order.removeFirst()] = nil }
+            let seconds = Self.maxAge(allowed)
+            if seconds > 0 {
+                if cache[name] == nil { order.append(name) }
+                cache[name] = (result, Date().addingTimeInterval(seconds), "private, max-age=\(Int(seconds))")
+                if order.count > 300 { cache[order.removeFirst()] = nil }
+            } else {
+                cache[name] = nil
+            }
         } else if result.isEmpty, code == 400 || code == 401 || code == 403 {
             // The session is no longer accepted: make a new one on the next prepare().
             failures += 1

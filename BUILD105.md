@@ -16,7 +16,9 @@ Continues build 104. From the user's build 104 car test:
 2. Car-drawn map from phone squares:
    - Maps/MapTiles.swift: Google Map Tiles API session (roadmap or satellite+roads, night styles,
      2x high-DPI) and `/map/tile/z/x/y` (App/Receiver.m) fetched by the phone with a 300-square
-     memory cache. Squares may be cached by the car for a day (`Cache-Control` only for this route).
+     memory cache. Google's Map Tiles policies forbid unauthorized caching, so a square is kept on
+     the phone, and may be kept by the car, only for the `max-age` in Google's own `Cache-Control`
+     answer (nothing is kept when Google says no-store or gives no header).
    - Car page `tileMap` (App/CanvasShell.js): own renderer, no library. Squares as images in a
      layer moved with CSS transforms; local drag, pinch, wheel, + / −; follow mode with travel
      direction up and the car below the middle while driving; route as SVG lines; car arrow and
