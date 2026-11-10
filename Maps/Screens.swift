@@ -788,6 +788,7 @@ struct SettingsView: View {
     @ObservedObject var settings: Settings
     @ObservedObject var car: CarLink
     @ObservedObject var vpn: CarVPN
+    @ObservedObject var cube = CubeLink.shared
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -845,6 +846,12 @@ struct SettingsView: View {
                         Text(a).font(.body.monospaced().bold()).textSelection(.enabled)
                     }
                     Text("1. iPhone: Personal Hotspot ON\n2. Tesla: Wi-Fi → this iPhone\n3. Tesla browser: open the address above\nKeep this app open while driving.")
+                        .font(.footnote).foregroundColor(.secondary)
+                }
+                Section("Orbit Cube display") {
+                    Toggle("Send the map to the cube", isOn: $cube.on)
+                    if cube.on { Text(cube.status).font(.footnote).foregroundColor(.secondary) }
+                    Text("1. Turn the cube on. 2. iPhone Settings → Wi-Fi → join \"Orbit-Clip\" (password is on the cube). 3. Keep this map screen open. The cube only shows the map while the car is stopped.")
                         .font(.footnote).foregroundColor(.secondary)
                 }
                 Section("Car map key (website key)") {

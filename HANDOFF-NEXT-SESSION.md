@@ -1,4 +1,4 @@
-# Handoff for the next Claude session (written 2026-11-10, after build 102)
+# Handoff for the next Claude session (written 2026-11-10, after build 103)
 
 Read this first. It replaces reading the old 400k-token conversation.
 
@@ -94,6 +94,10 @@ YouTube over AirPlay with no screen recording, and serves it to a car browser:
     ones about 3 s. Do not change the player before a log with the new line shows the slow step.
   - In that test the map question (does it keep running after leaving the app) was not answered;
     no `CAR MAP:` line was in the log part they sent.
+
+- **103 (0.20.66) is SENT, NOT TESTED WITH A CUBE.** Branch `release/build103-orbit-cube`, workflow
+  `orbitcube103.yml`. Contains 98–102 + the Orbit Cube display switch (see `BUILD103.md`,
+  `Maps/CubeLink.swift`). Asked for by a third person through the user.
 
 ## Next ideas the user agreed with (not started)
 - **Smart helper (non-developers):**
