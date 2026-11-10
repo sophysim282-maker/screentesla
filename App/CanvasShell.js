@@ -524,7 +524,7 @@ const tileMap={
   this.goal=goal;cancelAnimationFrame(this.glide);this.glide=0;
   if(!from||moved>.003||document.hidden||(moved<1e-7&&Math.abs(goal.heading-from.heading)<.5)){this.pose=goal;this.camera();this.draw();return;}
   // Smooth movement between GPS points; only moving a finished picture, so it is light for the car.
-  const swing=((goal.heading-from.heading+540)%360)-180,start=performance.now(),step=now=>{const t=Math.min(1,(now-start)/900);
+  const swing=((goal.heading-from.heading+540)%360)-180,start=performance.now(),step=now=>{const t=Math.min(1,(now-start)/600);
    this.pose={lat:from.lat+(goal.lat-from.lat)*t,lng:from.lng+(goal.lng-from.lng)*t,heading:((from.heading+swing*t)%360+360)%360};this.camera();this.render();this.glide=t<1?requestAnimationFrame(step):0;};
   this.glide=requestAnimationFrame(step);
  },
@@ -585,7 +585,8 @@ async function mapStateLoop(){
    if(drive){$('mapDist').textContent=s.distance||'';$('mapText').textContent=s.instruction||'';$('mapEtaTime').textContent=s.eta||'';$('mapEtaMore').textContent=[s.remaining,s.arrival].filter(Boolean).join(' · ');
     const arrow=String(s.maneuver||'')+'|'+String(s.then||'');if(arrow!==jsArrow){jsArrow=arrow;$('mapArrow').innerHTML=mapArrow(s.maneuver);$('mapThen').hidden=!s.then;$('mapThenArrow').innerHTML=s.then?mapArrow(s.then):'';}}
    renderMapUi(s,(useJs&&jsMapState==='ready')||useTiles||mapLive||bgMode);
-   next=(useJs||useTiles||mapLive||bgMode)?(Date.now()<mapFast?300:800):2500;
+   // Build 105: while driving ask the phone more often, so the turn and distance are fresh.
+   next=(useJs||useTiles||mapLive||bgMode)?(Date.now()<mapFast?300:(drive?450:800)):2500;
   }else{mapLive=false;$('mapMini').hidden=true;}
  }catch(e){next=3000;}
  if(run!==mapLoopRun)return;

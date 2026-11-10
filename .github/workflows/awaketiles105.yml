@@ -1,5 +1,5 @@
 name: Build105 keep awake and car-drawn map
-# Build 105: stay awake in the background without PiP; the car draws the map from squares the phone hands over. Includes build 104. Run 1.
+# Build 105: stay awake in the background without PiP; the car draws the map from squares the phone hands over. Includes build 104. Run 2.
 on:
   push:
     branches: ['release/build105-awake-tiles']

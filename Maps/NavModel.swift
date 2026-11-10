@@ -80,6 +80,9 @@ final class NavModel: NSObject, ObservableObject, CLLocationManagerDelegate {
     private var saidMid = false
     private var offRoute = 0
     private var lastReroute = Date.distantPast
+    private var alongKey = -1
+    private var lastAlong = 0.0
+    private var stepEnds: [Double] = []
     private var routing = false
     private var sessionToken = UUID().uuidString
     private var autoWork: DispatchWorkItem?
@@ -573,17 +576,41 @@ final class NavModel: NSObject, ObservableObject, CLLocationManagerDelegate {
             loc.distance(from: CLLocation(latitude: r.steps[i].end.latitude, longitude: r.steps[i].end.longitude))
         }
         var d = dist(stepIndex)
-        while d < 25, stepIndex < r.steps.count - 1 {
-            stepIndex += 1
-            saidFar = false
-            saidMid = false
-            saidNear = false
-            d = dist(stepIndex)
+        // Build 105: follow the car ALONG the route line. Before, a turn only counted when a GPS
+        // point landed within 25 m of the corner; at speed or with GPS error that was missed and the
+        // old turn stayed on screen after turning. Now the turn is done as soon as the car has
+        // passed that point of the line, and the distance counts down along the road.
+        let key = routesVersion * 100 + routeIndex
+        if key != alongKey { alongKey = key; lastAlong = 0; stepEnds = [] }
+        var onLine: (along: Double, total: Double)?
+        if let a = Self.along(loc.coordinate, on: r.path, near: lastAlong), a.off < 35 {
+            if stepEnds.count != r.steps.count {
+                let sum = r.steps.reduce(0) { $0 + $1.distance }
+                var run = 0.0
+                stepEnds = r.steps.map { run += $0.distance; return sum > 0 ? run * a.total / sum : a.total }
+            }
+            lastAlong = a.along
+            onLine = (a.along, a.total)
+            while stepIndex < r.steps.count - 1, a.along >= stepEnds[stepIndex] - 8 {
+                stepIndex += 1
+                saidFar = false
+                saidMid = false
+                saidNear = false
+            }
+            d = stepIndex == r.steps.count - 1 ? dist(stepIndex) : max(0, stepEnds[stepIndex] - a.along)
+        } else {
+            while d < 25, stepIndex < r.steps.count - 1 {
+                stepIndex += 1
+                saidFar = false
+                saidMid = false
+                saidNear = false
+                d = dist(stepIndex)
+            }
         }
         distanceToNext = d
 
         let after = r.steps.dropFirst(stepIndex + 1).reduce(0) { $0 + $1.distance }
-        remainingMeters = d + after
+        remainingMeters = onLine.map { max(d, $0.total - $0.along) } ?? (d + after)
         remainingSeconds = r.meters > 0 ? r.seconds * remainingMeters / r.meters : 0
 
         if stepIndex == r.steps.count - 1, d < 30 {
@@ -625,6 +652,36 @@ final class NavModel: NSObject, ObservableObject, CLLocationManagerDelegate {
         } else if Date().timeIntervalSince(lastReroute) > 120 {
             fetchRoutes()   // build 100: refresh traffic, route and arrival time every 2 minutes
         }
+    }
+
+    /// Build 105: how many metres along the route line the car is. `near` is the last known value:
+    /// a point close to it wins over an equally near point elsewhere (routes that cross or return).
+    static func along(_ c: CLLocationCoordinate2D, on path: GMSPath, near: Double)
+        -> (along: Double, off: Double, total: Double)? {
+        let n = Int(path.count())
+        guard n >= 2 else { return nil }
+        let ky = 110_540.0
+        var run = 0.0
+        var best: (score: Double, along: Double, off: Double)?
+        var a = path.coordinate(at: 0)
+        for i in 1..<n {
+            let b = path.coordinate(at: UInt(i))
+            let kx = cos((a.latitude + b.latitude) / 2 * .pi / 180) * 111_320.0
+            let ax = (a.longitude - c.longitude) * kx, ay = (a.latitude - c.latitude) * ky
+            let dx = (b.longitude - a.longitude) * kx, dy = (b.latitude - a.latitude) * ky
+            let len2 = dx * dx + dy * dy
+            let len = len2.squareRoot()
+            let t = len2 > 0 ? max(0, min(1, -(ax * dx + ay * dy) / len2)) : 0
+            let px = ax + t * dx, py = ay + t * dy
+            let off = (px * px + py * py).squareRoot()
+            let at = run + t * len
+            let score = off + ((at >= near - 30 && at <= near + 500) ? 0 : 25)
+            if best == nil || score < best!.score { best = (score, at, off) }
+            run += len
+            a = b
+        }
+        guard let b = best else { return nil }
+        return (b.along, b.off, run)
     }
 
     /// Nearest point on the route and the road direction there.

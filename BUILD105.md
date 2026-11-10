@@ -28,6 +28,13 @@ Continues build 104. From the user's build 104 car test:
    - While the car draws, it reports `carmap ok=1`, so the phone stops making map pictures (heat).
    - Phone map screen: orange "Car map is slow · Tap to fix" with Google's answer and the steps
      for **Map Tiles API**; green "Car draws the map ✓" when it works.
+3. Turn guidance (Maps/NavModel.swift `progress`, new `along`): the user reported "I already
+   turned but it still shows the turn". Cause: a step only advanced when a GPS fix was within 25 m
+   (straight line) of the corner; at speed or with GPS error that was missed and nothing corrected
+   it while the car stayed on the route. Now the position along the route line decides: a step is
+   done when the car is within 8 m of / past its end along the line, the distance counts down along
+   the road, and the old radius rule is only used when the car is more than 35 m from the line.
+   The car page asks the phone every 450 ms while driving (was 800) and glides 600 ms (was 900).
 - Video player, recovery and rescue page unchanged.
 - NOT verified here: real Google squares with the user's key, a real China-version Tesla, keep-awake.
 - Still open: "the road it gives is bad" — need one example from the user (start, destination,
