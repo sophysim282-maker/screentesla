@@ -1,5 +1,5 @@
 name: Build101 car map key fix
-# Build 101: phone shows whether the car draws the map; Fix screen to paste a website key; car reloads its map on a new key. Includes build 100.
+# Build 101: phone shows whether the car draws the map; Fix screen to paste a website key; car reloads its map on a new key. Includes build 100. Run 2.
 on:
   push:
     branches: ['release/build101-car-map-key']
