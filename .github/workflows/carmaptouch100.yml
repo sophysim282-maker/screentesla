@@ -1,5 +1,5 @@
 name: Build100 car map touch
-# Build 100: big car map touched directly, car search with suggestions, tap a place name, place card with routes and Start. Includes build 99.
+# Build 100: big car map touched directly, car search with suggestions, tap a place name, place card with routes and Start. Includes build 99. Run 2.
 on:
   push:
     branches: ['release/build100-car-map-touch']
