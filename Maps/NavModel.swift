@@ -502,6 +502,12 @@ final class NavModel: NSObject, ObservableObject, CLLocationManagerDelegate {
         if let l = location { progress(l) }
     }
 
+    /// Car "Start" button: start now, or as soon as the route arrives.
+    func startWhenReady() {
+        if route != nil { startGuidance() }
+        else if selected != nil { pendingStart = true; fetchRoutes() }
+    }
+
     func endGuidance() {
         guiding = false
         speech.stopSpeaking(at: .immediate)
@@ -582,8 +588,8 @@ final class NavModel: NSObject, ObservableObject, CLLocationManagerDelegate {
         if offRoute >= 2, Date().timeIntervalSince(lastReroute) > 5 {
             fetchRoutes()
             offRoute = 0
-        } else if Date().timeIntervalSince(lastReroute) > 300 {
-            fetchRoutes()   // refresh traffic and arrival time every 5 minutes
+        } else if Date().timeIntervalSince(lastReroute) > 120 {
+            fetchRoutes()   // build 100: refresh traffic, route and arrival time every 2 minutes
         }
     }
 

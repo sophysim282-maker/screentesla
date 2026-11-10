@@ -1,4 +1,4 @@
-# Handoff for the next Claude session (written 2026-11-10, after build 99)
+# Handoff for the next Claude session (written 2026-11-10, after build 100)
 
 Read this first. It replaces reading the old 400k-token conversation.
 
@@ -62,7 +62,7 @@ YouTube over AirPlay with no screen recording, and serves it to a car browser:
   - CI note: the `native` job uses `macos-15` (the Intel runner did not start on 2026-11-09).
     GitHub had "Internal server error" outages that day; just re-run with `gh workflow run`.
 
-- **99 (0.20.62) is SENT, NOT YET CAR-TESTED.** Branch `release/build99-google-map`, workflow
+- **99 (0.20.62) built, never sent alone (it is inside 100).** Branch `release/build99-google-map`, workflow
   `googlemap99.yml`. Car map looks like Google Maps navigation (see `BUILD99.md`): 3D heading-up
   vector map, real day/night colours, traffic, route edge + red pin, glide, turn arrows, arrival card.
   Web-only change in the map section of `App/CanvasShell.js` / `.html`.
@@ -70,6 +70,15 @@ YouTube over AirPlay with no screen recording, and serves it to a car browser:
     the glide rate or remove the tilt. If the map is flat, Google gave a raster map (falls back
     to build 98 behaviour).
   - 98 and 99 can be car-tested together: 99 contains 98.
+
+- **100 (0.20.63) is SENT, NOT YET CAR-TESTED.** Branch `release/build100-car-map-touch`, workflow
+  `carmaptouch100.yml`. Contains 98 + 99. See `BUILD100.md`: big car map touched directly, car
+  search with suggestions, tap a place name (`poi`), place card with routes and Start (`gostart`),
+  Re-centre, Exit, traffic refresh every 2 minutes. Build 99 was never sent on its own.
+  - The user asked for lane guidance "like Google Maps": not possible with public Google web APIs
+    (told the user). Do not fake it.
+  - Things only the car can show: touch feel, Tesla keyboard on the search box, video smoothness
+    while the map moves, whether Google gives the vector (3D) map.
 
 ## Next ideas the user agreed with (not started)
 - **Smart helper (non-developers):**

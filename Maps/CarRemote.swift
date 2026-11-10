@@ -57,7 +57,8 @@ extension NavModel {
             },
         ]
         if let p = selected {
-            var pl: [String: Any] = ["name": p.name, "address": p.address]
+            // Build 100: lat/lng let the car map show this place with its name.
+            var pl: [String: Any] = ["name": p.name, "address": p.address, "lat": p.lat, "lng": p.lng]
             if let i = info {
                 if let r = i.rating { pl["rating"] = r; pl["count"] = i.ratingCount ?? 0 }
                 if let t = i.type { pl["type"] = t }
@@ -115,6 +116,14 @@ extension NavModel {
         case "navsearch": searchWhileDriving(p["q"] ?? "")
         case "go": if driveResults.indices.contains(i) { goNow(driveResults[i]) }
         case "clearnear": driveResults = []; maps.recenter(self)
+        // Build 100: the car map is touched directly. A tapped place name opens that place by its
+        // Google id (real name, not a dropped pin); Start begins guidance as soon as the route is ready.
+        case "poi":
+            if let id = p["id"], !id.isEmpty, id.count < 300 { choose(Suggestion(id: id, main: p["name"] ?? "Place", secondary: "")) }
+        case "gostart":
+            maps.follow = true
+            maps.carFollow = true
+            startWhenReady()
         case "carmap": CarLink.carDrawsMapAt = p["ok"] == "1" ? Date() : .distantPast
         default: break
         }
