@@ -789,6 +789,7 @@ struct SettingsView: View {
     @ObservedObject var car: CarLink
     @ObservedObject var vpn: CarVPN
     @ObservedObject var cube = CubeLink.shared
+    @State private var carGoogleOn = CarLink.carGoogle
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -854,10 +855,11 @@ struct SettingsView: View {
                     Text("Shows the next turn, the distance, the road name and the minutes left on an Orbit Cube. 1. Turn the cube on. 2. Turn this switch on and allow Bluetooth. 3. The first time, type the 6-digit PIN shown on the cube. 4. Start a route here in ScreenLink Maps.")
                         .font(.footnote).foregroundColor(.secondary)
                 }
-                Section("Car map key (website key)") {
-                    Text("Only needed when the car map stops after you leave the app.")
+                Section("Car draws the Google map itself") {
+                    Toggle("Let the car load Google Maps", isOn: Binding(get: { CarLink.carGoogle }, set: { CarLink.carGoogle = $0; carGoogleOn = $0 }))
+                    Text("Keep this OFF for China-version cars: their browser blocks Google. When it is off, the car only talks to this iPhone and the map comes from the phone as pictures.")
                         .font(.footnote).foregroundColor(.secondary)
-                    CarMapKeyRows()
+                    if carGoogleOn { CarMapKeyRows() }
                 }
                 Section("Google key") {
                     Button("Remove Google key", role: .destructive) {

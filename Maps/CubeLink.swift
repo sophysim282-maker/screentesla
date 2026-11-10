@@ -135,12 +135,15 @@ final class CubeLink: NSObject, ObservableObject, CBCentralManagerDelegate, CBPe
             status = "This device is not an Orbit Cube (service missing)"
             return
         }
-        peripheral.discoverCharacteristics([Self.navigation], for: found)
+        peripheral.discoverCharacteristics(nil, for: found)   // all of them, so a wrong UUID can be reported
     }
 
     func peripheral(_ peripheral: CBPeripheral, didDiscoverCharacteristicsFor service: CBService, error: Error?) {
         guard let found = service.characteristics?.first(where: { $0.uuid == Self.navigation }) else {
-            status = "Orbit Cube has no navigation channel"
+            // Build 104: show what the cube really offers, for the cube maker.
+            let offered = (service.characteristics ?? []).map { String($0.uuid.uuidString.suffix(4)) }.joined(separator: ", ")
+            if let error { status = "Could not read the cube: \(error.localizedDescription)" }
+            else { status = "Cube has no navigation channel …0F13. It offers: " + (offered.isEmpty ? "nothing" : offered) }
             return
         }
         target = found

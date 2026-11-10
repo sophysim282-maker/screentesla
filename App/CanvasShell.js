@@ -190,7 +190,7 @@ window.addEventListener('pageshow',event=>{if(!event.persisted)return;setIdleArt
 function renderPerformance(){
  if(performanceFrozen||$('performancePanel').hidden)return;
  const profile=player?.performanceProfile?.()||previousPlaybackProfile;
- const lines=['Build: 0.20.66 / 103 · '+(activeEngine||requestedEngine)+' · '+(player?.videoAcceleration||requestedDecoder),'Playback: '+(player?.currentTime||0).toFixed(2)+' s','Page: '+(profile?.visibility||document.visibilityState||'unknown'),''];
+ const lines=['Build: 0.20.67 / 104 · '+(activeEngine||requestedEngine)+' · '+(player?.videoAcceleration||requestedDecoder),'Playback: '+(player?.currentTime||0).toFixed(2)+' s','Page: '+(profile?.visibility||document.visibilityState||'unknown'),''];
  const names=[['demuxMs','Demux ms'],['decoderWaitMs','Decoder feed wait ms'],['renderCallbackGapMs','Drawing callback gap ms'],['canvasDrawMs','Canvas draw call ms'],['videoQueueDepth','Pending decode requests']];
  for(const [key,label] of names){const m=profile?.metrics[key];lines.push(label+': '+(m?'mean '+m.mean.toFixed(2)+' | max '+m.max.toFixed(2)+' | n '+m.count:'no samples'));if(m)lines.push('  max at '+(m.maxAtMs/1000).toFixed(2)+'s, media '+m.mediaTime.toFixed(2)+'s');}
  lines.push('','Decode queue now: '+(profile?.videoQueueDepth||0),'Decoded frames queued: '+(profile?.framesQueued||0),'Video recoveries: '+(player?.stats.videoRecoveries||0),'Audio buffer underruns: '+(player?.stats.audioUnderruns||0));
@@ -211,7 +211,7 @@ async function retireOfflineUI(){
  }catch(error){lastConnectionError={message:'Rescue page setup: '+error.message,time:Date.now()};}
 }
 retireOfflineUI();
-self.ScreenLinkCanvasStatus=()=>({build:'0.20.66-103',engine:activeEngine||requestedEngine,videoDecoder:player?.videoAcceleration||null,connectionPhase,approvalPhase,phoneVolume,phoneEQ,phoneSettingsRevision,phonePlaybackRevision,volumeGain:player?.gain?.gain.value??null,eqLowGain:player?.low?.gain.value??null,minimalViewer:youtubeOnly&&!developerMode,lastRequestAt,lastSuccessAt,offlineUI:false,healthFailures,lastHealthyAt,reconnections,quality:$('quality').value,transportWaiting,decoderFaults,transportError:player?.lastTransportError||null,lastPlaybackError,lastConnectionError,recoveryAttempts:retryCount,mediaRunning:player?.running||false,mediaDuration:player?.duration||0,videoFramesQueued:player?.frames.length||0,audioPacketsQueued:player?.audio.length||0,secureContext:isSecureContext,connected,connectionPending:joining,viewerMode:youtubeOnly?'youtube':'split',screenFrames:screen.framesDrawn,screenHidden:screen.hold,screenQueue:screen.decoder?.decodeQueueSize||0,mediaEpoch,mediaPosition:player?.currentTime||0,mediaPaused:player?.paused??true,mediaWidth:$('mediaCanvas').width,mediaHeight:$('mediaCanvas').height,youtubeBufferSeconds:player?.bufferSeconds||0,encodedVideoLead:player?Math.max(0,player.preparedVideoEnd-player.currentTime):0,mediaStats:player?{...player.stats}:null,performance:player?.performanceProfile?.()||null,previousPlaybackProfile,playbackEvents:player?(player.playbackEvents||[]).map(e=>({...e})):[],segmentCache:player?.segmentCache?.size||0,audioSampleRate:player?.audioContext?.sampleRate||0,decodedAudioRate:player?.lastAudioSampleRate||player?.audio[0]?.sampleRate||0,segments:player?(player.segmentDiagnostics||[]).map(s=>({...s})):[],audioLead:player?.audioContext&&player.audioTail!==null?Math.max(0,player.audioTail-player.audioContext.currentTime):0,videoLead:player?Math.max(0,player.videoEnd-player.currentTime):0,audioState:audioContext?.state||'locked',audioNodes:player?.nodes.size||0,mediaError:player?.error?.message||'',socketOpen:ws?.readyState===WebSocket.OPEN});
+self.ScreenLinkCanvasStatus=()=>({build:'0.20.67-104',engine:activeEngine||requestedEngine,videoDecoder:player?.videoAcceleration||null,connectionPhase,approvalPhase,phoneVolume,phoneEQ,phoneSettingsRevision,phonePlaybackRevision,volumeGain:player?.gain?.gain.value??null,eqLowGain:player?.low?.gain.value??null,minimalViewer:youtubeOnly&&!developerMode,lastRequestAt,lastSuccessAt,offlineUI:false,healthFailures,lastHealthyAt,reconnections,quality:$('quality').value,transportWaiting,decoderFaults,transportError:player?.lastTransportError||null,lastPlaybackError,lastConnectionError,recoveryAttempts:retryCount,mediaRunning:player?.running||false,mediaDuration:player?.duration||0,videoFramesQueued:player?.frames.length||0,audioPacketsQueued:player?.audio.length||0,secureContext:isSecureContext,connected,connectionPending:joining,viewerMode:youtubeOnly?'youtube':'split',screenFrames:screen.framesDrawn,screenHidden:screen.hold,screenQueue:screen.decoder?.decodeQueueSize||0,mediaEpoch,mediaPosition:player?.currentTime||0,mediaPaused:player?.paused??true,mediaWidth:$('mediaCanvas').width,mediaHeight:$('mediaCanvas').height,youtubeBufferSeconds:player?.bufferSeconds||0,encodedVideoLead:player?Math.max(0,player.preparedVideoEnd-player.currentTime):0,mediaStats:player?{...player.stats}:null,performance:player?.performanceProfile?.()||null,previousPlaybackProfile,playbackEvents:player?(player.playbackEvents||[]).map(e=>({...e})):[],segmentCache:player?.segmentCache?.size||0,audioSampleRate:player?.audioContext?.sampleRate||0,decodedAudioRate:player?.lastAudioSampleRate||player?.audio[0]?.sampleRate||0,segments:player?(player.segmentDiagnostics||[]).map(s=>({...s})):[],audioLead:player?.audioContext&&player.audioTail!==null?Math.max(0,player.audioTail-player.audioContext.currentTime):0,videoLead:player?Math.max(0,player.videoEnd-player.currentTime):0,audioState:audioContext?.state||'locked',audioNodes:player?.nodes.size||0,mediaError:player?.error?.message||'',socketOpen:ws?.readyState===WebSocket.OPEN});
 for(const id of ['viewMode','quality','eq'])makeInline(id);
 function autoConnect(){if(!stopped&&!connected&&!joining)connect();if(!stopped)reconnectTimer=setTimeout(autoConnect,3000);}if(isSecureContext&&typeof VideoDecoder==='function')autoConnect();
 if(!isSecureContext||typeof VideoDecoder!=='function')status.textContent='This viewer needs HTTPS and WebCodecs support.';
@@ -263,7 +263,7 @@ function buildCarMap(){
  jsPath=[];jsPlaceKey='';jsFitKey='';
  jsMap.addListener?.('dragstart',carMapFree);
  // Tap a place name or icon on the map: open that place on the phone by its Google id.
- jsMap.addListener?.('click',event=>{if(event?.placeId){event.stop?.();mapSearchOpen=false;mapCmd('poi',{id:event.placeId});}else if(mapSearchOpen){mapSearchOpen=false;$('mapQuery').blur();renderMapUi(mapBgState,jsLive());}});
+ jsMap.addListener?.('click',event=>{if(event?.placeId){event.stop?.();mapSearchOpen=false;mapCmd('poi',{id:event.placeId});}else if(mapSearchOpen){mapSearchOpen=false;$('mapQuery').blur();renderMapUi(mapBgState,mapShown());}});
  applyCarMapMode();
 }
 function loadCarMap(key){
@@ -337,13 +337,15 @@ function mapArrow(maneuver){
 // map, search with suggestions, tap a place name on the map to open that place (its real name,
 // not a dropped pin), pick a route and press Start. The phone does the Google searches; the car
 // only sends small commands to /map/cmd and reads the answers from /map/state.
-let jsReloading=false,jsFollow=true,jsBig=null,jsPath=[],jsPlaceKey='',jsFitKey='',mapFast=0,mapLoopRun=0,mapSearchOpen=false,mapListKey='',mapCardKey='',mapTypeTimer=0,mapQueryPlace='';
-function mapCmd(a,params={}){
+let picPanned=false,picDown=null,jsReloading=false,jsFollow=true,jsBig=null,jsPath=[],jsPlaceKey='',jsFitKey='',mapFast=0,mapLoopRun=0,mapSearchOpen=false,mapListKey='',mapCardKey='',mapTypeTimer=0,mapQueryPlace='';
+function mapCmd(a,params={},quiet=false){
  if(!connected||!token)return;let url='/map/cmd?token='+encodeURIComponent(token)+'&a='+encodeURIComponent(a);
  for(const [k,v] of Object.entries(params))url+='&'+k+'='+encodeURIComponent(v);
- raw(url).catch(()=>{});mapFast=Date.now()+6000;setTimeout(mapStateLoop,220);
+ raw(url).catch(()=>{});if(quiet)return;mapFast=Date.now()+6000;setTimeout(mapStateLoop,220);
 }
 const jsLive=()=>jsMapState==='ready'&&!$('mapJs').hidden;
+// Any map on the car: Google drawn by the car, live pictures from the phone, or the GPS-moved picture.
+const mapShown=()=>jsLive()||mapLive||!$('mapBg').hidden;
 function carMapFree(){if(!document.body.classList.contains('map-big'))return;jsFollow=false;$('mapRecentre').hidden=false;}
 function applyCarMapMode(){const big=document.body.classList.contains('map-big');try{jsMap?.setOptions?.({gestureHandling:big?'greedy':'none',clickableIcons:big});}catch{}}
 function showPlace(place,path){
@@ -358,7 +360,8 @@ const mapIcon=name=>'<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="cur
 function mapNode(tag,cls,text){const n=document.createElement(tag);if(cls)n.className=cls;if(text!==undefined)n.textContent=text;return n;}
 function renderMapUi(s,on){
  const big=document.body.classList.contains('map-big'),ui=$('mapUi');
- if(big!==jsBig){jsBig=big;applyCarMapMode();if(!big){jsFollow=true;$('mapRecentre').hidden=true;mapSearchOpen=false;}if(jsPose)carMapFrame(jsPose);}
+ if(big!==jsBig){jsBig=big;applyCarMapMode();if(!big){jsFollow=true;picPanned=false;$('mapRecentre').hidden=true;mapSearchOpen=false;}if(jsPose)carMapFrame(jsPose);}
+ if(!jsLive()){$('mapRecentre').hidden=!(picPanned&&mapLive);}$('mapZoom').hidden=!(mapLive&&!jsLive());
  ui.hidden=!(on&&big);if(ui.hidden||!s)return;
  const drive=s.screen==='drive'||!!s.navigating,q=$('mapQuery'),text=q.value.trim(),place=!drive&&s.place?s.place:null;
  $('mapMini').classList.toggle('map-drive',drive);$('mapSearch').classList.toggle('open',mapSearchOpen);$('mapExit').hidden=!drive;
@@ -396,49 +399,77 @@ function renderMapUi(s,on){
 }
 function mapUiTap(event){
  const b=event.target.closest?.('[data-a]');if(!b||b.disabled)return;const a=b.dataset.a,q=$('mapQuery');if(!a)return;
- if(a==='recentre'){jsFollow=true;$('mapRecentre').hidden=true;if(jsPose)carMapFrame(jsPose);return;}
+ if(a==='recentre'){$('mapRecentre').hidden=true;if(jsLive()){jsFollow=true;if(jsPose)carMapFrame(jsPose);}else{picPanned=false;mapCmd('recenter');}return;}
+ if(a==='zoomin'||a==='zoomout'){mapCmd('zoom',{d:a==='zoomin'?1:-1});return;}
  if(a==='clear'){q.value='';mapSearchOpen=true;mapCmd('type',{q:''});if(mapBgState&&(mapBgState.results||[]).length||mapBgState?.place&&!mapBgState.navigating)mapCmd('close');q.focus();return;}
  const params={};if(b.dataset.i!==undefined)params.i=b.dataset.i;if(b.dataset.id)params.id=b.dataset.id;
  if(['suggest','result','recent','home','work'].includes(a)){mapSearchOpen=false;q.value=b.dataset.t||'';q.blur();}
  if(a==='close'){q.value='';mapSearchOpen=false;}
- mapCmd(a,params);renderMapUi(mapBgState,jsLive());
+ mapCmd(a,params);renderMapUi(mapBgState,mapShown());
 }
 function mapUiSetup(){
  const ui=$('mapUi'),q=$('mapQuery');
  ui.addEventListener('click',mapUiTap);
  for(const type of ['click','keydown','keyup','keypress'])ui.addEventListener(type,e=>e.stopPropagation());
  $('mapSearch').addEventListener('click',()=>{if(document.activeElement!==q)q.focus();});
- q.addEventListener('focus',()=>{mapSearchOpen=true;mapFast=Date.now()+60000;q.select?.();renderMapUi(mapBgState,jsLive());});
- q.addEventListener('input',()=>{mapSearchOpen=true;mapFast=Date.now()+60000;clearTimeout(mapTypeTimer);mapTypeTimer=setTimeout(()=>mapCmd('type',{q:q.value}),250);renderMapUi(mapBgState,jsLive());});
- q.addEventListener('keydown',e=>{if(e.key==='Enter'&&q.value.trim()){e.preventDefault();clearTimeout(mapTypeTimer);mapSearchOpen=true;mapCmd('search',{q:q.value.trim()});q.blur();}else if(e.key==='Escape'){mapSearchOpen=false;q.blur();renderMapUi(mapBgState,jsLive());}});
+ q.addEventListener('focus',()=>{mapSearchOpen=true;mapFast=Date.now()+60000;q.select?.();renderMapUi(mapBgState,mapShown());});
+ q.addEventListener('input',()=>{mapSearchOpen=true;mapFast=Date.now()+60000;clearTimeout(mapTypeTimer);mapTypeTimer=setTimeout(()=>mapCmd('type',{q:q.value}),250);renderMapUi(mapBgState,mapShown());});
+ q.addEventListener('keydown',e=>{if(e.key==='Enter'&&q.value.trim()){e.preventDefault();clearTimeout(mapTypeTimer);mapSearchOpen=true;mapCmd('search',{q:q.value.trim()});q.blur();}else if(e.key==='Escape'){mapSearchOpen=false;q.blur();renderMapUi(mapBgState,mapShown());}});
  // Two fingers or the wheel move the map by hand: stop following the car until Re-centre.
  $('mapJs').addEventListener('touchstart',e=>{if(e.touches.length>1)carMapFree();},{capture:true,passive:true});
  $('mapJs').addEventListener('wheel',()=>carMapFree(),{capture:true,passive:true});
 }
 mapUiSetup();
+// Build 104: touch on the phone's map pictures (no Google on the car). Drag moves the phone's map,
+// + / − zoom it, and a tap opens the place under the finger by its real name.
+function liveGeometry(){const img=$('mapMiniImg'),b=img.getBoundingClientRect(),iw=img.naturalWidth||800,ih=img.naturalHeight||500,sc=Math.max(b.width/iw,b.height/ih)||1;return {b,iw,ih,sc,ox:(b.width-iw*sc)/2,oy:(b.height-ih*sc)/2};}
+function pictureTap(x,y){
+ const s=mapBgState||{};if(mapSearchOpen){mapSearchOpen=false;$('mapQuery').blur();renderMapUi(s,mapShown());return;}
+ if(s.screen==='drive'||s.navigating)return;
+ if(mapLive){const g=liveGeometry(),fx=(x-g.b.left-g.ox)/g.sc/g.iw,fy=(y-g.b.top-g.oy)/g.sc/g.ih;if(fx>=0&&fx<=1&&fy>=0&&fy<=1)mapCmd('tapplace',{x:fx.toFixed(4),y:fy.toFixed(4)});return;}
+ if(!$('mapBg').hidden&&mapBgMeta&&s.lat){
+  // Same placement as placeMapBg (flat, north up): world point = car point + finger offset / scale.
+  const box=$('mapMini').getBoundingClientRect(),k=1.5*Math.max(.3,Math.min(1,box.width/1600)),c=mapWorld(s.lat,s.lng,mapBgMeta.z),size=512*Math.pow(2,mapBgMeta.z);
+  const wx=c[0]+(x-box.left-box.width/2)/k,wy=c[1]+(y-box.top-box.height/2)/k,lng=wx/size*360-180,lat=Math.atan(Math.sinh(Math.PI*(1-2*wy/size)))*180/Math.PI;
+  if(Number.isFinite(lat)&&Number.isFinite(lng))mapCmd('tapplace',{lat:lat.toFixed(6),lng:lng.toFixed(6)});
+ }
+}
+(()=>{const mini=$('mapMini');
+ mini.addEventListener('pointerdown',e=>{picDown=null;if(!document.body.classList.contains('map-big')||jsLive()||e.target.closest?.('#mapUi,#mapNote'))return;picDown={x:e.clientX,y:e.clientY,lx:e.clientX,ly:e.clientY,moved:false,sent:0};});
+ mini.addEventListener('pointermove',e=>{const d=picDown;if(!d)return;if(!d.moved&&Math.hypot(e.clientX-d.x,e.clientY-d.y)<14)return;d.moved=true;
+  if(!mapLive||Date.now()-d.sent<140)return;const g=liveGeometry(),fx=(e.clientX-d.lx)/(g.iw*g.sc),fy=(e.clientY-d.ly)/(g.ih*g.sc);d.sent=Date.now();d.lx=e.clientX;d.ly=e.clientY;
+  picPanned=true;$('mapRecentre').hidden=false;mapCmd('pan',{x:fx.toFixed(4),y:fy.toFixed(4)},true);});
+ mini.addEventListener('pointerup',e=>{const d=picDown;picDown=null;if(d&&!d.moved)pictureTap(e.clientX,e.clientY);});
+ mini.addEventListener('pointercancel',()=>{picDown=null;});
+ // A finger drag on a picture must stay a map drag, not the browser's own picture drag.
+ mini.addEventListener('dragstart',e=>e.preventDefault());
+})();
 async function mapStateLoop(){
  clearTimeout(mapStateTimer);let next=2000;const run=++mapLoopRun;
  try{
   if(connected&&token){
    const s=await api('/map/state');const drive=s.screen==='drive';
-   const mapOn=s.mapOn!==false,useJs=mapOn&&!!s.mapKey&&!!s.lat&&jsMapState!=='failed';
+   // Build 104: the car asks Google for nothing unless the phone switch "Car draws the Google map itself"
+   // is on (carGoogle). Default: every map picture comes from the phone, so the car only talks to the phone.
+   const mapOn=s.mapOn!==false,google=s.carGoogle===true,useJs=mapOn&&google&&!!s.mapKey&&!!s.lat&&jsMapState!=='failed';
    // Build 101: a new key from the phone after a refusal: load the page again so Google starts clean.
-   if(jsMapState==='failed'&&mapOn&&s.mapKey&&s.mapKey!==jsMapKey&&!jsReloading){jsReloading=true;location.reload();return;}
-   if(jsMapState==='failed'&&Date.now()-jsReportAt>10000)reportCarMap(false,jsFailReason);
-   if(mapOn&&s.mapKey&&jsMapState!=='failed')loadCarMap(s.mapKey);
+   if(google&&jsMapState==='failed'&&mapOn&&s.mapKey&&s.mapKey!==jsMapKey&&!jsReloading){jsReloading=true;location.reload();return;}
+   if(google&&jsMapState==='failed'&&Date.now()-jsReportAt>10000)reportCarMap(false,jsFailReason);
+   if(mapOn&&google&&s.mapKey&&jsMapState!=='failed')loadCarMap(s.mapKey);
    mapLive=!!s.mapLive&&!useJs&&mapOn;
    // Build 88: when the phone is not drawing the live map, show its GPS-moved map picture.
    const bgMode=mapOn&&!useJs&&!mapLive&&!!s.bg&&s.bgId!==undefined&&!!s.lat;mapBgState=s;
    $('mapJs').hidden=!useJs||jsMapState!=='ready';if(useJs)updateCarMap(s);
    // No map of any kind after a refusal (phone left the app): say why instead of just closing.
-   const note=mapOn&&jsMapState==='failed'&&!mapLive&&!bgMode;$('mapNote').hidden=!note;
+   const jsFailed=google&&jsMapState==='failed',note=mapOn&&!useJs&&!mapLive&&!bgMode&&(jsFailed||!!s.bgError);$('mapNote').hidden=!note;
+   if(note)$('mapNoteText').textContent=jsFailed?'The car could not load the Google map ('+(jsFailReason||'unknown')+'). On the phone open ScreenLink Maps and tap the orange button.':'The phone could not get the map picture ('+String(s.bgError).slice(0,90)+'). On the phone open ScreenLink Maps and tap the orange button.';
    $('mapMini').hidden=!(useJs||mapLive||bgMode||note);if(!useJs&&!mapLive&&!bgMode)document.body.classList.remove('map-big');
    $('mapMiniImg').style.visibility=mapLive?'visible':'hidden';$('mapBg').hidden=!bgMode;$('mapBgCar').hidden=!bgMode;
    if(bgMode)placeMapBg(s);
    $('mapTurn').hidden=!drive;$('mapEta').hidden=!drive;
    if(drive){$('mapDist').textContent=s.distance||'';$('mapText').textContent=s.instruction||'';$('mapEtaTime').textContent=s.eta||'';$('mapEtaMore').textContent=[s.remaining,s.arrival].filter(Boolean).join(' · ');
     const arrow=String(s.maneuver||'')+'|'+String(s.then||'');if(arrow!==jsArrow){jsArrow=arrow;$('mapArrow').innerHTML=mapArrow(s.maneuver);$('mapThen').hidden=!s.then;$('mapThenArrow').innerHTML=s.then?mapArrow(s.then):'';}}
-   renderMapUi(s,useJs&&jsMapState==='ready');
+   renderMapUi(s,(useJs&&jsMapState==='ready')||mapLive||bgMode);
    next=(useJs||mapLive||bgMode)?(Date.now()<mapFast?300:800):2500;
   }else{mapLive=false;$('mapMini').hidden=true;}
  }catch(e){next=3000;}
@@ -454,9 +485,9 @@ function mapFrameLoop(){
 }
 const mapReplace=()=>setTimeout(()=>{if(mapBgState&&!$('mapBg').hidden)placeMapBg(mapBgState);},560);
 // On the big Google map a tap belongs to the map (drag, place names). Tap the small video to go back.
-$('mapMini').addEventListener('click',()=>{if(document.body.classList.contains('map-big')&&jsLive())return;document.body.classList.toggle('map-big');mapReplace();renderMapUi(mapBgState,jsLive());setTimeout(()=>{if(jsPose)carMapFrame(jsPose);},560);});
-$('mapMini').addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){if(document.body.classList.contains('map-big')&&jsLive())return;e.preventDefault();document.body.classList.toggle('map-big');renderMapUi(mapBgState,jsLive());}});
-$('mediaCanvas').addEventListener('click',e=>{if(document.body.classList.contains('map-big')){document.body.classList.remove('map-big');e.stopPropagation();renderMapUi(mapBgState,jsLive());}},true);
+$('mapMini').addEventListener('click',()=>{if(document.body.classList.contains('map-big'))return;document.body.classList.toggle('map-big');mapReplace();renderMapUi(mapBgState,mapShown());setTimeout(()=>{if(jsPose)carMapFrame(jsPose);},560);});
+$('mapMini').addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){if(document.body.classList.contains('map-big'))return;e.preventDefault();document.body.classList.toggle('map-big');renderMapUi(mapBgState,mapShown());}});
+$('mediaCanvas').addEventListener('click',e=>{if(document.body.classList.contains('map-big')){document.body.classList.remove('map-big');e.stopPropagation();renderMapUi(mapBgState,mapShown());}},true);
 mapStateLoop();mapFrameLoop();
 })();
 

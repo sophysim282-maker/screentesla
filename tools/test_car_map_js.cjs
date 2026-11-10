@@ -8,14 +8,14 @@ execFileSync('openssl',['req','-x509','-newkey','rsa:2048','-nodes','-days','1',
 const assets={'/':'CanvasShell.html','/video':'CanvasShell.html','/app/pure.js':'CanvasShell.js','/app/screen.js':'CanvasScreen.js','/app/canvas.js':'CanvasPlayer.js','/app/mp4box.js':'MP4Demux.js','/app/mux.js':'TSDemux.js','/app/hls.js':'HLSPlayer.js','/app/browser-video.js':'BrowserVideoPlayer.js','/sw.js':'CanvasServiceWorker.js','/app/car-poster.jpg':'CarPoster.jpg','/app/car-ambient.webp':'CarAmbient.webp'};
 const token='private-fixture-token';
 // Encoded polyline for (38.5,-120.2) (40.7,-120.95) (43.252,-126.453) from Google's documentation.
-let mapState={mapLive:false,bg:true,bgId:1,screen:'drive',navigating:true,distance:'300 m',instruction:'Turn right',eta:'12 min',remaining:'5.2 km',arrival:'14:32',maneuver:'TURN_RIGHT',then:'TURN_LEFT',lat:11.5564,lng:104.9282,heading:90,mapOn:true,mapKey:'test-key',routeLine:'_p~iF~ps|U_ulLnnqC_mqNvxq`@',routeId:100};
-const cmds=[];let frames=0;
+let mapState={mapLive:false,bg:true,bgId:1,screen:'drive',navigating:true,distance:'300 m',instruction:'Turn right',eta:'12 min',remaining:'5.2 km',arrival:'14:32',maneuver:'TURN_RIGHT',then:'TURN_LEFT',lat:11.5564,lng:104.9282,heading:90,mapOn:true,carGoogle:true,mapKey:'test-key',routeLine:'_p~iF~ps|U_ulLnnqC_mqNvxq`@',routeId:100};
+const cmds=[];let frames=0,liveMap=false;
 const server=https.createServer({key:fs.readFileSync(temp+'/key'),cert:fs.readFileSync(temp+'/cert')},(req,res)=>{const u=new URL(req.url,'https://localhost');res.setHeader('Cache-Control','no-store');
  if(assets[u.pathname]){res.setHeader('Content-Type',u.pathname.endsWith('.js')?'application/javascript':u.pathname.endsWith('.jpg')?'image/jpeg':u.pathname.endsWith('.webp')?'image/webp':'text/html');return res.end(fs.readFileSync(path.join(app,assets[u.pathname])));}
  if(u.pathname==='/local-viewer/request'){req.resume();res.setHeader('Content-Type','application/json');return res.end(JSON.stringify({phase:'approved',token}));}
  if(u.searchParams.get('token')!==token){res.statusCode=403;return res.end('{}');}
  if(u.pathname==='/screen/privacy'){req.resume();res.setHeader('Content-Type','application/json');return res.end(JSON.stringify({hidden:true,privacyRevision:1}));}
- if(u.pathname==='/map/state'){res.setHeader('Content-Type','application/json');return res.end(JSON.stringify(mapState));}
+ if(u.pathname==='/map/state'){res.setHeader('Content-Type','application/json');return res.end(JSON.stringify({...mapState,mapLive:liveMap}));}
  if(u.pathname==='/map/cmd'){cmds.push(Object.fromEntries(u.searchParams));res.setHeader('Content-Type','application/json');return res.end('{"ok":true}');}
  if(u.pathname==='/map/bg.jpg'||u.pathname==='/map/frame.jpg'){frames++;res.setHeader('Content-Type','image/jpeg');return res.end(fs.readFileSync(path.join(app,'CarPoster.jpg')));}
  if(u.pathname==='/media/state'){res.setHeader('Content-Type','application/json');return res.end(JSON.stringify({viewerControls:{quality:'auto',volume:1,eq:'normal',revision:1},active:false,epoch:'',url:'',command:0}));}
@@ -35,13 +35,39 @@ const fakeGoogle=(refuse,raster)=>`(()=>{window.__fake={handlers:{},options:{},f
 (async()=>{let browser;try{
  await new Promise(r=>server.listen(0,'127.0.0.1',r));const base='https://127.0.0.1:'+server.address().port;
  browser=await chromium.launch({headless:true,executablePath:process.env.SCREENLINK_CHROME_BIN||undefined,args:['--no-sandbox','--ignore-certificate-errors']});
- for(const mode of ['vector','raster','refuse']){
+ for(const mode of ['pictures','vector','raster','refuse']){
   const refuse=mode==='refuse',raster=mode==='raster';
-  const context=await browser.newContext({ignoreHTTPSErrors:true,viewport:{width:1280,height:720}});let googleKey='';
+  const context=await browser.newContext({ignoreHTTPSErrors:true,viewport:{width:1280,height:720}});let googleKey='',outside=[];
+  context.on('request',r=>{const h=new URL(r.url()).hostname;if(h!=='127.0.0.1')outside.push(h);});
   await context.route('https://maps.googleapis.com/**',route=>{googleKey=new URL(route.request().url()).searchParams.get('key');route.fulfill({contentType:'application/javascript',body:fakeGoogle(refuse,raster)});});
   const page=await context.newPage();page.on('pageerror',e=>{console.error('PAGE',e.message);process.exitCode=1;});cmds.length=0;mapState={...mapState,mapOn:true,night:false,mapType:'normal',lat:11.5564,lng:104.9282,heading:90,routeId:100};
+  if(mode==='pictures')mapState={...mapState,carGoogle:false,mapKey:'',mapLive:true,screen:'home',navigating:false,results:[],suggestions:[],recents:[],place:undefined};
+  else mapState={...mapState,carGoogle:true,mapKey:'test-key',screen:'drive',navigating:true,bg:true,bgError:undefined};
+  liveMap=mode==='pictures';
   await page.goto(base+'/video');
-  if(mode==='vector'){
+  if(mode==='pictures'){
+   // Build 104: default for China-version cars. The car talks only to the phone, never to Google.
+   await page.waitForFunction(()=>!document.getElementById('mapMini').hidden&&document.getElementById('mapMiniImg').naturalWidth>0,null,{timeout:15000});
+   await page.click('#mapMini');await page.waitForFunction(()=>!document.getElementById('mapUi').hidden&&!document.getElementById('mapZoom').hidden,null,{timeout:5000});
+   cmds.length=0;await page.click('#mapZoom button');await page.waitForTimeout(200);assert(cmds.some(c=>c.a==='zoom'&&c.d==='1'),'Zoom button asks the phone to zoom');
+   cmds.length=0;await page.mouse.move(600,300);await page.mouse.down();await page.mouse.move(640,320,{steps:4});await page.waitForTimeout(200);await page.mouse.move(700,360,{steps:4});await page.mouse.up();await page.waitForTimeout(200);
+   assert(cmds.some(c=>c.a==='pan'&&Number(c.x)>0&&Number(c.y)>0),'Dragging the picture moves the phone map');assert(!cmds.some(c=>c.a==='tapplace'),'A drag is not a tap');
+   assert.equal(await page.evaluate(()=>document.getElementById('mapRecentre').hidden),false);await page.click('#mapRecentre');await page.waitForTimeout(200);assert(cmds.some(c=>c.a==='recenter'),'Re-centre goes to the phone');
+   cmds.length=0;await page.mouse.click(640,300);await page.waitForTimeout(300);
+   const tap=cmds.find(c=>c.a==='tapplace');assert(tap&&Math.abs(Number(tap.x)-.5)<.02&&Number(tap.y)>0&&Number(tap.y)<1,'Tap sends the spot on the picture: '+JSON.stringify(tap));
+   assert(await page.evaluate(()=>document.body.classList.contains('map-big')),'Tap stays on the big map');
+   await page.click('#mapQuery');await page.keyboard.type('cafe');await page.waitForTimeout(500);assert(cmds.some(c=>c.a==='type'&&c.q==='cafe'),'Search works on the picture map');
+   await page.mouse.click(900,200);await page.waitForTimeout(300);
+   liveMap=false;mapState={...mapState,mapLive:false,bg:true,bgId:1,bgLat:11.5564,bgLng:104.9282,bgZoom:16};
+   await page.waitForFunction(()=>!document.getElementById('mapBg').hidden&&document.getElementById('mapBgImg').naturalWidth>0,null,{timeout:8000});
+   cmds.length=0;await page.mouse.click(640,360);await page.waitForTimeout(300);
+   const far=cmds.find(c=>c.a==='tapplace');assert(far&&Math.abs(Number(far.lat)-11.5564)<2e-4&&Math.abs(Number(far.lng)-104.9282)<2e-4,'Tap on the background picture sends the map position: '+JSON.stringify(far));
+   mapState={...mapState,bg:false,bgError:'Google answered 403 not authorized'};
+   await page.waitForFunction(()=>!document.getElementById('mapNote').hidden&&/403/.test(document.getElementById('mapNoteText').textContent),null,{timeout:6000});
+   assert.deepEqual(outside,[],'The car asked nobody but the phone: '+outside.join(','));assert.equal(googleKey,'');
+   assert(!/googleapis|gstatic/.test(fs.readFileSync(path.join(app,'CanvasShell.html'),'utf8')),'The page itself names no Google address');
+   console.log('CAR_MAP_PICTURES: default mode never contacts Google; zoom, drag, re-centre, tap a place and search go through the phone; a failed background picture is explained.');
+  }else if(mode==='vector'){
    await page.waitForFunction(()=>!document.getElementById('mapMini').hidden&&!document.getElementById('mapJs').hidden,null,{timeout:15000});
    assert.equal(googleKey,'test-key','Key comes from the phone state, not from the website code');
    const f=await page.evaluate(()=>window.__fake);

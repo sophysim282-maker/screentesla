@@ -257,6 +257,40 @@ final class NavModel: NSObject, ObservableObject, CLLocationManagerDelegate {
         }
     }
 
+    /// Build 104: a tap on the car's map picture. Opens the nearest real place (name, rating…);
+    /// when nothing is there, the street address is used as the name instead of "Dropped pin".
+    func placeAt(_ c: CLLocationCoordinate2D) {
+        guard CLLocationCoordinate2DIsValid(c) else { return }
+        status = "Loading…"
+        let body: [String: Any] = [
+            "maxResultCount": 1, "rankPreference": "DISTANCE", "languageCode": settings.language,
+            "locationRestriction": ["circle": ["center": ["latitude": c.latitude, "longitude": c.longitude], "radius": 40.0]],
+        ]
+        api.call("https://places.googleapis.com/v1/places:searchNearby", body: body,
+                 fields: "places.id,places.displayName,places.formattedAddress,places.location") { [weak self] json, _ in
+            guard let self else { return }
+            self.status = ""
+            if let p = (json?["places"] as? [[String: Any]])?.first,
+               let loc = p["location"] as? [String: Any],
+               let lat = loc["latitude"] as? Double, let lng = loc["longitude"] as? Double {
+                let name = (p["displayName"] as? [String: Any])?["text"] as? String ?? "Place"
+                self.select(Place(name: name, address: p["formattedAddress"] as? String ?? "", lat: lat, lng: lng,
+                                  placeId: p["id"] as? String))
+                return
+            }
+            let spot = Place(name: "Place on the map", address: String(format: "%.5f, %.5f", c.latitude, c.longitude),
+                             lat: c.latitude, lng: c.longitude)
+            self.select(spot, remember: false)
+            let url = "https://maps.googleapis.com/maps/api/geocode/json?latlng=\(c.latitude),\(c.longitude)&language=\(self.settings.language)&key=\(self.api.key)"
+            self.api.call(url) { [weak self] json, _ in
+                guard let self, self.selected.map({ spot.same($0) }) == true,
+                      let addr = (json?["results"] as? [[String: Any]])?.first?["formatted_address"] as? String else { return }
+                self.selected?.name = addr.components(separatedBy: ",").first ?? addr
+                self.selected?.address = addr
+            }
+        }
+    }
+
     // MARK: - Place card
 
     func select(_ place: Place, remember: Bool = true) {

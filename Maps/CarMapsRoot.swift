@@ -77,6 +77,9 @@ struct CarMapSwitch: View {
     @State private var works = false
     @State private var problem = ""
     @State private var showFix = false
+    @State private var google = CarLink.carGoogle
+    @State private var picture = ""
+    @State private var showPicture = false
     private let tick = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     var body: some View {
@@ -91,16 +94,25 @@ struct CarMapSwitch: View {
                     .foregroundColor(.white)
             }
             .accessibilityLabel(on ? "Car map is on. Tap to hide the map on the car screen." : "Car map is off. Tap to show the map on the car screen.")
-            // Build 101: say plainly whether the car draws the map itself (needed for background use).
-            if on && works {
+            // Build 104: by default the map on the car is pictures from this iPhone (no Google on the car).
+            // Say plainly when the picture for "app left / phone locked" cannot be fetched.
+            if on && !google && !picture.isEmpty {
+                Button { showPicture = true } label: {
+                    Text("Car map stops when you leave the app · Tap to fix")
+                        .font(.caption.weight(.semibold))
+                        .padding(.horizontal, 10).padding(.vertical, 6)
+                        .background(Color.orange, in: Capsule())
+                        .foregroundColor(.white)
+                }
+            } else if on && google && works {
                 Text("Car draws the map ✓ works when you leave the app")
                     .font(.caption.weight(.semibold))
                     .padding(.horizontal, 10).padding(.vertical, 5)
                     .background(Color.green.opacity(0.85), in: Capsule())
                     .foregroundColor(.white)
-            } else if on && !problem.isEmpty {
+            } else if on && google && !problem.isEmpty {
                 Button { showFix = true } label: {
-                    Text("Car map stops when you leave the app · Tap to fix")
+                    Text("Car cannot load Google · Tap to fix")
                         .font(.caption.weight(.semibold))
                         .padding(.horizontal, 10).padding(.vertical, 6)
                         .background(Color.orange, in: Capsule())
@@ -108,8 +120,36 @@ struct CarMapSwitch: View {
                 }
             }
         }
-        .onReceive(tick) { _ in works = CarLink.carDrawsMap; problem = CarLink.carMapProblem }
+        .onReceive(tick) { _ in
+            works = CarLink.carDrawsMap; problem = CarLink.carMapProblem
+            google = CarLink.carGoogle; picture = CarLink.bgProblem
+        }
         .sheet(isPresented: $showFix) { CarMapKeySheet(problem: problem) }
+        .sheet(isPresented: $showPicture) { CarMapPictureSheet(problem: picture) }
+    }
+}
+
+/// Build 104: the map picture used while the app is not on screen needs "Maps Static API".
+struct CarMapPictureSheet: View {
+    let problem: String
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationView {
+            Form {
+                Section("What is wrong") {
+                    Text("When you leave ScreenLink or lock the iPhone, the phone asks Google for one map picture and moves it with GPS for the car. Google did not give that picture: \(problem)")
+                }
+                Section("Fix (one time, on a computer)") {
+                    Text("1. Open console.cloud.google.com.\n2. APIs & Services → Library → search \"Maps Static API\" → Enable.\n3. APIs & Services → Credentials → open your key. If \"API restrictions\" lists APIs, add Maps Static API and Save.\n4. Wait 5 minutes, then leave the app again and look at the car.")
+                        .font(.footnote)
+                    Text("The car itself never contacts Google. Only this iPhone does.")
+                        .font(.footnote).foregroundColor(.secondary)
+                }
+            }
+            .navigationTitle("Fix the car map")
+            .toolbar { Button("Close") { dismiss() } }
+        }
     }
 }
 

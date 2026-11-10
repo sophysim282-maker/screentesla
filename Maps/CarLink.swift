@@ -28,6 +28,14 @@ final class CarLink: ObservableObject {
     }
     // Build 101: why the car could not draw the map itself (shown on the phone with a Fix button).
     static var carMapProblem = ""
+    // Build 104: by default the car asks Google for nothing (China-version cars block Google);
+    // every map picture comes from this iPhone. This switch lets other cars draw Google themselves.
+    static var carGoogle: Bool {
+        get { UserDefaults.standard.bool(forKey: "carGoogle") }
+        set { UserDefaults.standard.set(newValue, forKey: "carGoogle") }
+    }
+    /// Why the map picture for "phone locked / app left" could not be fetched (empty = fine).
+    static var bgProblem = ""
     @Published var carConnected = false
     let server = CarServer(port: 8080)
     private var timer: Timer?
@@ -130,7 +138,17 @@ final class CarLink: ObservableObject {
             DispatchQueue.main.async {
                 guard let self else { return }
                 self.staticBusy = false
-                guard let data, (resp as? HTTPURLResponse)?.statusCode == 200 else { return }
+                guard let data, (resp as? HTTPURLResponse)?.statusCode == 200 else {
+                    // Build 104: say why instead of silently showing no map; try again in 15 s.
+                    let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
+                    let text = String(data: (data ?? Data()).prefix(160), encoding: .utf8)?
+                        .replacingOccurrences(of: "\n", with: " ") ?? ""
+                    Self.bgProblem = code == 0 ? "no internet on the phone" : "Google answered \(code) \(text)"
+                    self.bgMeta["bgError"] = String(Self.bgProblem.prefix(90))
+                    self.lastStatic = Date().addingTimeInterval(13)
+                    return
+                }
+                Self.bgProblem = ""
                 self.server.setBackgroundMap(data)
                 self.bgCenter = here
                 self.bgKey = key

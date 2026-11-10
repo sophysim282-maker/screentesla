@@ -1,5 +1,6 @@
 import Foundation
 import UIKit
+import CoreLocation
 
 /// The Tesla screen can control the app: this builds what the car shows and runs what the car taps.
 extension NavModel {
@@ -45,7 +46,8 @@ extension NavModel {
             "bg": !CarLink.liveMapUsable,
             // Build 98: the car draws the map itself from these (see CanvasShell.js updateCarMap).
             "mapOn": CarLink.carMapOn,
-            "mapKey": CarLink.carMapKey,
+            "carGoogle": CarLink.carGoogle,
+            "mapKey": CarLink.carGoogle ? CarLink.carMapKey : "",   // build 104: the key stays on the phone unless the switch is on
             "routeLine": carRouteLine(),
             "routeId": routesVersion * 100 + routeIndex,
             "headingUp": MapController.shared.headingUp,
@@ -120,6 +122,15 @@ extension NavModel {
         // Google id (real name, not a dropped pin); Start begins guidance as soon as the route is ready.
         case "poi":
             if let id = p["id"], !id.isEmpty, id.count < 300 { choose(Suggestion(id: id, main: p["name"] ?? "Place", secondary: "")) }
+        // Build 104: tap on a map picture → the place under the finger, by its real name.
+        case "tapplace":
+            if !guiding {
+                if let lat = Double(p["lat"] ?? ""), let lng = Double(p["lng"] ?? "") {
+                    placeAt(CLLocationCoordinate2D(latitude: lat, longitude: lng))
+                } else {
+                    placeAt(maps.carCoordinate(fx: fx, fy: fy))
+                }
+            }
         case "gostart":
             maps.follow = true
             maps.carFollow = true

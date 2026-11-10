@@ -1,4 +1,4 @@
-# Handoff for the next Claude session (written 2026-11-10, after build 103)
+# Handoff for the next Claude session (written 2026-11-10, after build 104)
 
 Read this first. It replaces reading the old 400k-token conversation.
 
@@ -30,6 +30,8 @@ YouTube over AirPlay with no screen recording, and serves it to a car browser:
    `tools/build.sh` (assert), `App/CanvasShell.js` + `App/CanvasShell.html` (build label), and add
    a top line in `App/main.m` (`Version 0.20.xx / build NN: …`; rename the old one to `Earlier build`).
    The Developer title reads the real version from Info.plist (fixed in 97).
+6a. **China-version Tesla: the car page must not load anything from Google** (no script, tile,
+   font or preconnect). Everything the car shows comes from the phone.
 6. **Never put the private HTTPS identity or the Google API key in GitHub, a commit, an artifact or
    chat.** The repo is public. The Google key lives only on the phone (UserDefaults `googleKey`,
    optional `carMapKey`) and reaches the car through the token-protected `/map/state`.
@@ -101,6 +103,15 @@ YouTube over AirPlay with no screen recording, and serves it to a car browser:
   - The user wants a simple road line on the cube too. That needs the cube maker to add a
     characteristic; a packet proposal was given to the user. Wait for their UUID.
   - **Rule from the user: answer first and ask before building anything new.**
+
+- **104 (0.20.67) is SENT, NOT YET CAR-TESTED.** Branch `release/build104-phone-map`, workflow
+  `phonemap104.yml`. Contains 98–103. **The user's Tesla is a China version: its browser blocks
+  Google. The car page must never contact Google** (see `BUILD104.md`). Map = pictures from the
+  phone; `carGoogle` switch (off) keeps the Google-drawn map for other cars.
+  - If the map still closes after leaving the app: the phone map screen shows an orange button
+    with Google's answer for the Static-map picture (most likely Maps Static API is not enabled).
+  - Cube (BLE): first test said "no navigation channel" → characteristic …0F13 missing on the
+    cube. 104 lists the characteristics the cube offers; pass that to the cube maker.
 
 ## Next ideas the user agreed with (not started)
 - **Smart helper (non-developers):**
