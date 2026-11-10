@@ -848,10 +848,10 @@ struct SettingsView: View {
                     Text("1. iPhone: Personal Hotspot ON\n2. Tesla: Wi-Fi → this iPhone\n3. Tesla browser: open the address above\nKeep this app open while driving.")
                         .font(.footnote).foregroundColor(.secondary)
                 }
-                Section("Orbit Cube display") {
-                    Toggle("Send the map to the cube", isOn: $cube.on)
+                Section("Orbit Cube (Bluetooth)") {
+                    Toggle("Send turns to the cube", isOn: $cube.on)
                     if cube.on { Text(cube.status).font(.footnote).foregroundColor(.secondary) }
-                    Text("1. Turn the cube on. 2. iPhone Settings → Wi-Fi → join \"Orbit-Clip\" (password is on the cube). 3. Keep this map screen open. The cube only shows the map while the car is stopped.")
+                    Text("Shows the next turn, the distance, the road name and the minutes left on an Orbit Cube. 1. Turn the cube on. 2. Turn this switch on and allow Bluetooth. 3. The first time, type the 6-digit PIN shown on the cube. 4. Start a route here in ScreenLink Maps.")
                         .font(.footnote).foregroundColor(.secondary)
                 }
                 Section("Car map key (website key)") {

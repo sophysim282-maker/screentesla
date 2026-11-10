@@ -102,6 +102,8 @@ targets:
         - audio
         - processing
         - location
+        - bluetooth-central
+        NSBluetoothAlwaysUsageDescription: ScreenLink Maps sends the next turn of your route to an Orbit Cube display.
         NSLocationWhenInUseUsageDescription: ScreenLink Maps uses your location for navigation on the car screen.
         NSMicrophoneUsageDescription: ScreenLink Maps uses the microphone for voice search.
         NSSpeechRecognitionUsageDescription: ScreenLink Maps turns your voice into a search.

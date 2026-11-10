@@ -1,142 +1,235 @@
-import UIKit
-import GoogleMaps
+import Foundation
+import CoreBluetooth
 
-/// Build 103: shows the map on an "Orbit Cube" (ESP32-S3 display with its own Wi-Fi hotspot).
-/// The iPhone joins the cube's Wi-Fi "Orbit-Clip"; this sends one small picture after another to
-/// http://192.168.9.1/frame: 80 x 80 pixels, RGB565 little-endian, top row first, 12800 bytes.
-/// One picture at a time (wait for the answer), about 6 a second, and the last picture is sent
-/// again while the map cannot be drawn, because the cube leaves the map after 2 s of silence.
-final class CubeLink: ObservableObject {
+/// Build 103: sends the next turn of the ScreenLink Maps route to an "Orbit Cube" display over
+/// Bluetooth Low Energy. The cube is the peripheral, this app is the central. One packet
+/// (little-endian) is written with response to the navigation characteristic:
+///   byte 0 version (1) · byte 1 maneuver code · bytes 2-5 metres to the turn (uint32)
+///   bytes 6-7 minutes left (uint16, 0xFFFF unknown) · bytes 8… next road name, UTF-8, 0-32 bytes
+/// Sent when something changes and at least every 2 s while guiding; code 0 once when it stops.
+final class CubeLink: NSObject, ObservableObject, CBCentralManagerDelegate, CBPeripheralDelegate {
     static let shared = CubeLink()
-    static let side = 80
+    private static let service = CBUUID(string: "1AD64E14-72BE-418D-8C36-08B4F2100F10")
+    private static let navigation = CBUUID(string: "1AD64E14-72BE-418D-8C36-08B4F2100F13")
+    private static let cubeName = "Orbit Cube"
 
     @Published var status = "Off"
     @Published var on: Bool {
         didSet {
-            UserDefaults.standard.set(on, forKey: "cubeOn")
+            UserDefaults.standard.set(on, forKey: "cubeBluetoothOn")
             if on { start() } else { stop() }
         }
     }
 
-    private let url = URL(string: "http://192.168.9.1/frame")!
-    private let session: URLSession
+    weak var nav: NavModel?
+    private var central: CBCentralManager?
+    private var cube: CBPeripheral?
+    private var target: CBCharacteristic?
     private var timer: Timer?
-    private var busy = false
-    private var last = Data()
-    private var shown = 0
-    private var waitUntil = Date.distantPast
+    private var lastPacket = Data()
+    private var lastSent = Date.distantPast
+    private var writingSince: Date?
 
-    private init() {
-        let c = URLSessionConfiguration.ephemeral
-        c.allowsCellularAccess = false          // the cube has no internet: Wi-Fi only
-        c.waitsForConnectivity = false
-        c.timeoutIntervalForRequest = 2
-        c.httpMaximumConnectionsPerHost = 1
-        session = URLSession(configuration: c)
-        on = UserDefaults.standard.bool(forKey: "cubeOn")
+    private override init() {
+        on = UserDefaults.standard.bool(forKey: "cubeBluetoothOn")
+        super.init()
     }
 
     /// Called when the map screen opens: continue if the switch was left on.
-    func resume() { if on { start() } }
+    func resume(nav: NavModel) {
+        self.nav = nav
+        if on { start() }
+    }
 
     private func start() {
-        guard timer == nil else { return }
-        status = "Looking for the cube…"
-        timer = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: true) { [weak self] _ in self?.step() }
+        if central == nil {
+            status = "Starting Bluetooth…"
+            central = CBCentralManager(delegate: self, queue: .main)   // iOS asks for Bluetooth permission here
+        } else {
+            find()
+        }
+        if timer == nil {
+            timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in self?.tick() }
+        }
     }
 
     private func stop() {
         timer?.invalidate()
         timer = nil
+        // Clear the turn on the cube before leaving it.
+        if let cube, let target, cube.state == .connected {
+            cube.writeValue(Self.packet(code: 0, metres: 0, minutes: 0xFFFF, road: ""), for: target, type: .withResponse)
+        }
+        central?.stopScan()
+        if let cube { central?.cancelPeripheralConnection(cube) }
+        cube = nil
+        target = nil
+        lastPacket = Data()
+        writingSince = nil
         status = "Off"
     }
 
-    private func step() {
-        guard on, !busy, Date() >= waitUntil else { return }
-        if let fresh = Self.capture() { last = fresh }
-        guard last.count == Self.side * Self.side * 2 else {
-            status = "Open the map screen so there is a map to send"
+    private func find() {
+        guard on, let central, central.state == .poweredOn, cube == nil else { return }
+        if let known = central.retrieveConnectedPeripherals(withServices: [Self.service]).first {
+            connect(known)
             return
         }
-        busy = true
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/octet-stream", forHTTPHeaderField: "Content-Type")
-        session.uploadTask(with: request, from: last) { [weak self] data, response, _ in
-            let code = (response as? HTTPURLResponse)?.statusCode ?? 0
-            let text = String(data: (data ?? Data()).prefix(80), encoding: .utf8)?
-                .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            DispatchQueue.main.async { self?.finished(code, text) }
-        }.resume()
+        status = "Looking for the cube…"
+        central.scanForPeripherals(withServices: nil, options: nil)
     }
 
-    private func finished(_ code: Int, _ text: String) {
-        busy = false
+    private func connect(_ peripheral: CBPeripheral) {
+        central?.stopScan()
+        cube = peripheral
+        peripheral.delegate = self
+        status = "Connecting to the cube…"
+        central?.connect(peripheral, options: nil)      // does not time out: also reconnects later
+    }
+
+    // MARK: - Bluetooth events
+
+    func centralManagerDidUpdateState(_ central: CBCentralManager) {
+        switch central.state {
+        case .poweredOn: find()
+        case .poweredOff: status = "Turn Bluetooth on (iPhone Settings → Bluetooth)"
+        case .unauthorized: status = "Allow Bluetooth for ScreenLink (iPhone Settings → ScreenLink)"
+        case .unsupported: status = "This iPhone cannot use Bluetooth LE"
+        default: break
+        }
+        if central.state != .poweredOn { cube = nil; target = nil }
+    }
+
+    func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral,
+                        advertisementData: [String: Any], rssi RSSI: NSNumber) {
+        guard cube == nil else { return }
+        let name = advertisementData[CBAdvertisementDataLocalNameKey] as? String ?? peripheral.name ?? ""
+        let services = advertisementData[CBAdvertisementDataServiceUUIDsKey] as? [CBUUID] ?? []
+        if name == Self.cubeName || services.contains(Self.service) { connect(peripheral) }
+    }
+
+    func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
+        status = "Cube found. Reading it…"
+        peripheral.discoverServices([Self.service])
+    }
+
+    func centralManager(_ central: CBCentralManager, didFailToConnect peripheral: CBPeripheral, error: Error?) {
+        lost(peripheral, "Could not connect to the cube. Trying again…")
+    }
+
+    func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
+        lost(peripheral, "Cube disconnected. Reconnecting…")
+    }
+
+    private func lost(_ peripheral: CBPeripheral, _ text: String) {
+        target = nil
+        writingSince = nil
+        lastPacket = Data()
         guard on else { return }
-        switch code {
-        case 200:
-            shown += 1
-            status = "Map is on the cube ✓ (\(shown) pictures)"
-        case 500:
-            break                                   // cube was busy: just send the next picture
-        case 409:
-            status = "Cube refuses pictures: " + (text.isEmpty ? "car moving or no speed data yet" : text)
-            waitUntil = Date().addingTimeInterval(1)
-        case 403:
-            status = "Join the Wi-Fi \"Orbit-Clip\" on this iPhone (Settings → Wi-Fi)"
-            waitUntil = Date().addingTimeInterval(1)
-        case 400:
-            status = "Cube did not accept the picture size"
-            waitUntil = Date().addingTimeInterval(1)
-        case 0:
-            status = "Cube not found. Join the Wi-Fi \"Orbit-Clip\" (Settings → Wi-Fi)"
-            waitUntil = Date().addingTimeInterval(1)
-        default:
-            status = "Cube answered \(code)"
-            waitUntil = Date().addingTimeInterval(1)
+        status = text
+        central?.connect(peripheral, options: nil)
+    }
+
+    func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {
+        guard let found = peripheral.services?.first(where: { $0.uuid == Self.service }) else {
+            status = "This device is not an Orbit Cube (service missing)"
+            return
+        }
+        peripheral.discoverCharacteristics([Self.navigation], for: found)
+    }
+
+    func peripheral(_ peripheral: CBPeripheral, didDiscoverCharacteristicsFor service: CBService, error: Error?) {
+        guard let found = service.characteristics?.first(where: { $0.uuid == Self.navigation }) else {
+            status = "Orbit Cube has no navigation channel"
+            return
+        }
+        target = found
+        lastPacket = Data()
+        status = "Cube connected ✓"
+        tick()
+    }
+
+    func peripheral(_ peripheral: CBPeripheral, didWriteValueFor characteristic: CBCharacteristic, error: Error?) {
+        writingSince = nil
+        guard on else { return }
+        if let error {
+            lastPacket = Data()   // send it again
+            let code = (error as NSError).code
+            let pairing = [CBATTError.insufficientAuthentication.rawValue, CBATTError.insufficientEncryption.rawValue,
+                           CBATTError.insufficientAuthorization.rawValue].contains(code)
+            status = pairing ? "Type the 6-digit PIN shown on the cube" : "Cube refused the turn: \(error.localizedDescription)"
+        } else {
+            status = nav?.guiding == true ? "Sending turns to the cube ✓" : "Cube connected ✓ Start a route to show turns"
         }
     }
 
-    /// Centre square of the live map, scaled to 80 x 80, as RGB565 little-endian. Nil when the map
-    /// is not on screen (app in the background) or the iPhone returns a black picture for it.
-    private static func capture() -> Data? {
-        guard UIApplication.shared.applicationState == .active else { return nil }
-        for view in [MapController.shared.carMap, MapController.shared.phoneMap] {
-            guard view.window != nil, view.bounds.width > 0, view.bounds.height > 0 else { continue }
-            if let data = rgb565(of: view) { return data }
-        }
-        return nil
+    // MARK: - Packets
+
+    private func tick() {
+        guard on, let cube, let target, cube.state == .connected else { return }
+        if let since = writingSince, Date().timeIntervalSince(since) < 5 { return }   // one write at a time
+        let guiding = nav?.guiding == true
+        let data = currentPacket()
+        let changed = data != lastPacket
+        // While guiding: on every change and at least every 2 s. Stopped: code 0 once.
+        guard changed || (guiding && Date().timeIntervalSince(lastSent) >= 2) else { return }
+        lastPacket = data
+        lastSent = Date()
+        writingSince = Date()
+        cube.writeValue(data, for: target, type: .withResponse)
     }
 
-    private static func rgb565(of view: UIView) -> Data? {
-        let n = side
-        let scale = CGFloat(n) / min(view.bounds.width, view.bounds.height)
-        let w = view.bounds.width * scale, h = view.bounds.height * scale
-        let format = UIGraphicsImageRendererFormat()
-        format.scale = 1
-        format.opaque = true
-        let image = UIGraphicsImageRenderer(size: CGSize(width: n, height: n), format: format).image { _ in
-            view.drawHierarchy(in: CGRect(x: (CGFloat(n) - w) / 2, y: (CGFloat(n) - h) / 2, width: w, height: h),
-                               afterScreenUpdates: false)
+    private func currentPacket() -> Data {
+        guard let nav, nav.guiding, !nav.steps.isEmpty else {
+            return Self.packet(code: 0, metres: 0, minutes: 0xFFFF, road: "")
         }
-        guard let cg = image.cgImage else { return nil }
-        var pixels = [UInt8](repeating: 0, count: n * n * 4)
-        guard let ctx = CGContext(data: &pixels, width: n, height: n, bitsPerComponent: 8, bytesPerRow: n * 4,
-                                  space: CGColorSpaceCreateDeviceRGB(),
-                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
-        ctx.interpolationQuality = .high
-        ctx.draw(cg, in: CGRect(x: 0, y: 0, width: n, height: n))
-        var out = Data(count: n * n * 2)
-        var brightest: UInt8 = 0
-        out.withUnsafeMutableBytes { (raw: UnsafeMutableRawBufferPointer) in
-            for i in 0..<(n * n) {
-                let r = pixels[i * 4], g = pixels[i * 4 + 1], b = pixels[i * 4 + 2]
-                brightest = max(brightest, r, g, b)
-                let color = (UInt16(r & 0xF8) << 8) | (UInt16(g & 0xFC) << 3) | UInt16(b >> 3)
-                raw[i * 2] = UInt8(color & 0xFF)        // low byte first
-                raw[i * 2 + 1] = UInt8(color >> 8)
+        let maneuver = nav.nextManeuver
+        let road = maneuver == "ARRIVE" ? (nav.selected?.name ?? "") : Self.roadName(nav.nextInstruction)
+        let minutes = nav.remainingSeconds > 0 ? UInt16(min(65534, (nav.remainingSeconds / 60).rounded(.up))) : 0xFFFF
+        return Self.packet(code: Self.code(maneuver), metres: UInt32(max(0, min(4_000_000, nav.distanceToNext.rounded()))),
+                           minutes: minutes, road: road)
+    }
+
+    static func packet(code: UInt8, metres: UInt32, minutes: UInt16, road: String) -> Data {
+        var d = Data([1, code])
+        for shift in [0, 8, 16, 24] { d.append(UInt8((metres >> UInt32(shift)) & 0xFF)) }
+        d.append(UInt8(minutes & 0xFF))
+        d.append(UInt8(minutes >> 8))
+        // At most 32 bytes of UTF-8, never cutting a letter in half.
+        var name = road
+        while name.utf8.count > 32 { name.removeLast() }
+        d.append(contentsOf: Array(name.utf8))
+        return d
+    }
+
+    /// Google Routes maneuver names → the cube's codes.
+    static func code(_ m: String) -> UInt8 {
+        switch m {
+        case "TURN_SLIGHT_LEFT": return 2
+        case "TURN_LEFT": return 3
+        case "TURN_SHARP_LEFT": return 4
+        case "TURN_SLIGHT_RIGHT": return 5
+        case "TURN_RIGHT": return 6
+        case "TURN_SHARP_RIGHT": return 7
+        case "UTURN_LEFT", "UTURN_RIGHT": return 8
+        case "ROUNDABOUT_LEFT", "ROUNDABOUT_RIGHT", "ROUNDABOUT_CLOCKWISE", "ROUNDABOUT_COUNTERCLOCKWISE": return 9
+        case "RAMP_LEFT", "FORK_LEFT": return 10
+        case "RAMP_RIGHT", "FORK_RIGHT": return 11
+        case "MERGE": return 12
+        case "ARRIVE": return 13
+        default: return 1          // STRAIGHT, DEPART, NAME_CHANGE, FERRY… → continue
+        }
+    }
+
+    /// Google gives one sentence ("Turn left onto Norodom Blvd"). Take the road after "onto" / "on" /
+    /// "toward" when the sentence is English; otherwise send the sentence itself (cut to 32 bytes).
+    static func roadName(_ instruction: String) -> String {
+        for word in [" onto ", " on to ", " toward ", " towards ", " on "] {
+            if let r = instruction.range(of: word, options: [.caseInsensitive, .backwards]) {
+                let name = instruction[r.upperBound...].trimmingCharacters(in: .whitespacesAndNewlines)
+                if !name.isEmpty { return name }
             }
         }
-        return brightest < 12 ? nil : out               // all black: this view could not be copied
+        return instruction
     }
 }

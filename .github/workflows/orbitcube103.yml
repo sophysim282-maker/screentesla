@@ -1,5 +1,5 @@
 name: Build103 Orbit Cube
-# Build 103: Orbit Cube display (map as 80x80 RGB565 pictures over the cube Wi-Fi). Includes build 102. Run 1.
+# Build 103: Orbit Cube turn display over Bluetooth LE (maneuver, metres, minutes, road name). Includes build 102. Run 2.
 on:
   push:
     branches: ['release/build103-orbit-cube']

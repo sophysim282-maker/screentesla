@@ -96,8 +96,11 @@ YouTube over AirPlay with no screen recording, and serves it to a car browser:
     no `CAR MAP:` line was in the log part they sent.
 
 - **103 (0.20.66) is SENT, NOT TESTED WITH A CUBE.** Branch `release/build103-orbit-cube`, workflow
-  `orbitcube103.yml`. Contains 98–102 + the Orbit Cube display switch (see `BUILD103.md`,
-  `Maps/CubeLink.swift`). Asked for by a third person through the user.
+  `orbitcube103.yml`. Contains 98–102 + "Orbit Cube (Bluetooth)" switch in Maps Settings: next
+  turn, metres, minutes, road name over BLE (see `BUILD103.md`, `Maps/CubeLink.swift`).
+  - The user wants a simple road line on the cube too. That needs the cube maker to add a
+    characteristic; a packet proposal was given to the user. Wait for their UUID.
+  - **Rule from the user: answer first and ask before building anything new.**
 
 ## Next ideas the user agreed with (not started)
 - **Smart helper (non-developers):**

@@ -279,6 +279,6 @@ struct ContentView: View {
         car.nav = nav
         car.server.onCommand = { [weak nav] action, params in nav?.handleCar(action, params) }
         car.start { [weak nav] in nav?.carState() ?? [:] }
-        CubeLink.shared.resume()   // build 103: Orbit Cube display, if its switch was left on
+        CubeLink.shared.resume(nav: nav)   // build 103: Orbit Cube turn display (Bluetooth), if its switch was left on
     }
 }
