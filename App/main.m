@@ -39,6 +39,12 @@ static void SLActivityFinish(void) {
  Class cls=NSClassFromString(@"SLWidgetActivity");
  if([cls respondsToSelector:@selector(finish)])[(id<SLWidgetActivityAPI>)cls finish];
 }
+// Build 105: Maps/KeepAwake.swift, reached by name like the other Swift parts.
+@protocol SLKeepAwakeAPI
++ (void)start;
++ (void)stop;
++ (NSString *)problem;
+@end
 @interface Controller : UIViewController <NSNetServiceBrowserDelegate,UIDocumentPickerDelegate> { CVPixelBufferRef _lastPixel; }
 @property(nonatomic,strong) Receiver *receiver;
 @property(nonatomic,strong) NSNetServiceBrowser *networkProbe;
@@ -71,6 +77,7 @@ static void SLActivityFinish(void) {
 @property(nonatomic,strong) ScreenLinkHomeView *dashboard;
 @property(nonatomic,strong) NSArray<NSLayoutConstraint *> *previewConstraints;
 @property(nonatomic,strong) SLDisconnectFlow *disconnectFlow;
+@property(nonatomic) BOOL keepAwakeLogged;
 @property(nonatomic) BOOL userDisconnected,disconnectNeedsAttention;
 @property(nonatomic) NSUInteger previewIndex;
 @property(nonatomic,strong) NSURLSession *disconnectSession;
@@ -131,7 +138,8 @@ static void SLActivityFinish(void) {
         [owner append:@"BACKGROUND RUNTIME ENDED: receiver, viewer link and media session retained. iOS may suspend this app without PiP. Returning to ScreenLink resumes the existing receiver; Start is not required to rebuild it."];
         if(!owner.preview.active&&!owner.youtubePiP.active && UIApplication.sharedApplication.applicationState==UIApplicationStateBackground)[owner beginGrace];
     };
-    [self append:@"Version 0.20.67 / build 104: for China-version cars the car browser now talks only to this iPhone and never to Google. The car map comes from the phone as pictures; search, place card, Start, zoom, drag and tap-a-place work through the phone. If the map picture for a locked phone fails, an orange Tap to fix button says why (Maps Static API). The Google-drawn car map is a switch in Maps Settings, off by default. Cube status now lists what the cube offers."];
+    [self append:@"Version 0.20.68 / build 105: (1) ScreenLink stays awake in the background while sharing, without PiP (location keep-alive, blue mark). (2) New fast car map: the car draws it itself from map squares this iPhone hands over, so drag and zoom are instant and the car never contacts Google. Needs Map Tiles API on your Google key; the map screen shows an orange button if it is missing. Video unchanged."];
+    [self append:@"Earlier build 104: for China-version cars the car browser now talks only to this iPhone and never to Google. The car map comes from the phone as pictures; search, place card, Start, zoom, drag and tap-a-place work through the phone. If the map picture for a locked phone fails, an orange Tap to fix button says why (Maps Static API). The Google-drawn car map is a switch in Maps Settings, off by default. Cube status now lists what the cube offers."];
     [self append:@"Earlier build 103: new switch in the map settings, Orbit Cube (Bluetooth): sends the next turn, distance, road name and minutes left of the ScreenLink Maps route to an Orbit Cube display. Off by default. Nothing else changed. Includes build 102."];
     [self append:@"Earlier build 102: the log now says how long each video took to show its first picture (CAR PLAYER: start took ...), to find why the first video is slow. Measuring only; playback is unchanged. Includes build 101."];
     [self append:@"Earlier build 101: the map screen now says if the car draws the map itself (works when you leave the app) or not. If Google refuses the key on the car website, an orange Tap to fix button shows the steps and a box to paste a website key; the car then reloads its map. Includes build 100."];
@@ -410,9 +418,13 @@ static void SLActivityFinish(void) {
 - (void)start {if(![self permitExplicitStart])return; if(self.broadcastArmed){[self probeBroadcast];[self append:@"Screen broadcast mode is selected. Start it using the system broadcast button; Stop sharing exits this mode before starting the normal receiver."];return;} [self withVPN:^{[self startReceiver];}]; }
 - (void)startReceiver {
     if(!self.receiver.isRunning)self.receiver.discoveryMode=2-self.discoveryMode.selectedSegmentIndex;
-    if([self.receiver start]){[NSUserDefaults.standardUserDefaults setBool:YES forKey:@"receiverArmed"];UIApplication.sharedApplication.idleTimerDisabled=YES;[self links];}
+    if([self.receiver start]){[NSUserDefaults.standardUserDefaults setBool:YES forKey:@"receiverArmed"];UIApplication.sharedApplication.idleTimerDisabled=YES;[self links];
+        // Build 105: stay awake in the background without PiP (location keep-alive, blue mark).
+        Class awake=NSClassFromString(@"SLKeepAwake");if(awake){[(id<SLKeepAwakeAPI>)awake start];if(!self.keepAwakeLogged){self.keepAwakeLogged=YES;[self append:@"KEEP AWAKE ON: while sharing, ScreenLink uses location in the background (blue mark at the top of the iPhone) so iOS does not put it to sleep when there is no PiP window. If iOS asks, allow location While Using."];
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW,8*NSEC_PER_SEC),dispatch_get_main_queue(),^{NSString *problem=[(id<SLKeepAwakeAPI>)awake problem];if([problem isKindOfClass:NSString.class]&&problem.length)[self append:[@"KEEP AWAKE NOT ACTIVE: " stringByAppendingString:problem]];});}}
+    }
 }
-- (void)stop {self.discoveryPolicyDenied=NO;[self.dashboard showPlayerState:@{}];self.youtubePiPRequested=NO;[self.youtubePiP reset];[self.youtubePiP removeFromSuperview];self.youtubePiP=nil;SLActivityFinish();self.mediaStartGeneration++;self.mediaOnlyRestarting=NO;[NSUserDefaults.standardUserDefaults setBool:NO forKey:@"resumeYouTubeOnReturn"]; [self stopBroadcast]; [NSUserDefaults.standardUserDefaults setBool:NO forKey:@"receiverArmed"];[self.session finish];[self endGrace];[self.receiver stop];[self.preview reset];[self.preview removeFromSuperview];self.preview=nil;if(_lastPixel){CVPixelBufferRelease(_lastPixel);_lastPixel=NULL;}UIApplication.sharedApplication.idleTimerDisabled=NO;[self append:@"Stopped. Video frames cleared."]; }
+- (void)stop {{Class awake=NSClassFromString(@"SLKeepAwake");if(awake)[(id<SLKeepAwakeAPI>)awake stop];self.keepAwakeLogged=NO;}self.discoveryPolicyDenied=NO;[self.dashboard showPlayerState:@{}];self.youtubePiPRequested=NO;[self.youtubePiP reset];[self.youtubePiP removeFromSuperview];self.youtubePiP=nil;SLActivityFinish();self.mediaStartGeneration++;self.mediaOnlyRestarting=NO;[NSUserDefaults.standardUserDefaults setBool:NO forKey:@"resumeYouTubeOnReturn"]; [self stopBroadcast]; [NSUserDefaults.standardUserDefaults setBool:NO forKey:@"receiverArmed"];[self.session finish];[self endGrace];[self.receiver stop];[self.preview reset];[self.preview removeFromSuperview];self.preview=nil;if(_lastPixel){CVPixelBufferRelease(_lastPixel);_lastPixel=NULL;}UIApplication.sharedApplication.idleTimerDisabled=NO;[self append:@"Stopped. Video frames cleared."]; }
 - (void)startMedia {
     if(![self permitExplicitStart])return;
     if(self.broadcastArmed){[self probeBroadcast];[self append:@"In screen broadcast mode, select ScreenLink VPN Phone inside YouTube AirPlay, then open Google Maps. The extension owns the receiver; no timed task or floating preview is needed for the main app. Verify both streams on your iPhone."];return;}

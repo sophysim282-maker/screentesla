@@ -8,6 +8,10 @@
 + (NSData *)stateData;
 + (void)command:(NSString *)action params:(NSDictionary<NSString *,NSString *> *)params;
 @end
+// Build 105: map squares for the car, fetched by the phone (Maps/MapTiles.swift).
+@protocol SLMapTilesAPI
++ (NSData *)tile:(NSString *)path;
+@end
 #import "LocalWebSocket.h"
 #import "VPNDiscovery.h"
 #import "AnnexB.h"
@@ -647,7 +651,7 @@ static NSArray *txtStrings(const char *bytes,int length) {
     NSURLComponents *url=[NSURLComponents componentsWithString:[@"http://localhost" stringByAppendingString:target]];
     NSString *token=nil,*epoch=nil;uint64_t after=0;BOOL longPoll=NO;
     for(NSURLQueryItem *item in url.queryItems){if([item.name isEqual:@"epoch"])epoch=item.value;else if([item.name isEqual:@"token"])token=item.value;else if([item.name isEqual:@"after"]){after=strtoull(item.value.UTF8String,NULL,10);longPoll=YES;}}
-    NSString *mime=@"text/plain; charset=utf-8",*status=@"200 OK",*extra=@"";NSData *body=[NSData data];
+    NSString *mime=@"text/plain; charset=utf-8",*status=@"200 OK",*extra=@"",*cacheControl=@"no-store";NSData *body=[NSData data];
     NSRange headerEnd=[request rangeOfData:[@"\r\n\r\n" dataUsingEncoding:NSUTF8StringEncoding] options:0 range:NSMakeRange(0,request.length)];
     if(headerEnd.location==NSNotFound)return;
     NSUInteger bodyOffset=headerEnd.location==NSNotFound?request.length:NSMaxRange(headerEnd);NSUInteger bodyLength=0;NSString *byteRange=nil,*origin=nil,*host=nil;NSMutableDictionary *wsHeaders=[NSMutableDictionary dictionary];BOOL duplicateWS=NO;BOOL localControl=NO,viewerHeaderValid=NO;
@@ -761,6 +765,11 @@ static NSArray *txtStrings(const char *bytes,int length) {
             NSData *jpeg=[url.path isEqual:@"/map/frame.jpg"]?[(id<SLMapFeedAPI>)feed frameData]:[(id<SLMapFeedAPI>)feed backgroundData];
             if(jpeg.length){mime=@"image/jpeg";body=jpeg;}else status=@"204 No Content";
         }
+        else if([url.path hasPrefix:@"/map/tile/"]){
+            // Build 105: one map square. The car may keep it for a day; the address carries a version.
+            Class tiles=NSClassFromString(@"SLMapTiles");NSData *tile=tiles?[(id<SLMapTilesAPI>)tiles tile:[url.path substringFromIndex:10]]:nil;
+            if(tile.length>3){const uint8_t *first=tile.bytes;mime=first[0]==0x89?@"image/png":@"image/jpeg";body=tile;cacheControl=@"private, max-age=86400";}else status=@"502 Bad Gateway";
+        }
         else if([url.path isEqual:@"/map/state"]){mime=@"application/json";body=[(id<SLMapFeedAPI>)feed stateData];}
         else if([url.path isEqual:@"/map/cmd"]){
             NSMutableDictionary *params=[NSMutableDictionary dictionary];for(NSURLQueryItem *item in url.queryItems)if(![item.name isEqual:@"token"]&&item.value)params[item.name]=item.value;
@@ -825,7 +834,7 @@ static NSArray *txtStrings(const char *bytes,int length) {
     } else {status=@"404 Not Found";}
     if(aliasClient && ([url.path isEqual:@"/media/state"] || [url.path hasPrefix:@"/media/resource/"]))body=SLRetokenLocalMediaData(body,mime,self.token,token);
     BOOL keep=secureTransport&&current&&parts.count>2&&[parts[2] hasPrefix:@"HTTP/1.1"]&&![[wsHeaders[@"connection"] lowercaseString] containsString:@"close"];
-    NSString *header=[NSString stringWithFormat:@"HTTP/1.1 %@\r\nContent-Type: %@\r\nContent-Length: %lu\r\nCache-Control: no-store\r\n%@X-Content-Type-Options: nosniff\r\n%@\r\n",status,mime,(unsigned long)body.length,keep?@"Connection: keep-alive\r\nKeep-Alive: timeout=600, max=100000\r\n":@"Connection: close\r\n",extra];
+    NSString *header=[NSString stringWithFormat:@"HTTP/1.1 %@\r\nContent-Type: %@\r\nContent-Length: %lu\r\nCache-Control: %@\r\n%@X-Content-Type-Options: nosniff\r\n%@\r\n",status,mime,(unsigned long)body.length,cacheControl,keep?@"Connection: keep-alive\r\nKeep-Alive: timeout=600, max=100000\r\n":@"Connection: close\r\n",extra];
     NSData *h=[header dataUsingEncoding:NSUTF8StringEncoding];if(send_all(client,h.bytes,h.length)&&send_all(client,body.bytes,body.length))webKeepAlive=keep;
 }
 - (void)screenSocket:(int)client generation:(NSUInteger)generation token:(NSString *)token peer:(NSString *)peer {

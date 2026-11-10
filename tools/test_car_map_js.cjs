@@ -9,7 +9,7 @@ const assets={'/':'CanvasShell.html','/video':'CanvasShell.html','/app/pure.js':
 const token='private-fixture-token';
 // Encoded polyline for (38.5,-120.2) (40.7,-120.95) (43.252,-126.453) from Google's documentation.
 let mapState={mapLive:false,bg:true,bgId:1,screen:'drive',navigating:true,distance:'300 m',instruction:'Turn right',eta:'12 min',remaining:'5.2 km',arrival:'14:32',maneuver:'TURN_RIGHT',then:'TURN_LEFT',lat:11.5564,lng:104.9282,heading:90,mapOn:true,carGoogle:true,mapKey:'test-key',routeLine:'_p~iF~ps|U_ulLnnqC_mqNvxq`@',routeId:100};
-const cmds=[];let frames=0,liveMap=false;
+const cmds=[],tiles=[];let frames=0,liveMap=false,tilesFail=false;
 const server=https.createServer({key:fs.readFileSync(temp+'/key'),cert:fs.readFileSync(temp+'/cert')},(req,res)=>{const u=new URL(req.url,'https://localhost');res.setHeader('Cache-Control','no-store');
  if(assets[u.pathname]){res.setHeader('Content-Type',u.pathname.endsWith('.js')?'application/javascript':u.pathname.endsWith('.jpg')?'image/jpeg':u.pathname.endsWith('.webp')?'image/webp':'text/html');return res.end(fs.readFileSync(path.join(app,assets[u.pathname])));}
  if(u.pathname==='/local-viewer/request'){req.resume();res.setHeader('Content-Type','application/json');return res.end(JSON.stringify({phase:'approved',token}));}
@@ -17,6 +17,7 @@ const server=https.createServer({key:fs.readFileSync(temp+'/key'),cert:fs.readFi
  if(u.pathname==='/screen/privacy'){req.resume();res.setHeader('Content-Type','application/json');return res.end(JSON.stringify({hidden:true,privacyRevision:1}));}
  if(u.pathname==='/map/state'){res.setHeader('Content-Type','application/json');return res.end(JSON.stringify({...mapState,mapLive:liveMap}));}
  if(u.pathname==='/map/cmd'){cmds.push(Object.fromEntries(u.searchParams));res.setHeader('Content-Type','application/json');return res.end('{"ok":true}');}
+ if(u.pathname.startsWith('/map/tile/')){tiles.push(u.pathname.slice(10)+'@'+u.searchParams.get('v'));if(tilesFail){res.statusCode=502;return res.end();}res.setHeader('Content-Type','image/jpeg');return res.end(fs.readFileSync(path.join(app,'CarPoster.jpg')));}
  if(u.pathname==='/map/bg.jpg'||u.pathname==='/map/frame.jpg'){frames++;res.setHeader('Content-Type','image/jpeg');return res.end(fs.readFileSync(path.join(app,'CarPoster.jpg')));}
  if(u.pathname==='/media/state'){res.setHeader('Content-Type','application/json');return res.end(JSON.stringify({viewerControls:{quality:'auto',volume:1,eq:'normal',revision:1},active:false,epoch:'',url:'',command:0}));}
  if(u.pathname==='/media/report'){req.resume();req.on('end',()=>res.end('{}'));return;}
@@ -35,14 +36,63 @@ const fakeGoogle=(refuse,raster)=>`(()=>{window.__fake={handlers:{},options:{},f
 (async()=>{let browser;try{
  await new Promise(r=>server.listen(0,'127.0.0.1',r));const base='https://127.0.0.1:'+server.address().port;
  browser=await chromium.launch({headless:true,executablePath:process.env.SCREENLINK_CHROME_BIN||undefined,args:['--no-sandbox','--ignore-certificate-errors']});
- for(const mode of ['pictures','vector','raster','refuse']){
+ for(const mode of ['tiles','pictures','vector','raster','refuse']){
   const refuse=mode==='refuse',raster=mode==='raster';
   const context=await browser.newContext({ignoreHTTPSErrors:true,viewport:{width:1280,height:720}});let googleKey='',outside=[];
   context.on('request',r=>{const h=new URL(r.url()).hostname;if(h!=='127.0.0.1')outside.push(h);});
   await context.route('https://maps.googleapis.com/**',route=>{googleKey=new URL(route.request().url()).searchParams.get('key');route.fulfill({contentType:'application/javascript',body:fakeGoogle(refuse,raster)});});
   const page=await context.newPage();page.on('pageerror',e=>{console.error('PAGE',e.message);process.exitCode=1;});cmds.length=0;mapState={...mapState,mapOn:true,night:false,mapType:'normal',lat:11.5564,lng:104.9282,heading:90,routeId:100};
-  if(mode==='pictures')mapState={...mapState,carGoogle:false,mapKey:'',mapLive:true,screen:'home',navigating:false,results:[],suggestions:[],recents:[],place:undefined};
-  else mapState={...mapState,carGoogle:true,mapKey:'test-key',screen:'drive',navigating:true,bg:true,bgError:undefined};
+  tilesFail=false;tiles.length=0;
+  if(mode==='tiles'){
+   // Build 105: the car draws the map from squares handed over by the phone. No Google on the car.
+   mapState={...mapState,carGoogle:false,mapKey:'',tiles:true,tileV:1,tileError:'',screen:'home',navigating:false,results:[],suggestions:[],recents:[],place:undefined,night:false};liveMap=false;
+   await page.goto(base+'/video');
+   await page.waitForFunction(()=>!document.getElementById('mapMini').hidden&&!document.getElementById('mapTiles').hidden&&document.querySelectorAll('.tile-layer img').length>0,null,{timeout:15000});
+   await page.waitForFunction(()=>[...document.querySelectorAll('.tile-layer img')].some(i=>i.naturalWidth>0),null,{timeout:8000});
+   assert(tiles.length>0&&tiles.every(t=>/^15\/\d+\/\d+@1$/.test(t)),'Squares come from the phone at the browse zoom: '+tiles.slice(0,3));
+   await page.waitForFunction(()=>true);await page.waitForTimeout(300);assert(cmds.some(c=>c.a==='carmap'&&c.ok==='1'),'Car tells the phone it draws the map (phone stops making pictures)');
+   assert.equal(await page.evaluate(()=>getComputedStyle(document.getElementById('mapBg')).display),'none');
+   await page.click('#mapMini');await page.waitForFunction(()=>!document.getElementById('mapUi').hidden&&!document.getElementById('mapZoom').hidden,null,{timeout:5000});
+   await page.waitForFunction(()=>/translate\(640px, ?360px\)/.test(document.getElementById('tileCar').style.transform),null,{timeout:4000}).catch(()=>{});
+   const car0=await page.evaluate(()=>document.getElementById('tileCar').style.transform);assert(/translate\(640px, ?360px\)/.test(car0),'Car is in the middle while browsing: '+car0);
+   // Zoom is instant and local.
+   tiles.length=0;cmds.length=0;await page.click('#mapZoom button');await page.waitForFunction(()=>ScreenLinkTileMap.view.zoom===16,null,{timeout:3000});
+   await page.waitForFunction(()=>true);await page.waitForTimeout(600);assert(tiles.some(t=>t.startsWith('16/')),'Zooming loads the next level');assert(!cmds.some(c=>c.a==='zoom'),'Zoom does not need the phone');
+   // Drag is instant and local; Re-centre follows the car again.
+   const before=await page.evaluate(()=>({...ScreenLinkTileMap.view}));
+   await page.mouse.move(600,300);await page.mouse.down();await page.mouse.move(700,380,{steps:6});await page.mouse.up();await page.waitForTimeout(200);
+   const after=await page.evaluate(()=>({...ScreenLinkTileMap.view,follow:ScreenLinkTileMap.follow}));
+   assert(after.lng<before.lng&&after.lat>before.lat&&after.follow===false,'Dragging right/down moves the map west/north: '+JSON.stringify([before,after]));
+   assert(!cmds.some(c=>c.a==='pan'||c.a==='tapplace'),'A drag needs no phone and is not a tap');
+   assert.equal(await page.evaluate(()=>document.getElementById('mapRecentre').hidden),false);await page.click('#mapRecentre');
+   assert(await page.evaluate(()=>ScreenLinkTileMap.follow&&Math.abs(ScreenLinkTileMap.view.lat-11.5564)<1e-9),'Re-centre');
+   // Tap = the place under the finger, by name, found by the phone.
+   cmds.length=0;await page.mouse.click(640,360);await page.waitForTimeout(300);
+   const tap=cmds.find(c=>c.a==='tapplace');assert(tap&&Math.abs(Number(tap.lat)-11.5564)<1e-4&&Math.abs(Number(tap.lng)-104.9282)<1e-4,'Tap at the car gives the car position: '+JSON.stringify(tap));
+   // Place + route: red dot with the name, whole route shown.
+   mapState={...mapState,screen:'place',routeId:300,place:{name:'Brown Coffee',address:'Street 51',lat:11.5701,lng:104.9155,drive:'8 min'},routes:[{time:'8 min',arrive:'14:40',dist:'2.1 km',sel:true}],routeLine:'_p~iF~ps|U_ulLnnqC_mqNvxq`@'};
+   await page.waitForFunction(()=>document.getElementById('tileDestName').textContent==='Brown Coffee'&&!document.getElementById('tileDest').hidden&&!ScreenLinkTileMap.follow,null,{timeout:5000});
+   assert(await page.evaluate(()=>document.querySelector('.tile-layer:last-child .line').getAttribute('points').split(' ').length)===3,'Route line drawn by the car');
+   assert.equal(await page.evaluate(()=>document.querySelector('.map-card-head b').textContent),'Brown Coffee');
+   // Driving: travel direction up, car below the middle, smooth movement.
+   mapState={...mapState,screen:'drive',navigating:true,place:undefined,routes:[],heading:90};
+   await page.waitForFunction(()=>ScreenLinkTileMap.follow&&ScreenLinkTileMap.view.bearing===90&&Math.abs(ScreenLinkTileMap.view.zoom-17.2)<1e-9,null,{timeout:6000});
+   const drive=await page.evaluate(()=>({t:document.getElementById('tileCar').style.transform,a:document.getElementById('tileCarArrow').style.transform}));
+   const y=Number(/translate\(([\d.]+)px, ?([\d.]+)px\)/.exec(drive.t)[2]);assert(y>420&&y<620,'Car sits below the middle while driving: '+drive.t);assert(/rotate\(0deg\)/.test(drive.a),'Arrow points up: '+drive.a);
+   if(process.env.CAR_MAP_SHOTS)await page.screenshot({path:process.env.CAR_MAP_SHOTS+'/tiles.png'});
+   mapState={...mapState,lat:11.5566,lng:104.9290};await page.waitForFunction(()=>Math.abs(ScreenLinkTileMap.pose.lng-104.9290)<1e-9,null,{timeout:6000});
+   // Night look from the phone = new version = squares reloaded.
+   tiles.length=0;mapState={...mapState,night:true,tileV:2};await page.waitForFunction(()=>document.getElementById('mapMini').classList.contains('map-night'),null,{timeout:5000});
+   await page.waitForTimeout(600);assert(tiles.some(t=>t.endsWith('@2')),'New look reloads the squares');
+   // Squares stop arriving → fall back to the phone's pictures and tell the phone.
+   tilesFail=true;cmds.length=0;mapState={...mapState,tileV:3,bg:true,bgId:1,bgLat:11.5564,bgLng:104.9282,bgZoom:16};
+   await page.waitForFunction(()=>document.getElementById('mapTiles').hidden&&!document.getElementById('mapBg').hidden,null,{timeout:12000});
+   assert.deepEqual(outside,[],'The car asked nobody but the phone: '+outside.join(','));
+   console.log('CAR_MAP_TILES: car draws the map from the phone\'s squares; instant zoom and drag, re-centre, tap a place, route and place name, heading-up driving, night reload, fallback to pictures; no Google on the car.');
+   await context.close();continue;
+  }
+  if(mode==='pictures')mapState={...mapState,carGoogle:false,tiles:false,mapKey:'',mapLive:true,screen:'home',navigating:false,results:[],suggestions:[],recents:[],place:undefined};
+  else mapState={...mapState,carGoogle:true,tiles:false,mapKey:'test-key',screen:'drive',navigating:true,bg:true,bgError:undefined,night:false,routeLine:'_p~iF~ps|U_ulLnnqC_mqNvxq`@',routeId:100,heading:90,lat:11.5564,lng:104.9282};
   liveMap=mode==='pictures';
   await page.goto(base+'/video');
   if(mode==='pictures'){

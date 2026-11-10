@@ -53,6 +53,11 @@ final class CarLink: ObservableObject {
             guard let self else { return }
             let connected = self.server.hasClients
             if connected != self.carConnected { self.carConnected = connected }
+            // Build 105: keep a Google tile session ready so the car can draw the map itself.
+            if Self.carMapOn, !Self.carGoogle, let nav = self.nav {
+                SLMapTiles.prepare(key: nav.api.key, night: Settings.shared.isNight,
+                                   satellite: Settings.shared.mapType == "satellite", language: Settings.shared.language)
+            }
             var st = state()
             st.merge(self.bgMeta) { a, _ in a }
             self.server.setState(st)

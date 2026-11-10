@@ -80,6 +80,8 @@ struct CarMapSwitch: View {
     @State private var google = CarLink.carGoogle
     @State private var picture = ""
     @State private var showPicture = false
+    @State private var tiles = ""
+    @State private var showTiles = false
     private let tick = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     var body: some View {
@@ -96,7 +98,21 @@ struct CarMapSwitch: View {
             .accessibilityLabel(on ? "Car map is on. Tap to hide the map on the car screen." : "Car map is off. Tap to show the map on the car screen.")
             // Build 104: by default the map on the car is pictures from this iPhone (no Google on the car).
             // Say plainly when the picture for "app left / phone locked" cannot be fetched.
-            if on && !google && !picture.isEmpty {
+            if on && !google && !tiles.isEmpty {
+                Button { showTiles = true } label: {
+                    Text("Car map is slow · Tap to fix")
+                        .font(.caption.weight(.semibold))
+                        .padding(.horizontal, 10).padding(.vertical, 6)
+                        .background(Color.orange, in: Capsule())
+                        .foregroundColor(.white)
+                }
+            } else if on && !google && works {
+                Text("Car draws the map ✓ works when you leave the app")
+                    .font(.caption.weight(.semibold))
+                    .padding(.horizontal, 10).padding(.vertical, 5)
+                    .background(Color.green.opacity(0.85), in: Capsule())
+                    .foregroundColor(.white)
+            } else if on && !google && !picture.isEmpty {
                 Button { showPicture = true } label: {
                     Text("Car map stops when you leave the app · Tap to fix")
                         .font(.caption.weight(.semibold))
@@ -122,10 +138,37 @@ struct CarMapSwitch: View {
         }
         .onReceive(tick) { _ in
             works = CarLink.carDrawsMap; problem = CarLink.carMapProblem
-            google = CarLink.carGoogle; picture = CarLink.bgProblem
+            google = CarLink.carGoogle; picture = CarLink.bgProblem; tiles = SLMapTiles.problem
         }
+        .sheet(isPresented: $showTiles) { CarMapTilesSheet(problem: tiles) }
         .sheet(isPresented: $showFix) { CarMapKeySheet(problem: problem) }
         .sheet(isPresented: $showPicture) { CarMapPictureSheet(problem: picture) }
+    }
+}
+
+/// Build 105: the fast car map needs "Map Tiles API" on the user's Google key.
+struct CarMapTilesSheet: View {
+    let problem: String
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationView {
+            Form {
+                Section("What is wrong") {
+                    Text("For a fast map the car draws it itself from small map squares that this iPhone gets from Google. Google did not give them: \(problem)")
+                    Text("Until this is fixed the car shows slow map pictures instead.")
+                        .font(.footnote).foregroundColor(.secondary)
+                }
+                Section("Fix (one time, on a computer)") {
+                    Text("1. Open console.cloud.google.com.\n2. APIs & Services → Library → search \"Map Tiles API\" → Enable.\n3. APIs & Services → Credentials → open your key. If \"API restrictions\" lists APIs, add Map Tiles API and Save.\n4. Wait 5 minutes. The car map changes by itself.")
+                        .font(.footnote)
+                    Text("The car itself never contacts Google. Only this iPhone does.")
+                        .font(.footnote).foregroundColor(.secondary)
+                }
+            }
+            .navigationTitle("Fix the car map")
+            .toolbar { Button("Close") { dismiss() } }
+        }
     }
 }
 

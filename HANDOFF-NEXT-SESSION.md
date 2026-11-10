@@ -1,4 +1,4 @@
-# Handoff for the next Claude session (written 2026-11-10, after build 104)
+# Handoff for the next Claude session (written 2026-11-10, after build 105)
 
 Read this first. It replaces reading the old 400k-token conversation.
 
@@ -112,6 +112,14 @@ YouTube over AirPlay with no screen recording, and serves it to a car browser:
     with Google's answer for the Static-map picture (most likely Maps Static API is not enabled).
   - Cube (BLE): first test said "no navigation channel" → characteristic …0F13 missing on the
     cube. 104 lists the characteristics the cube offers; pass that to the cube maker.
+
+- **105 (0.20.68) is SENT, NOT YET CAR-TESTED.** Branch `release/build105-awake-tiles`, workflow
+  `awaketiles105.yml`. Contains 98–104. See `BUILD105.md`: (1) keep-awake without PiP through
+  location updates; (2) the car draws the map from squares the phone fetches (Map Tiles API).
+  - User must enable **Map Tiles API** on the Google key; the phone shows an orange button if not.
+  - If the user says the app still sleeps: look for `KEEP AWAKE ON` / `NOT ACTIVE` in the log.
+  - Build 104's picture map was rejected by the user as unusable. Do not go back to it as the
+    main map; it is only the fallback.
 
 ## Next ideas the user agreed with (not started)
 - **Smart helper (non-developers):**

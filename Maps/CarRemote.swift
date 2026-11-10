@@ -46,6 +46,10 @@ extension NavModel {
             "bg": !CarLink.liveMapUsable,
             // Build 98: the car draws the map itself from these (see CanvasShell.js updateCarMap).
             "mapOn": CarLink.carMapOn,
+            // Build 105: the car draws the map from squares this iPhone hands over (/map/tile/…).
+            "tiles": CarLink.carMapOn && !CarLink.carGoogle && SLMapTiles.ready,
+            "tileV": SLMapTiles.version,
+            "tileError": String(SLMapTiles.problem.prefix(90)),
             "carGoogle": CarLink.carGoogle,
             "mapKey": CarLink.carGoogle ? CarLink.carMapKey : "",   // build 104: the key stays on the phone unless the switch is on
             "routeLine": carRouteLine(),
