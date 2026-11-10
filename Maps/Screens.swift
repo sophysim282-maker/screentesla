@@ -847,6 +847,11 @@ struct SettingsView: View {
                     Text("1. iPhone: Personal Hotspot ON\n2. Tesla: Wi-Fi → this iPhone\n3. Tesla browser: open the address above\nKeep this app open while driving.")
                         .font(.footnote).foregroundColor(.secondary)
                 }
+                Section("Car map key (website key)") {
+                    Text("Only needed when the car map stops after you leave the app.")
+                        .font(.footnote).foregroundColor(.secondary)
+                    CarMapKeyRows()
+                }
                 Section("Google key") {
                     Button("Remove Google key", role: .destructive) {
                         UserDefaults.standard.removeObject(forKey: "googleKey")

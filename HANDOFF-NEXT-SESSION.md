@@ -1,4 +1,4 @@
-# Handoff for the next Claude session (written 2026-11-10, after build 100)
+# Handoff for the next Claude session (written 2026-11-10, after build 101)
 
 Read this first. It replaces reading the old 400k-token conversation.
 
@@ -79,6 +79,14 @@ YouTube over AirPlay with no screen recording, and serves it to a car browser:
     (told the user). Do not fake it.
   - Things only the car can show: touch feel, Tesla keyboard on the search box, video smoothness
     while the map moves, whether Google gives the vector (3D) map.
+
+- **101 (0.20.64) is SENT, NOT YET CAR-TESTED.** Branch `release/build101-car-map-key`, workflow
+  `carmapkey101.yml`. Contains 98–100. The user said the car map closes when they leave the app.
+  Suspected (not proven, no log): Google refuses the key on the car website. 101 adds the phone
+  status line + "Tap to fix" sheet that saves `carMapKey` (see `BUILD101.md`).
+  - If the phone shows the green "Car draws the map ✓" line and the map still closes in the
+    background, the cause is different: look at whether iOS suspends the app (no AirPlay/PiP and
+    no GPS running) and at the `/map/state` answers.
 
 ## Next ideas the user agreed with (not started)
 - **Smart helper (non-developers):**

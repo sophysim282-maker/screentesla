@@ -74,17 +74,92 @@ struct CarMapsRoot: View {
 
 struct CarMapSwitch: View {
     @State private var on = CarLink.carMapOn
+    @State private var works = false
+    @State private var problem = ""
+    @State private var showFix = false
+    private let tick = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+
     var body: some View {
-        Button {
-            on.toggle(); CarLink.carMapOn = on
-        } label: {
-            Label(on ? "Car map ON" : "Car map OFF", systemImage: on ? "map.fill" : "map")
-                .font(.subheadline.weight(.semibold))
-                .padding(.horizontal, 12).padding(.vertical, 8)
-                .background(on ? Color.green.opacity(0.85) : Color.gray.opacity(0.6), in: Capsule())
-                .foregroundColor(.white)
+        VStack(alignment: .trailing, spacing: 6) {
+            Button {
+                on.toggle(); CarLink.carMapOn = on
+            } label: {
+                Label(on ? "Car map ON" : "Car map OFF", systemImage: on ? "map.fill" : "map")
+                    .font(.subheadline.weight(.semibold))
+                    .padding(.horizontal, 12).padding(.vertical, 8)
+                    .background(on ? Color.green.opacity(0.85) : Color.gray.opacity(0.6), in: Capsule())
+                    .foregroundColor(.white)
+            }
+            .accessibilityLabel(on ? "Car map is on. Tap to hide the map on the car screen." : "Car map is off. Tap to show the map on the car screen.")
+            // Build 101: say plainly whether the car draws the map itself (needed for background use).
+            if on && works {
+                Text("Car draws the map ✓ works when you leave the app")
+                    .font(.caption.weight(.semibold))
+                    .padding(.horizontal, 10).padding(.vertical, 5)
+                    .background(Color.green.opacity(0.85), in: Capsule())
+                    .foregroundColor(.white)
+            } else if on && !problem.isEmpty {
+                Button { showFix = true } label: {
+                    Text("Car map stops when you leave the app · Tap to fix")
+                        .font(.caption.weight(.semibold))
+                        .padding(.horizontal, 10).padding(.vertical, 6)
+                        .background(Color.orange, in: Capsule())
+                        .foregroundColor(.white)
+                }
+            }
         }
-        .accessibilityLabel(on ? "Car map is on. Tap to hide the map on the car screen." : "Car map is off. Tap to show the map on the car screen.")
+        .onReceive(tick) { _ in works = CarLink.carDrawsMap; problem = CarLink.carMapProblem }
+        .sheet(isPresented: $showFix) { CarMapKeySheet(problem: problem) }
+    }
+}
+
+/// Build 101: paste a Google key that is allowed on the car website. Kept only on this iPhone.
+struct CarMapKeyRows: View {
+    @State private var text = UserDefaults.standard.string(forKey: "carMapKey") ?? ""
+    @State private var saved = false
+    var done: () -> Void = {}
+
+    var body: some View {
+        Text("1. Open console.cloud.google.com on a computer.\n2. APIs & Services → Library → turn on \"Maps JavaScript API\".\n3. APIs & Services → Credentials → Create credentials → API key.\n4. Open the new key. Application restrictions: Websites. Add:\nhttps://car.tesla4khmer.com/*\n5. API restrictions: Maps JavaScript API. Save.\n6. Copy the key and paste it below.")
+            .font(.footnote)
+        TextField("AIza… (website key)", text: $text)
+            .autocorrectionDisabled()
+            .textInputAutocapitalization(.never)
+        Button(saved ? "Saved ✓ the car reloads its map" : "Save car map key") {
+            let k = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !k.isEmpty else { return }
+            UserDefaults.standard.set(k, forKey: "carMapKey")
+            CarLink.carMapProblem = ""
+            saved = true
+            done()
+        }
+        if !(UserDefaults.standard.string(forKey: "carMapKey") ?? "").isEmpty {
+            Button("Remove car map key", role: .destructive) {
+                UserDefaults.standard.removeObject(forKey: "carMapKey")
+                text = ""
+                saved = false
+            }
+        }
+    }
+}
+
+struct CarMapKeySheet: View {
+    let problem: String
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationView {
+            Form {
+                Section("What is wrong") {
+                    Text("The car could not draw the Google map itself: \(problem). So it shows pictures from this iPhone, and those stop when you leave ScreenLink or lock the phone.")
+                    Text("Fix: give the car its own Google key for the website. You do this once.")
+                        .font(.footnote).foregroundColor(.secondary)
+                }
+                Section("Car map key") { CarMapKeyRows() }
+            }
+            .navigationTitle("Fix the car map")
+            .toolbar { Button("Close") { dismiss() } }
+        }
     }
 }
 

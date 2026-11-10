@@ -123,6 +123,13 @@ const fakeGoogle=(refuse,raster)=>`(()=>{window.__fake={handlers:{},options:{},f
    await page.waitForFunction(()=>!document.getElementById('mapMini').hidden&&!document.getElementById('mapBg').hidden,null,{timeout:15000});
    assert(cmds.some(c=>c.a==='carmap'&&c.ok==='0'&&/refused/.test(c.why||'')),'Car tells the phone Google refused the key');
    assert.equal(await page.evaluate(()=>document.getElementById('mapJs').hidden),true);
+   // Build 101: phone left the app (no pictures): a note explains it; a new key reloads the map once.
+   mapState={...mapState,bg:false};
+   await page.waitForFunction(()=>!document.getElementById('mapMini').hidden&&!document.getElementById('mapNote').hidden,null,{timeout:6000});
+   mapState={...mapState,mapKey:'website-key-2'};
+   await page.waitForFunction(()=>true);const until=Date.now()+8000;while(googleKey!=='website-key-2'&&Date.now()<until)await page.waitForTimeout(200);
+   assert.equal(googleKey,'website-key-2','A new key from the phone reloads the car map with that key');
+   mapState={...mapState,mapKey:'test-key',bg:true};
    console.log('CAR_MAP_FALLBACK: refused key falls back to the phone map picture and is reported.');
   }
   await context.close();

@@ -124,7 +124,10 @@ extension NavModel {
             maps.follow = true
             maps.carFollow = true
             startWhenReady()
-        case "carmap": CarLink.carDrawsMapAt = p["ok"] == "1" ? Date() : .distantPast
+        case "carmap":
+            let ok = p["ok"] == "1"
+            CarLink.carDrawsMapAt = ok ? Date() : .distantPast
+            CarLink.carMapProblem = ok ? "" : (p["why"] ?? "The car could not draw the map")
         default: break
         }
     }

@@ -26,6 +26,8 @@ final class CarLink: ObservableObject {
         let own = UserDefaults.standard.string(forKey: "carMapKey") ?? ""
         return own.isEmpty ? (UserDefaults.standard.string(forKey: "googleKey") ?? "") : own
     }
+    // Build 101: why the car could not draw the map itself (shown on the phone with a Fix button).
+    static var carMapProblem = ""
     @Published var carConnected = false
     let server = CarServer(port: 8080)
     private var timer: Timer?
