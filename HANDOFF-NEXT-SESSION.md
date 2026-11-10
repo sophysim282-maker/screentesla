@@ -1,4 +1,4 @@
-# Handoff for the next Claude session (written 2026-11-10, after build 101)
+# Handoff for the next Claude session (written 2026-11-10, after build 102)
 
 Read this first. It replaces reading the old 400k-token conversation.
 
@@ -87,6 +87,13 @@ YouTube over AirPlay with no screen recording, and serves it to a car browser:
   - If the phone shows the green "Car draws the map ✓" line and the map still closes in the
     background, the cause is different: look at whether iOS suspends the app (no AirPlay/PiP and
     no GPS running) and at the `/map/state` answers.
+
+- **102 (0.20.65) is SENT, NOT YET CAR-TESTED.** Branch `release/build102-start-timing`, workflow
+  `starttiming102.yml`. Contains 98–101 + a `CAR PLAYER: start took …` log line (see `BUILD102.md`).
+  - User's build 100 car test: connection no longer lost; first video slow to start (13 s), later
+    ones about 3 s. Do not change the player before a log with the new line shows the slow step.
+  - In that test the map question (does it keep running after leaving the app) was not answered;
+    no `CAR MAP:` line was in the log part they sent.
 
 ## Next ideas the user agreed with (not started)
 - **Smart helper (non-developers):**
