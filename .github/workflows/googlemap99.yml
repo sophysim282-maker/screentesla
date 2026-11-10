@@ -1,5 +1,5 @@
 name: Build99 Google map look
-# Build 99: the car map looks like Google Maps navigation (3D heading-up, traffic, day/night, route edge, pin, glide, turn arrows).
+# Build 99: the car map looks like Google Maps navigation (3D heading-up, traffic, day/night, route edge, pin, glide, turn arrows). Run 2.
 on:
   push:
     branches: ['release/build99-google-map']
