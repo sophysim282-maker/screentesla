@@ -2,6 +2,65 @@
 
 Read this first. It replaces reading the old 400k-token conversation.
 
+## WHERE WE ARE NOW (read this part first)
+Latest build sent to the user: **105 (0.20.68)**, branch `release/build105-awake-tiles`
+(same commits on `claude/build-98-car-map-handoff-tlhw9w`). Not car-tested yet. Use 105 only;
+98–104 are inside it or replaced by it.
+
+What the user has said, in order of importance:
+1. **Ask before building.** "I ask first and tell me before build." Explain the plan in simple
+   English, wait for "go". A bare "continue" is not a clear go: confirm in one line.
+2. **The Tesla is a China version. Its browser blocks Google** (google.com/maps does not open).
+   The car page must talk only to the phone.
+3. The video link itself is good now ("never loses connection"). Tesla cannot play the 4K test
+   quality; use Auto / 1080p.
+4. The map is the big complaint: slow, bad touch, turn stays on screen after turning, no lanes,
+   "not like Google Maps". Build 104's picture map was called unusable.
+5. "The road it gives is bad": still unclear whether the chosen route is wrong or only the line
+   looked bad. Asked for one example (start, destination, what was wrong). No answer yet.
+
+What 105 changes (see `BUILD105.md`):
+- Keep-awake without PiP (low-accuracy background location, blue mark). Log: `KEEP AWAKE ON`.
+- Car draws the map from squares the phone fetches (Google Map Tiles API) at `/map/tile/z/x/y`.
+  **The user must enable "Map Tiles API" on the Google key**; otherwise the car falls back to
+  slow pictures and the phone shows an orange "Car map is slow · Tap to fix" button.
+- Turn guidance follows the car along the route line (fixes "already turned, still shows turn").
+- Squares are kept only as long as Google's Cache-Control allows (Map Tiles policy).
+
+Waiting on the user:
+- Car test of 105 + "Copy test log" (look for `KEEP AWAKE`, `CAR MAP`, `CAR PLAYER: start took`).
+- One example of a bad route.
+
+Orbit Cube (third person, through the user), Bluetooth LE, `Maps/CubeLink.swift`:
+- App is central; writes the turn packet to characteristic …0F13 (see `BUILD103.md`).
+- First test said "no navigation channel". Cube maker says firmware v18+ has …0F11 command,
+  …0F12 status, …0F13 navigation, **…0F14 road line**, and that iOS cached the old list. User
+  was told: forget the device, restart the phone, read the status line (104+ discovers all
+  characteristics and lists what it gets).
+- Asked the cube maker to confirm the road-line packet for …0F14 (proposal: byte0 version 1,
+  byte1 N points 2–16, then N × int8 x,y; car at 0,0, forward up, 1 unit = 3 m; ≤ 1 per second)
+  and to send the GATT Service Changed indication after firmware updates.
+- Road line is NOT built. Ask the user before building it.
+- An earlier Wi-Fi picture sender for the cube was removed (never approved).
+
+Research done for the user (told them, nothing built):
+- Good navigation apps: map matching, dead reckoning between GPS fixes, glide, progress along
+  the route, adaptive off-route checks, honest "weak signal" state.
+- Lane guidance IS available to apps, just not from the Google Routes API we use: Google
+  Navigation SDK for iOS (draws on the phone; ~0.05 USD per destination after 1,000 free a
+  month), TomTom routing (`sectionType=lanes`), Mapbox directions. Earlier statement to the user
+  that lanes were impossible was corrected.
+- Suggested order after 105: (1) dead reckoning so the arrow is not ~1 s late, (2) smarter
+  off-route check, (3) lane guidance via Navigation SDK or TomTom/Mapbox — each needs a go.
+
+Things a new session needs from the user:
+- **The HTTPS identity is not in GitHub.** Ask the user to attach an older HTTPS IPA (they
+  attached `ScreenLink-0.20.48-build85-HTTPS-unsigned.ipa`; it holds `PrivateTLS/fullchain.pem`
+  and `private.key`, valid until 1 Feb 2027). Never print or commit them.
+- A new account must have GitHub access to `sophysim282-maker/screentesla`.
+- First push of a new release branch often does not start its workflow; push one more small
+  change to the workflow file (the "Run N." comment) to start it.
+
 ## The project
 ScreenLink is an iPhone app (repo `sophysim282-maker/screentesla`, **public**). It receives
 YouTube over AirPlay with no screen recording, and serves it to a car browser:
