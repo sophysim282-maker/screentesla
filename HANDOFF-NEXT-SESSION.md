@@ -1,9 +1,12 @@
-# Handoff for the next Claude session (written 2026-11-10, after build 107)
+# Handoff for the next Claude session (written 2026-11-10, after build 108)
 
 Read this first. It replaces reading the old 400k-token conversation.
 
 ## WHERE WE ARE NOW (read this part first)
-Latest build sent to the user: **107 (0.20.70)**, branch `release/build107-video-first`
+Latest build sent to the user: **108 (0.20.71)**, branch `release/build108-maps-closed`:
+**all map systems closed at the user's request** (`BUILD108.md`; `MAPS_CLOSED` in CanvasShell.js,
+`showMaps` in main.m). The Orbit Cube switch is unreachable while maps are closed.
+Before that: **107 (0.20.70)**, branch `release/build107-video-first`
 (107 = 106 + "video first" map budget + proof facts in the car summary line, `BUILD107.md`;
 made after two build 106 logs with picture freezes and "6 connections open").
 Before that: **106 (0.20.69)**, branch `release/build106-stability`

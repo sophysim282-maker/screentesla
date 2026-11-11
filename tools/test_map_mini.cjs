@@ -26,6 +26,7 @@ const status=page=>page.evaluate(()=>ScreenLinkCanvasStatus());
  await new Promise(r=>server.listen(0,'127.0.0.1',r));const base='https://127.0.0.1:'+server.address().port;
  browser=await chromium.launch({headless:true,executablePath:process.env.SCREENLINK_CHROME_BIN||undefined,args:['--no-sandbox','--ignore-certificate-errors','--autoplay-policy=no-user-gesture-required']});
  const page=await (await browser.newContext({ignoreHTTPSErrors:true,viewport:{width:1280,height:720}})).newPage();page.on('pageerror',e=>console.error('PAGE',e.message));
+ await page.addInitScript(()=>{self.ScreenLinkMapsForTest=true;});
  await page.goto(base+'/video');
  await page.waitForFunction(()=>ScreenLinkCanvasStatus().mediaStats?.drawn>20,null,{timeout:30000});
  await page.waitForFunction(()=>!document.getElementById('mapMini').hidden&&document.getElementById('mapMiniImg').naturalWidth>0,null,{timeout:10000});

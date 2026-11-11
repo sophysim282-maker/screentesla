@@ -41,6 +41,7 @@ const fakeGoogle=(refuse,raster)=>`(()=>{window.__fake={handlers:{},options:{},f
   const context=await browser.newContext({ignoreHTTPSErrors:true,viewport:{width:1280,height:720}});let googleKey='',outside=[];
   context.on('request',r=>{const h=new URL(r.url()).hostname;if(h!=='127.0.0.1')outside.push(h);});
   await context.route('https://maps.googleapis.com/**',route=>{googleKey=new URL(route.request().url()).searchParams.get('key');route.fulfill({contentType:'application/javascript',body:fakeGoogle(refuse,raster)});});
+  await context.addInitScript(()=>{self.ScreenLinkMapsForTest=true;});
   const page=await context.newPage();page.on('pageerror',e=>{console.error('PAGE',e.message);process.exitCode=1;});cmds.length=0;mapState={...mapState,mapOn:true,night:false,mapType:'normal',lat:11.5564,lng:104.9282,heading:90,routeId:100};
   tilesFail=false;tiles.length=0;
   if(mode==='tiles'){
@@ -209,6 +210,12 @@ const fakeGoogle=(refuse,raster)=>`(()=>{window.__fake={handlers:{},options:{},f
    console.log('CAR_MAP_FALLBACK: refused key falls back to the phone map picture and is reported.');
   }
   await context.close();
+ }
+ {// Build 108: without the test switch the map systems are closed: no /map request at all.
+  const context=await browser.newContext({ignoreHTTPSErrors:true,viewport:{width:1280,height:720}});const asked=[];context.on('request',r=>{const u=new URL(r.url());if(u.pathname.startsWith('/map/'))asked.push(u.pathname);});
+  const page=await context.newPage();mapState={...mapState,carGoogle:false,tiles:true,tileV:9,mapOn:true};await page.goto(base+'/video');await page.waitForTimeout(6000);
+  assert.deepEqual(asked,[],'Closed maps: the car asked for no map data: '+asked.join(','));assert.equal(await page.evaluate(()=>document.getElementById('mapMini').hidden),true);
+  console.log('CAR_MAP_CLOSED: build 108 page makes no map request and shows no map.');await context.close();
  }
  console.log('CAR_MAP_JS_PASSED');
 }finally{server.closeAllConnections?.();server.close();await browser?.close();fs.rmSync(temp,{recursive:true,force:true});}})().catch(e=>{console.error(e);process.exit(1);});
