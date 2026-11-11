@@ -34,6 +34,15 @@ function errorDetail(){if(!lastConnectionError)return '';const e=lastConnectionE
 let mediaStartAt=0,mediaStartLogged=true;let lastInternetBack=null;
 const sentCarEvents=new WeakSet();let carLogQueue=[],lastReportedPlaybackError=null,lastReportedConnectionError=null,lastCarSummaryAt=0,lastCarDecoder='';
 function carLogLine(text){carLogQueue.push(String(text).replace(/[\u0000-\u001f]/g,' ').slice(0,220));if(carLogQueue.length>6)carLogQueue.splice(0,carLogQueue.length-6);}
+// Build 107: facts that show what took the video's data away: is a map running on the car, how many
+// map squares are loading or waiting, and how long the last picture piece took to download.
+function carProof(p){
+ let map='off';try{map=typeof tileMap!=='undefined'&&tileMap.live()?'squares':!$('mapJs').hidden?'google':mapLive?'phone pictures':!$('mapBg').hidden?'phone picture':'off';}catch{}
+ let text=' · map '+map;try{if(map==='squares')text+=' (loading '+tileMap.active+', waiting '+tileMap.queue.length+')';}catch{}
+ const last=[...(p.segmentDiagnostics||[])].reverse().find(d=>d.kind==='video');
+ if(last)text+=' · last picture piece '+Math.round(last.fetchMs||0)+'ms for '+(Number(last.duration)||0).toFixed(1)+'s of video';
+ return text;
+}
 function collectCarLog(p){
  if(!p)return;const at=t=>Number.isFinite(t)?t.toFixed(1)+'s':'?';let fresh=false;
  for(const e of p.playbackEvents||[]){if(sentCarEvents.has(e))continue;sentCarEvents.add(e);fresh=true;carLogLine(e.type+' at '+at(e.position)+(e.videoLead!==undefined?' · video ahead '+Number(e.videoLead).toFixed(2)+'s':'')+(e.audioLead!==undefined?' · sound ahead '+Number(e.audioLead).toFixed(2)+'s':'')+(e.detail?' · '+e.detail:''));}
@@ -41,7 +50,7 @@ function collectCarLog(p){
  const decoder=p.videoAcceleration||activeEngine||'';if(decoder&&decoder!==lastCarDecoder){if(lastCarDecoder)fresh=true;carLogLine('video decoder now '+decoder);lastCarDecoder=decoder;}
  if(lastPlaybackError&&lastPlaybackError!==lastReportedPlaybackError){lastReportedPlaybackError=lastPlaybackError;fresh=true;carLogLine('player error: '+String(lastPlaybackError.message||'').slice(0,120)+' at '+at(lastPlaybackError.position));}
  if(lastConnectionError&&lastConnectionError!==lastReportedConnectionError){lastReportedConnectionError=lastConnectionError;carLogLine('connection was interrupted: '+String(lastConnectionError.message||'').slice(0,100)+' at '+new Date(lastConnectionError.time).toLocaleTimeString()+(lastConnectionError.failures?' after '+lastConnectionError.failures+' failed checks':''));}
- if(fresh||Date.now()-lastCarSummaryAt>60000){lastCarSummaryAt=Date.now();const s=p.stats||{};carLogLine('summary: '+(activeEngine||'?')+' '+(p.videoAcceleration||'')+' · '+$('mediaCanvas').width+'x'+$('mediaCanvas').height+' · quality '+$('quality').value+' · at '+at(p.currentTime)+' · pictures '+(s.drawn||0)+' · decoder restarts '+(s.videoRecoveries||0)+' · picture holds '+(s.videoHiccups||0)+' · rebuffers '+(s.rebufferCount||0)+' · sound gaps '+(s.audioUnderruns||0)+(s.softwareDecoderFallback?' · SOFTWARE DECODER':''));}
+ if(fresh||Date.now()-lastCarSummaryAt>60000){lastCarSummaryAt=Date.now();const s=p.stats||{};carLogLine('summary: '+(activeEngine||'?')+' '+(p.videoAcceleration||'')+' · '+$('mediaCanvas').width+'x'+$('mediaCanvas').height+' · quality '+$('quality').value+' · at '+at(p.currentTime)+' · pictures '+(s.drawn||0)+' · decoder restarts '+(s.videoRecoveries||0)+' · picture holds '+(s.videoHiccups||0)+' · rebuffers '+(s.rebufferCount||0)+' · sound gaps '+(s.audioUnderruns||0)+(s.softwareDecoderFallback?' · SOFTWARE DECODER':'')+carProof(p));}
 }
 // Build 92: "lost phone" report and backup button. When the page loses the phone, remember
 // when and why; after reconnecting, send one CAR PLAYER line with the lost period. After 20 s
@@ -190,7 +199,7 @@ window.addEventListener('pageshow',event=>{if(!event.persisted)return;setIdleArt
 function renderPerformance(){
  if(performanceFrozen||$('performancePanel').hidden)return;
  const profile=player?.performanceProfile?.()||previousPlaybackProfile;
- const lines=['Build: 0.20.69 / 106 · '+(activeEngine||requestedEngine)+' · '+(player?.videoAcceleration||requestedDecoder),'Playback: '+(player?.currentTime||0).toFixed(2)+' s','Page: '+(profile?.visibility||document.visibilityState||'unknown'),''];
+ const lines=['Build: 0.20.70 / 107 · '+(activeEngine||requestedEngine)+' · '+(player?.videoAcceleration||requestedDecoder),'Playback: '+(player?.currentTime||0).toFixed(2)+' s','Page: '+(profile?.visibility||document.visibilityState||'unknown'),''];
  const names=[['demuxMs','Demux ms'],['decoderWaitMs','Decoder feed wait ms'],['renderCallbackGapMs','Drawing callback gap ms'],['canvasDrawMs','Canvas draw call ms'],['videoQueueDepth','Pending decode requests']];
  for(const [key,label] of names){const m=profile?.metrics[key];lines.push(label+': '+(m?'mean '+m.mean.toFixed(2)+' | max '+m.max.toFixed(2)+' | n '+m.count:'no samples'));if(m)lines.push('  max at '+(m.maxAtMs/1000).toFixed(2)+'s, media '+m.mediaTime.toFixed(2)+'s');}
  lines.push('','Decode queue now: '+(profile?.videoQueueDepth||0),'Decoded frames queued: '+(profile?.framesQueued||0),'Video recoveries: '+(player?.stats.videoRecoveries||0),'Audio buffer underruns: '+(player?.stats.audioUnderruns||0));
@@ -211,7 +220,7 @@ async function retireOfflineUI(){
  }catch(error){lastConnectionError={message:'Rescue page setup: '+error.message,time:Date.now()};}
 }
 retireOfflineUI();
-self.ScreenLinkCanvasStatus=()=>({build:'0.20.69-106',engine:activeEngine||requestedEngine,videoDecoder:player?.videoAcceleration||null,connectionPhase,approvalPhase,phoneVolume,phoneEQ,phoneSettingsRevision,phonePlaybackRevision,volumeGain:player?.gain?.gain.value??null,eqLowGain:player?.low?.gain.value??null,minimalViewer:youtubeOnly&&!developerMode,lastRequestAt,lastSuccessAt,offlineUI:false,healthFailures,lastHealthyAt,reconnections,quality:$('quality').value,transportWaiting,decoderFaults,transportError:player?.lastTransportError||null,lastPlaybackError,lastConnectionError,recoveryAttempts:retryCount,mediaRunning:player?.running||false,mediaDuration:player?.duration||0,videoFramesQueued:player?.frames.length||0,audioPacketsQueued:player?.audio.length||0,secureContext:isSecureContext,connected,connectionPending:joining,viewerMode:youtubeOnly?'youtube':'split',screenFrames:screen.framesDrawn,screenHidden:screen.hold,screenQueue:screen.decoder?.decodeQueueSize||0,mediaEpoch,mediaPosition:player?.currentTime||0,mediaPaused:player?.paused??true,mediaWidth:$('mediaCanvas').width,mediaHeight:$('mediaCanvas').height,youtubeBufferSeconds:player?.bufferSeconds||0,encodedVideoLead:player?Math.max(0,player.preparedVideoEnd-player.currentTime):0,mediaStats:player?{...player.stats}:null,performance:player?.performanceProfile?.()||null,previousPlaybackProfile,playbackEvents:player?(player.playbackEvents||[]).map(e=>({...e})):[],segmentCache:player?.segmentCache?.size||0,audioSampleRate:player?.audioContext?.sampleRate||0,decodedAudioRate:player?.lastAudioSampleRate||player?.audio[0]?.sampleRate||0,segments:player?(player.segmentDiagnostics||[]).map(s=>({...s})):[],audioLead:player?.audioContext&&player.audioTail!==null?Math.max(0,player.audioTail-player.audioContext.currentTime):0,videoLead:player?Math.max(0,player.videoEnd-player.currentTime):0,audioState:audioContext?.state||'locked',audioNodes:player?.nodes.size||0,mediaError:player?.error?.message||'',socketOpen:ws?.readyState===WebSocket.OPEN});
+self.ScreenLinkCanvasStatus=()=>({build:'0.20.70-107',engine:activeEngine||requestedEngine,videoDecoder:player?.videoAcceleration||null,connectionPhase,approvalPhase,phoneVolume,phoneEQ,phoneSettingsRevision,phonePlaybackRevision,volumeGain:player?.gain?.gain.value??null,eqLowGain:player?.low?.gain.value??null,minimalViewer:youtubeOnly&&!developerMode,lastRequestAt,lastSuccessAt,offlineUI:false,healthFailures,lastHealthyAt,reconnections,quality:$('quality').value,transportWaiting,decoderFaults,transportError:player?.lastTransportError||null,lastPlaybackError,lastConnectionError,recoveryAttempts:retryCount,mediaRunning:player?.running||false,mediaDuration:player?.duration||0,videoFramesQueued:player?.frames.length||0,audioPacketsQueued:player?.audio.length||0,secureContext:isSecureContext,connected,connectionPending:joining,viewerMode:youtubeOnly?'youtube':'split',screenFrames:screen.framesDrawn,screenHidden:screen.hold,screenQueue:screen.decoder?.decodeQueueSize||0,mediaEpoch,mediaPosition:player?.currentTime||0,mediaPaused:player?.paused??true,mediaWidth:$('mediaCanvas').width,mediaHeight:$('mediaCanvas').height,youtubeBufferSeconds:player?.bufferSeconds||0,encodedVideoLead:player?Math.max(0,player.preparedVideoEnd-player.currentTime):0,mediaStats:player?{...player.stats}:null,performance:player?.performanceProfile?.()||null,previousPlaybackProfile,playbackEvents:player?(player.playbackEvents||[]).map(e=>({...e})):[],segmentCache:player?.segmentCache?.size||0,audioSampleRate:player?.audioContext?.sampleRate||0,decodedAudioRate:player?.lastAudioSampleRate||player?.audio[0]?.sampleRate||0,segments:player?(player.segmentDiagnostics||[]).map(s=>({...s})):[],audioLead:player?.audioContext&&player.audioTail!==null?Math.max(0,player.audioTail-player.audioContext.currentTime):0,videoLead:player?Math.max(0,player.videoEnd-player.currentTime):0,audioState:audioContext?.state||'locked',audioNodes:player?.nodes.size||0,mediaError:player?.error?.message||'',socketOpen:ws?.readyState===WebSocket.OPEN});
 for(const id of ['viewMode','quality','eq'])makeInline(id);
 function autoConnect(){if(!stopped&&!connected&&!joining)connect();if(!stopped)reconnectTimer=setTimeout(autoConnect,3000);}if(isSecureContext&&typeof VideoDecoder==='function')autoConnect();
 if(!isSecureContext||typeof VideoDecoder!=='function')status.textContent='This viewer needs HTTPS and WebCodecs support.';
@@ -452,6 +461,17 @@ function pictureTap(x,y){
 // and zoom are instant because they happen here; the route line, the car arrow and the place name
 // are drawn here too. The phone only sends GPS, the route and the squares, so it stays cool and the
 // map keeps working when ScreenLink is left or the iPhone is locked.
+// Build 107: how many map downloads may run next to the video right now (see tileMap.pump).
+function videoBudget(){
+ if(!mediaEpoch||!player||mediaFailed)return 3;
+ if(player.paused||player.ended)return 3;
+ if(!mediaStartLogged||!player.running)return 0;
+ if(!Number.isFinite(player.videoEnd))return 1;
+ // Near the end of a video there is nothing more to download, so the map may go on.
+ // The player normally keeps about 4 s of picture ready; under 1.5 s means it is running short.
+ const ahead=Math.max(player.videoEnd,player.preparedVideoEnd||0)-(player.currentTime||0),left=(player.duration||0)-(player.currentTime||0);return ahead<1.5&&left>6?0:1;
+}
+self.ScreenLinkVideoBudget=videoBudget;
 const tileMap={
  T:256,view:{lat:0,lng:0,zoom:15,bearing:0},follow:true,zoomDrive:17.2,zoomBrowse:15,layers:[],version:null,night:null,
  loads:0,errors:0,queue:[],active:0,pose:null,goal:null,glide:0,path:[],routeId:'',placeKey:'',fitKey:'',frame:0,pointers:new Map(),gesture:null,
@@ -472,7 +492,10 @@ const tileMap={
  },
  drawRoute(l){const pts=this.path.map(p=>{const w=this.world(p.lat,p.lng,l.tz);return (w[0]-l.ox).toFixed(1)+','+(w[1]-l.oy).toFixed(1);}).join(' ');for(const line of l.el.querySelectorAll('polyline'))line.setAttribute('points',pts);l.scale=0;},
  pump(){
-  while(this.active<3&&this.queue.length){const job=this.queue.shift();if(!job.img.isConnected)continue;this.active++;
+  // Build 107 "video first": a car browser has only 6 connections to the phone and the video needs them.
+  // No video: 3 squares at a time. Video playing: 1. Video starting or short of picture: none (retry soon).
+  const budget=videoBudget();if(!budget&&this.queue.length){clearTimeout(this.waitTimer);this.waitTimer=setTimeout(()=>this.pump(),700);}
+  while(this.active<budget&&this.queue.length){const job=this.queue.shift();if(!job.img.isConnected)continue;this.active++;
    const done=ok=>{this.active--;if(ok){this.loads++;job.img.style.opacity=1;}else{this.errors++;job.img.remove();job.layer.tiles.delete(job.key);}this.pump();};
    job.img.onload=()=>done(true);job.img.onerror=()=>done(false);job.img.src='/map/tile/'+job.layer.tz+'/'+job.x+'/'+job.y+'?token='+encodeURIComponent(token)+'&v='+this.version;}
  },
@@ -586,7 +609,7 @@ async function mapStateLoop(){
     const arrow=String(s.maneuver||'')+'|'+String(s.then||'');if(arrow!==jsArrow){jsArrow=arrow;$('mapArrow').innerHTML=mapArrow(s.maneuver);$('mapThen').hidden=!s.then;$('mapThenArrow').innerHTML=s.then?mapArrow(s.then):'';}}
    renderMapUi(s,(useJs&&jsMapState==='ready')||useTiles||mapLive||bgMode);
    // Build 105: while driving ask the phone more often, so the turn and distance are fresh.
-   next=(useJs||useTiles||mapLive||bgMode)?(Date.now()<mapFast?300:(drive?450:800)):2500;
+   const busyVideo=videoBudget()<3;next=(useJs||useTiles||mapLive||bgMode)?(Date.now()<mapFast?(busyVideo?500:300):(drive?(busyVideo?900:450):(busyVideo?1500:800))):2500;
   }else{mapLive=false;$('mapMini').hidden=true;}
  }catch(e){next=3000;}
  if(run!==mapLoopRun)return;
@@ -595,7 +618,8 @@ async function mapStateLoop(){
 function mapFrameLoop(){
  clearTimeout(mapFrameTimer);
  if(!mapLive||!connected||!token){mapFrameTimer=setTimeout(mapFrameLoop,1000);return;}
- const img=$('mapMiniImg'),done=()=>{mapFrameTimer=setTimeout(mapFrameLoop,120);};
+ const budget=videoBudget();if(!budget){mapFrameTimer=setTimeout(mapFrameLoop,700);return;}
+ const img=$('mapMiniImg'),done=()=>{mapFrameTimer=setTimeout(mapFrameLoop,budget<3?300:120);};
  img.onload=done;img.onerror=()=>{mapFrameTimer=setTimeout(mapFrameLoop,1000);};
  img.src='/map/frame.jpg?token='+encodeURIComponent(token)+'&t='+Date.now();
 }

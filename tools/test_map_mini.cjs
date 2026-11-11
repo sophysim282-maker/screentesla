@@ -32,6 +32,8 @@ const status=page=>page.evaluate(()=>ScreenLinkCanvasStatus());
  const mini=await page.evaluate(()=>{const m=document.getElementById('mapMini').getBoundingClientRect(),v=document.getElementById('mediaCanvas').getBoundingClientRect();return {mw:m.width,mh:m.height,vw:v.width,turn:document.getElementById('mapText').textContent,dist:document.getElementById('mapDist').textContent,eta:document.getElementById('mapEtaTime').textContent+' · '+document.getElementById('mapEtaMore').textContent,turnShown:!document.getElementById('mapTurn').hidden};});
  assert(mini.mw>200&&mini.mw<mini.vw*0.5,'Small map sits in the corner of the video');assert.equal(mini.turn,'Turn right onto Norodom Blvd');assert.equal(mini.dist,'300 m');assert.equal(mini.eta,'14:32 · 12 min');assert(mini.turnShown);
  const f0=mapFrames;await page.waitForTimeout(1500);assert(mapFrames-f0>=4,'Map pictures keep refreshing: '+(mapFrames-f0));
+ // Build 107: while a video plays, map downloads get one connection (or none when the video is short).
+ assert([0,1].includes(await page.evaluate(()=>ScreenLinkVideoBudget())),'Map yields to a playing video');
  console.log('MAP_MINI_SHOWN',mini);if(process.env.SHOT_DIR)await page.screenshot({path:process.env.SHOT_DIR+'/car-map-small.png'});
  const before=(await status(page)).mediaPosition;
  await page.click('#mapMini');await page.waitForTimeout(700);

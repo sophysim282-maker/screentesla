@@ -102,7 +102,7 @@ final class SLMapTiles: NSObject {
         if let held, held.until > Date() { return held.data }
         guard !token.isEmpty, let url = URL(string: "https://tile.googleapis.com/v1/2dtiles/\(name)?session=\(token)&key=\(key)") else { return Data() }
         var req = URLRequest(url: url)
-        req.timeoutInterval = 5
+        req.timeoutInterval = 2   // build 107: never hold a car connection long; the video needs them
         req.setValue(Bundle.main.bundleIdentifier, forHTTPHeaderField: "X-Ios-Bundle-Identifier")
         let done = DispatchSemaphore(value: 0)
         var result = Data()
@@ -114,7 +114,7 @@ final class SLMapTiles: NSObject {
             allowed = (resp as? HTTPURLResponse)?.value(forHTTPHeaderField: "Cache-Control") ?? ""
             done.signal()
         }.resume()
-        _ = done.wait(timeout: .now() + 6)
+        _ = done.wait(timeout: .now() + 2.5)
         lock.lock()
         if !result.isEmpty, token == session {
             failures = 0
