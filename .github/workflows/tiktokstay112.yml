@@ -1,5 +1,5 @@
 name: Build112 TikTok stays in the app
-# Build 112 TEST: TikTok page stays inside ScreenLink (no jump to the TikTok app) and shows sign-in windows. Run 1.
+# Build 112 TEST: TikTok page stays inside ScreenLink (no jump to the TikTok app) and shows sign-in windows. Run 2.
 on:
   push:
     branches: ['release/build112-tiktok-stay']
