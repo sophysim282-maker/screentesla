@@ -1,5 +1,5 @@
 name: Build107 video first
-# Build 107: video first (map downloads yield to the video) and proof lines in the car log. Includes build 106. Run 1.
+# Build 107: video first (map downloads yield to the video) and proof lines in the car log. Includes build 106. Run 2.
 on:
   push:
     branches: ['release/build107-video-first']
