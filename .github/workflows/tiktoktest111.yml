@@ -1,5 +1,5 @@
 name: Build111 TikTok test
-# Build 111 TEST: TikTok inside ScreenLink without screen recording (web view + AirPlay hand-over + plain-file playback on the car). Run 1.
+# Build 111 TEST: TikTok inside ScreenLink without screen recording (web view + AirPlay hand-over + plain-file playback on the car). Run 2.
 on:
   push:
     branches: ['release/build111-tiktok-test']
