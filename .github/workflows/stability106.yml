@@ -1,5 +1,5 @@
 name: Build106 status light and self-repair
-# Build 106: status light on Home, background self-repair, retry when the phone internet returns. Includes build 105. Run 1.
+# Build 106: status light on Home, background self-repair, retry when the phone internet returns. Includes build 105. Run 2.
 on:
   push:
     branches: ['release/build106-stability']
