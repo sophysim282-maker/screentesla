@@ -36,7 +36,7 @@ const flush=async()=>{for(let i=0;i<40;i++)await Promise.resolve();};
  // A partial JSON body must retain its deadline, so polling cannot hang forever.
  const original=scope.fetch;let bodyStarted=false;
  scope.fetch=async(_path,opts)=>({ok:true,json:()=>{bodyStarted=true;return new Promise((resolve,reject)=>opts.signal.addEventListener('abort',()=>reject(new DOMException('Body timed out','AbortError')),{once:true}));}});
- const before=timers.length;const pending=scope.test.raw('/media/state').then(()=>assert.fail('Expected body timeout'),e=>assert.equal(e.name,'AbortError'));await flush();assert(bodyStarted);const timeout=timers.slice(before).find(t=>t.ms===7000);assert(timeout&&!timeout.cleared);timeout.fn();await pending;scope.fetch=original;
+ const before=timers.length;const pending=scope.test.raw('/media/state').then(()=>assert.fail('Expected body timeout'),e=>assert.equal(e.name,'AbortError'));await flush();assert(bodyStarted);const timeout=timers.slice(before).find(t=>t.ms===4000);assert(timeout&&!timeout.cleared);timeout.fn();await pending;scope.fetch=original;
  const diagnostic=JSON.stringify(scope.ScreenLinkCanvasStatus());assert(!diagnostic.includes('private-proof-')&&!diagnostic.includes(saved.nonce));
  console.log('LIVE_RECONNECT_PASSED: stalled drawing + control outage retains buffered player; same-session recovery; authorization revocation; stored proof; back/forward restore; stale replies; body deadline; credential redaction.');
 })().catch(e=>{console.error(e);process.exit(1)});
