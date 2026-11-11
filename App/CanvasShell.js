@@ -51,17 +51,9 @@ function autoQualityStepDown(){
  carLogLine('auto quality: picture pieces arrive too slowly (last '+Math.round(last.fetchMs)+'ms for '+length.toFixed(1)+'s, only '+ready.toFixed(1)+'s ready). Stepping down from '+height+'p to '+lower+'p.');
  return true;
 }
-// Build 109: if the page has had no answer from the phone for 45 s and no picture has moved for 20 s,
-// load the page again (at most once every 2 minutes). A fresh page starts with fresh connections.
-let lastSelfRestart=0;try{lastSelfRestart=Number(sessionStorage.getItem('screenlink-self-restart'))||0;}catch{}
-// (A repeating setTimeout, not setInterval: the page must keep exactly one interval, the audio clock.)
-function selfRestartCheck(){
- try{setTimeout(selfRestartCheck,5000);}catch{}
- if(stopped||document.hidden||!lastSuccessAt)return;const now=Date.now();
- if(now-lastSuccessAt<45000||now-lastProgressAt<20000||now-lastSelfRestart<120000)return;
- lastSelfRestart=now;try{sessionStorage.setItem('screenlink-self-restart',String(now));}catch{}location.reload();
-}
-try{setTimeout(selfRestartCheck,5000);}catch{}let lastInternetBack=null;
+// Build 110: the build 109 page self-restart was removed; reloading forces new secure connections,
+// which is exactly what fails when the phone is slow to answer.
+let lastInternetBack=null;
 const sentCarEvents=new WeakSet();let carLogQueue=[],lastReportedPlaybackError=null,lastReportedConnectionError=null,lastCarSummaryAt=0,lastCarDecoder='';
 function carLogLine(text){carLogQueue.push(String(text).replace(/[\u0000-\u001f]/g,' ').slice(0,220));if(carLogQueue.length>6)carLogQueue.splice(0,carLogQueue.length-6);}
 // Build 107: facts that show what took the video's data away: is a map running on the car, how many
@@ -127,7 +119,7 @@ function screenState(meta){if((Number(meta.privacyRevision)||0)<minRevision)retu
  $('mapDetail').textContent='WebCodecs · '+(meta.framesDrawn||screen.framesDrawn)+' frames drawn · rotation '+(meta.orientation||1);}
 function hideLocal(message){screen.hide();mapCover.hidden=false;mapCover.textContent=message;$('privacyState').textContent=message;}
 function screenError(error){screenFault=true;hideLocal('Screen decoder stopped: '+error.message);$('mapDetail').textContent=error.message;ws?.close();}
-async function raw(path,options={}){/* Build 109: a stuck request is given up after 4 s (was 7 s) so the retry comes sooner. */const control=new AbortController(),timeout=setTimeout(()=>control.abort(),4000);lastRequestAt=Date.now();try{
+async function raw(path,options={}){/* Build 110: back to 7 s. Giving up after 4 s (build 109) made the car open more new secure connections while the phone was slow. */const control=new AbortController(),timeout=setTimeout(()=>control.abort(),7000);lastRequestAt=Date.now();try{
  // Build 83: a reused connection can be closed by the phone just as it is used
  // ("Failed to fetch"); retry such a network error once at once, as browsers do for GETs.
  let response;try{response=await fetch(path,{...options,cache:'no-store',signal:control.signal});}catch(error){if(!(error instanceof TypeError)||control.signal.aborted)throw error;response=await fetch(path,{...options,cache:'no-store',signal:control.signal});}if(!response.ok){const e=Error('HTTP '+response.status+' from '+path.split('?')[0]);e.status=response.status;throw e;}const result=await response.json();lastSuccessAt=Date.now();return result;}finally{clearTimeout(timeout);}}
@@ -229,7 +221,7 @@ window.addEventListener('pageshow',event=>{if(!event.persisted)return;setIdleArt
 function renderPerformance(){
  if(performanceFrozen||$('performancePanel').hidden)return;
  const profile=player?.performanceProfile?.()||previousPlaybackProfile;
- const lines=['Build: 0.20.72 / 109 · '+(activeEngine||requestedEngine)+' · '+(player?.videoAcceleration||requestedDecoder),'Playback: '+(player?.currentTime||0).toFixed(2)+' s','Page: '+(profile?.visibility||document.visibilityState||'unknown'),''];
+ const lines=['Build: 0.20.73 / 110 · '+(activeEngine||requestedEngine)+' · '+(player?.videoAcceleration||requestedDecoder),'Playback: '+(player?.currentTime||0).toFixed(2)+' s','Page: '+(profile?.visibility||document.visibilityState||'unknown'),''];
  const names=[['demuxMs','Demux ms'],['decoderWaitMs','Decoder feed wait ms'],['renderCallbackGapMs','Drawing callback gap ms'],['canvasDrawMs','Canvas draw call ms'],['videoQueueDepth','Pending decode requests']];
  for(const [key,label] of names){const m=profile?.metrics[key];lines.push(label+': '+(m?'mean '+m.mean.toFixed(2)+' | max '+m.max.toFixed(2)+' | n '+m.count:'no samples'));if(m)lines.push('  max at '+(m.maxAtMs/1000).toFixed(2)+'s, media '+m.mediaTime.toFixed(2)+'s');}
  lines.push('','Decode queue now: '+(profile?.videoQueueDepth||0),'Decoded frames queued: '+(profile?.framesQueued||0),'Video recoveries: '+(player?.stats.videoRecoveries||0),'Audio buffer underruns: '+(player?.stats.audioUnderruns||0));
@@ -250,7 +242,7 @@ async function retireOfflineUI(){
  }catch(error){lastConnectionError={message:'Rescue page setup: '+error.message,time:Date.now()};}
 }
 retireOfflineUI();
-self.ScreenLinkCanvasStatus=()=>({build:'0.20.72-109',engine:activeEngine||requestedEngine,videoDecoder:player?.videoAcceleration||null,connectionPhase,approvalPhase,phoneVolume,phoneEQ,phoneSettingsRevision,phonePlaybackRevision,volumeGain:player?.gain?.gain.value??null,eqLowGain:player?.low?.gain.value??null,minimalViewer:youtubeOnly&&!developerMode,lastRequestAt,lastSuccessAt,offlineUI:false,healthFailures,lastHealthyAt,reconnections,quality:$('quality').value,transportWaiting,decoderFaults,transportError:player?.lastTransportError||null,lastPlaybackError,lastConnectionError,recoveryAttempts:retryCount,mediaRunning:player?.running||false,mediaDuration:player?.duration||0,videoFramesQueued:player?.frames.length||0,audioPacketsQueued:player?.audio.length||0,secureContext:isSecureContext,connected,connectionPending:joining,viewerMode:youtubeOnly?'youtube':'split',screenFrames:screen.framesDrawn,screenHidden:screen.hold,screenQueue:screen.decoder?.decodeQueueSize||0,mediaEpoch,mediaPosition:player?.currentTime||0,mediaPaused:player?.paused??true,mediaWidth:$('mediaCanvas').width,mediaHeight:$('mediaCanvas').height,youtubeBufferSeconds:player?.bufferSeconds||0,encodedVideoLead:player?Math.max(0,player.preparedVideoEnd-player.currentTime):0,mediaStats:player?{...player.stats}:null,performance:player?.performanceProfile?.()||null,previousPlaybackProfile,playbackEvents:player?(player.playbackEvents||[]).map(e=>({...e})):[],segmentCache:player?.segmentCache?.size||0,audioSampleRate:player?.audioContext?.sampleRate||0,decodedAudioRate:player?.lastAudioSampleRate||player?.audio[0]?.sampleRate||0,segments:player?(player.segmentDiagnostics||[]).map(s=>({...s})):[],audioLead:player?.audioContext&&player.audioTail!==null?Math.max(0,player.audioTail-player.audioContext.currentTime):0,videoLead:player?Math.max(0,player.videoEnd-player.currentTime):0,audioState:audioContext?.state||'locked',audioNodes:player?.nodes.size||0,mediaError:player?.error?.message||'',socketOpen:ws?.readyState===WebSocket.OPEN});
+self.ScreenLinkCanvasStatus=()=>({build:'0.20.73-110',engine:activeEngine||requestedEngine,videoDecoder:player?.videoAcceleration||null,connectionPhase,approvalPhase,phoneVolume,phoneEQ,phoneSettingsRevision,phonePlaybackRevision,volumeGain:player?.gain?.gain.value??null,eqLowGain:player?.low?.gain.value??null,minimalViewer:youtubeOnly&&!developerMode,lastRequestAt,lastSuccessAt,offlineUI:false,healthFailures,lastHealthyAt,reconnections,quality:$('quality').value,transportWaiting,decoderFaults,transportError:player?.lastTransportError||null,lastPlaybackError,lastConnectionError,recoveryAttempts:retryCount,mediaRunning:player?.running||false,mediaDuration:player?.duration||0,videoFramesQueued:player?.frames.length||0,audioPacketsQueued:player?.audio.length||0,secureContext:isSecureContext,connected,connectionPending:joining,viewerMode:youtubeOnly?'youtube':'split',screenFrames:screen.framesDrawn,screenHidden:screen.hold,screenQueue:screen.decoder?.decodeQueueSize||0,mediaEpoch,mediaPosition:player?.currentTime||0,mediaPaused:player?.paused??true,mediaWidth:$('mediaCanvas').width,mediaHeight:$('mediaCanvas').height,youtubeBufferSeconds:player?.bufferSeconds||0,encodedVideoLead:player?Math.max(0,player.preparedVideoEnd-player.currentTime):0,mediaStats:player?{...player.stats}:null,performance:player?.performanceProfile?.()||null,previousPlaybackProfile,playbackEvents:player?(player.playbackEvents||[]).map(e=>({...e})):[],segmentCache:player?.segmentCache?.size||0,audioSampleRate:player?.audioContext?.sampleRate||0,decodedAudioRate:player?.lastAudioSampleRate||player?.audio[0]?.sampleRate||0,segments:player?(player.segmentDiagnostics||[]).map(s=>({...s})):[],audioLead:player?.audioContext&&player.audioTail!==null?Math.max(0,player.audioTail-player.audioContext.currentTime):0,videoLead:player?Math.max(0,player.videoEnd-player.currentTime):0,audioState:audioContext?.state||'locked',audioNodes:player?.nodes.size||0,mediaError:player?.error?.message||'',socketOpen:ws?.readyState===WebSocket.OPEN});
 for(const id of ['viewMode','quality','eq'])makeInline(id);
 function autoConnect(){if(!stopped&&!connected&&!joining)connect();if(!stopped)reconnectTimer=setTimeout(autoConnect,3000);}if(isSecureContext&&typeof VideoDecoder==='function')autoConnect();
 if(!isSecureContext||typeof VideoDecoder!=='function')status.textContent='This viewer needs HTTPS and WebCodecs support.';

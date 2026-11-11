@@ -616,7 +616,9 @@ static NSArray *txtStrings(const char *bytes,int length) {
         else{_socket=server;_httpAccepting=YES;listenSerial=++_httpListenSerial;}
     }
     if(context)SSL_CTX_up_ref(context);
-    dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY,0),^{
+    // Build 110: the loop that accepts the car's connections ran at low (utility) priority, which iOS
+    // slows down first for a background app. It now runs at the same priority as the request handlers.
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED,0),^{
         while(YES) {
             BOOL current;@synchronized(self){current=generation==self->_generation&&listenSerial==(context?self->_httpsListenSerial:self->_httpListenSerial);}if(!current)break;
             int client=accept(server,NULL,NULL);if(client<0){

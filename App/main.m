@@ -45,6 +45,7 @@ static void SLActivityFinish(void) {
 + (void)start;
 + (void)stop;
 + (NSString *)problem;
++ (void)setLog:(void (^)(NSString *))block;
 @end
 @interface Controller : UIViewController <NSNetServiceBrowserDelegate,UIDocumentPickerDelegate> { CVPixelBufferRef _lastPixel; }
 @property(nonatomic,strong) Receiver *receiver;
@@ -145,7 +146,8 @@ static void SLActivityFinish(void) {
         [owner append:@"BACKGROUND RUNTIME ENDED: receiver, viewer link and media session retained. iOS may suspend this app without PiP. Returning to ScreenLink resumes the existing receiver; Start is not required to rebuild it."];
         if(!owner.preview.active&&!owner.youtubePiP.active && UIApplication.sharedApplication.applicationState==UIApplicationStateBackground)[owner beginGrace];
     };
-    [self append:@"Version 0.20.72 / build 109: video stability. With Quality on Auto, when picture pieces arrive too slowly the video steps down by itself (1080p to 720p to 480p) instead of freezing; a quality you choose yourself is never changed. A stuck request is retried after 4 s (was 7 s). The car page loads itself again after 45 s without any answer. Maps stay closed as in build 108."];
+    [self append:@"Version 0.20.73 / build 110: finds and fights iOS pausing ScreenLink in the background. A one-second heartbeat notices when iOS paused or slowed the app (log: APP PAUSED BY iOS / BACKGROUND WORK SLOWED) and then starts a silent sound so iOS keeps the app running at full speed without PiP. The loop that accepts the car connections runs at normal priority. The two build 109 changes that forced new connections (4 s give-up, page reload) are removed. Maps stay closed."];
+    [self append:@"Earlier build 109: video stability. With Quality on Auto, when picture pieces arrive too slowly the video steps down by itself (1080p to 720p to 480p) instead of freezing; a quality you choose yourself is never changed. A stuck request is retried after 4 s (was 7 s). The car page loads itself again after 45 s without any answer. Maps stay closed as in build 108."];
     [self append:@"Earlier build 108: ALL MAP SYSTEMS CLOSED. No map screen on the phone, no map on the car, and the car page asks the phone for no map data. Only the video runs. Everything else is as in build 107."];
     [self append:@"Earlier build 107: video first. The car map can no longer take the connections the video needs: one map download at a time while a video plays, none while a video is starting or short of picture, and the phone gives up on a slow map square after 2 s. The CAR PLAYER summary now also says whether a map is running and how fast the last picture piece downloaded. Player and quality choices unchanged."];
     [self append:@"Earlier build 106: stability. (A) Status light on Home: green Car connected, yellow or red with the one thing to do (hotspot, 3.3.3.3 link, phone internet, phone hot, car not opened). (B) Self-repair every 5 s also in the background: dead listeners are rebound and the 3.3.3.3 link is reconnected. (D) When the phone internet returns, the car retries the video at once. 4K and 1440p choices unchanged. Player unchanged."];
@@ -468,7 +470,7 @@ static void SLActivityFinish(void) {
     if([self.receiver start]){[NSUserDefaults.standardUserDefaults setBool:YES forKey:@"receiverArmed"];UIApplication.sharedApplication.idleTimerDisabled=YES;[self links];
         [self startHealthWatch];
         // Build 105: stay awake in the background without PiP (location keep-alive, blue mark).
-        Class awake=NSClassFromString(@"SLKeepAwake");if(awake){[(id<SLKeepAwakeAPI>)awake start];if(!self.keepAwakeLogged){self.keepAwakeLogged=YES;[self append:@"KEEP AWAKE ON: while sharing, ScreenLink uses location in the background (blue mark at the top of the iPhone) so iOS does not put it to sleep when there is no PiP window. If iOS asks, allow location While Using."];
+        Class awake=NSClassFromString(@"SLKeepAwake");if(awake){{__weak typeof(self) weakLog=self;[(id<SLKeepAwakeAPI>)awake setLog:^(NSString *line){dispatch_async(dispatch_get_main_queue(),^{[weakLog append:line];});}];}[(id<SLKeepAwakeAPI>)awake start];if(!self.keepAwakeLogged){self.keepAwakeLogged=YES;[self append:@"KEEP AWAKE ON: while sharing, ScreenLink uses location in the background (blue mark at the top of the iPhone) so iOS does not put it to sleep when there is no PiP window. If iOS asks, allow location While Using."];
             dispatch_after(dispatch_time(DISPATCH_TIME_NOW,8*NSEC_PER_SEC),dispatch_get_main_queue(),^{NSString *problem=[(id<SLKeepAwakeAPI>)awake problem];if([problem isKindOfClass:NSString.class]&&problem.length)[self append:[@"KEEP AWAKE NOT ACTIVE: " stringByAppendingString:problem]];});}}
     }
 }
