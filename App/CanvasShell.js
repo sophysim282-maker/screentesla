@@ -54,11 +54,14 @@ function autoQualityStepDown(){
 // Build 109: if the page has had no answer from the phone for 45 s and no picture has moved for 20 s,
 // load the page again (at most once every 2 minutes). A fresh page starts with fresh connections.
 let lastSelfRestart=0;try{lastSelfRestart=Number(sessionStorage.getItem('screenlink-self-restart'))||0;}catch{}
-if(typeof setInterval==='function')setInterval(()=>{
+// (A repeating setTimeout, not setInterval: the page must keep exactly one interval, the audio clock.)
+function selfRestartCheck(){
+ try{setTimeout(selfRestartCheck,5000);}catch{}
  if(stopped||document.hidden||!lastSuccessAt)return;const now=Date.now();
  if(now-lastSuccessAt<45000||now-lastProgressAt<20000||now-lastSelfRestart<120000)return;
  lastSelfRestart=now;try{sessionStorage.setItem('screenlink-self-restart',String(now));}catch{}location.reload();
-},5000);let lastInternetBack=null;
+}
+try{setTimeout(selfRestartCheck,5000);}catch{}let lastInternetBack=null;
 const sentCarEvents=new WeakSet();let carLogQueue=[],lastReportedPlaybackError=null,lastReportedConnectionError=null,lastCarSummaryAt=0,lastCarDecoder='';
 function carLogLine(text){carLogQueue.push(String(text).replace(/[\u0000-\u001f]/g,' ').slice(0,220));if(carLogQueue.length>6)carLogQueue.splice(0,carLogQueue.length-6);}
 // Build 107: facts that show what took the video's data away: is a map running on the car, how many

@@ -1,5 +1,5 @@
 name: Build109 stable video
-# Build 109: automatic quality step-down, faster retry, page self-restart; maps stay closed. Includes build 108. Run 2.
+# Build 109: automatic quality step-down, faster retry, page self-restart; maps stay closed. Includes build 108. Run 3.
 on:
   push:
     branches: ['release/build109-stable-video']
