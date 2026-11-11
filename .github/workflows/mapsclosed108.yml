@@ -1,5 +1,5 @@
 name: Build108 maps closed
-# Build 108: all map systems closed (video only) at the user request. Includes build 107. Run 1.
+# Build 108: all map systems closed (video only) at the user request. Includes build 107. Run 2.
 on:
   push:
     branches: ['release/build108-maps-closed']
