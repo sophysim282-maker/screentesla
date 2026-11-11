@@ -1,5 +1,5 @@
 name: Build110 awake proof
-# Build 110: heartbeat that proves iOS pausing the app, silent-sound keep-alive, listener priority; removes two build 109 changes. Run 1.
+# Build 110: heartbeat that proves iOS pausing the app, silent-sound keep-alive, listener priority; removes two build 109 changes. Run 2.
 on:
   push:
     branches: ['release/build110-awake-proof']
