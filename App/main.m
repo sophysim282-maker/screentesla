@@ -151,7 +151,8 @@ static void SLActivityFinish(void) {
         [owner append:@"BACKGROUND RUNTIME ENDED: receiver, viewer link and media session retained. iOS may suspend this app without PiP. Returning to ScreenLink resumes the existing receiver; Start is not required to rebuild it."];
         if(!owner.preview.active&&!owner.youtubePiP.active && UIApplication.sharedApplication.applicationState==UIApplicationStateBackground)[owner beginGrace];
     };
-    [self append:@"Version 0.20.74 / build 111 TEST: TikTok inside ScreenLink without screen recording. Tap the Maps button on Home, then Open TikTok (test). Log in, play a video, tap Send to car or the AirPlay button and choose ScreenLink VPN Phone. Every step writes a TIKTOK TEST line here. It may not work; that is what this build finds out. Everything else is build 110."];
+    [self append:@"Version 0.20.75 / build 112 TEST: TikTok stays inside ScreenLink. Taps no longer jump to the TikTok app or the App Store, and sign-in windows (for example Continue with Google) open inside ScreenLink. If Google refuses to sign in inside an app, use email or username with a password. Everything else is build 111."];
+    [self append:@"Earlier build 111 TEST: TikTok inside ScreenLink without screen recording. Tap the Maps button on Home, then Open TikTok (test). Log in, play a video, tap Send to car or the AirPlay button and choose ScreenLink VPN Phone. Every step writes a TIKTOK TEST line here. It may not work; that is what this build finds out. Everything else is build 110."];
     [self append:@"Earlier build 110: finds and fights iOS pausing ScreenLink in the background. A one-second heartbeat notices when iOS paused or slowed the app (log: APP PAUSED BY iOS / BACKGROUND WORK SLOWED) and then starts a silent sound so iOS keeps the app running at full speed without PiP. The loop that accepts the car connections runs at normal priority. The two build 109 changes that forced new connections (4 s give-up, page reload) are removed. Maps stay closed."];
     [self append:@"Earlier build 109: video stability. With Quality on Auto, when picture pieces arrive too slowly the video steps down by itself (1080p to 720p to 480p) instead of freezing; a quality you choose yourself is never changed. A stuck request is retried after 4 s (was 7 s). The car page loads itself again after 45 s without any answer. Maps stay closed as in build 108."];
     [self append:@"Earlier build 108: ALL MAP SYSTEMS CLOSED. No map screen on the phone, no map on the car, and the car page asks the phone for no map data. Only the video runs. Everything else is as in build 107."];
@@ -221,7 +222,7 @@ static void SLActivityFinish(void) {
 }
 - (void)showMaps {
  // Build 108: all map systems are closed at the user's request (video only). Remove these two lines to open them again.
- {UIAlertController *closed=[UIAlertController alertControllerWithTitle:@"Maps are closed" message:@"All map systems are turned off so only the video runs.\n\nBuild 111 test: TikTok inside ScreenLink, no screen recording." preferredStyle:UIAlertControllerStyleAlert];
+ {UIAlertController *closed=[UIAlertController alertControllerWithTitle:@"Maps are closed" message:@"All map systems are turned off so only the video runs.\n\nTikTok test: TikTok inside ScreenLink, no screen recording." preferredStyle:UIAlertControllerStyleAlert];
   __weak typeof(self) weakSelf=self;
   [closed addAction:[UIAlertAction actionWithTitle:@"Open TikTok (test)" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action){typeof(self) owner=weakSelf;Class launcher=NSClassFromString(@"SLTikTokLauncher");if(!owner||!launcher)return;
    [(id<SLTikTokLauncherAPI>)launcher setLog:^(NSString *line){dispatch_async(dispatch_get_main_queue(),^{[weakSelf append:line];});}];

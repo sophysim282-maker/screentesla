@@ -43,12 +43,16 @@ final class SLTikTokLauncher: NSObject {
     }
 }
 
-final class TikTokViewController: UIViewController, WKNavigationDelegate {
+final class TikTokViewController: UIViewController, WKNavigationDelegate, WKUIDelegate {
     private static let agent = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1"
     private var web: WKWebView!
     private let status = UILabel()
     private var timer: Timer?
     private var lastState = ""
+    // Build 112: a sign-in window opened by the page (for example "Continue with Google").
+    private var popup: WKWebView?
+    private var popupBox: UIView?
+    private var blockedLog = Date.distantPast
 
     // Marks every video on the page as allowed for AirPlay and reports what kind of video is playing.
     private static let probe = """
@@ -69,6 +73,7 @@ final class TikTokViewController: UIViewController, WKNavigationDelegate {
         web = WKWebView(frame: .zero, configuration: config)
         web.customUserAgent = Self.agent
         web.navigationDelegate = self
+        web.uiDelegate = self
         web.allowsBackForwardNavigationGestures = true
 
         let close = UIButton(type: .system)
@@ -98,7 +103,7 @@ final class TikTokViewController: UIViewController, WKNavigationDelegate {
         status.font = .systemFont(ofSize: 13)
         status.numberOfLines = 2
         status.textAlignment = .center
-        status.text = "Log in, play a video, then tap Send to car or the AirPlay button and choose ScreenLink VPN Phone."
+        status.text = "Log in, play a video, then tap Send to car and choose ScreenLink VPN Phone. If Google sign-in is refused, use email or username with a password."
         let stack = UIStackView(arrangedSubviews: [bar, web, status])
         stack.axis = .vertical
         stack.spacing = 6
@@ -129,6 +134,79 @@ final class TikTokViewController: UIViewController, WKNavigationDelegate {
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) { shareLogin() }
+
+    /// Build 112: stay inside ScreenLink. A tap must never jump to the TikTok app or the App Store.
+    func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction,
+                 decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+        guard let url = navigationAction.request.url, let scheme = url.scheme?.lowercased() else { decisionHandler(.cancel); return }
+        let host = url.host?.lowercased() ?? ""
+        let leavesApp = !["http", "https", "about", "blob", "data"].contains(scheme)
+            || host.hasSuffix("onelink.me") || host.hasSuffix("app.link") || host == "apps.apple.com" || host == "itunes.apple.com"
+        if leavesApp {
+            if Date().timeIntervalSince(blockedLog) > 5 {
+                blockedLog = Date()
+                SLTikTokLauncher.log?("TIKTOK TEST: stopped a jump out of ScreenLink (\(scheme)://\(host)).")
+                status.text = "Stayed in ScreenLink (the page tried to open the TikTok app)."
+            }
+            decisionHandler(.cancel)
+            return
+        }
+        // A tapped link to tiktok.com lets iOS open the TikTok app instead (a "universal link").
+        // Cancelling the tap and loading the same address ourselves keeps it in this page.
+        if navigationAction.navigationType == .linkActivated, navigationAction.targetFrame?.isMainFrame == true {
+            decisionHandler(.cancel)
+            webView.load(navigationAction.request)
+            return
+        }
+        decisionHandler(.allow)
+    }
+
+    /// The page asks for a new window. Sign-in buttons do this: show it on top, inside ScreenLink.
+    func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration,
+                 for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
+        closePopup()
+        let box = UIView()
+        box.backgroundColor = .black
+        box.translatesAutoresizingMaskIntoConstraints = false
+        let done = UIButton(type: .system)
+        done.setTitle("✕ Close sign-in window", for: .normal)
+        done.titleLabel?.font = .boldSystemFont(ofSize: 16)
+        done.addTarget(self, action: #selector(closePopup), for: .touchUpInside)
+        done.translatesAutoresizingMaskIntoConstraints = false
+        let made = WKWebView(frame: .zero, configuration: configuration)   // this configuration keeps the link to the page that opened it
+        made.customUserAgent = Self.agent
+        made.navigationDelegate = self
+        made.uiDelegate = self
+        made.translatesAutoresizingMaskIntoConstraints = false
+        box.addSubview(done)
+        box.addSubview(made)
+        view.addSubview(box)
+        let guide = view.safeAreaLayoutGuide
+        NSLayoutConstraint.activate([
+            box.topAnchor.constraint(equalTo: view.topAnchor), box.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            box.leadingAnchor.constraint(equalTo: view.leadingAnchor), box.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            done.topAnchor.constraint(equalTo: guide.topAnchor, constant: 4), done.leadingAnchor.constraint(equalTo: guide.leadingAnchor, constant: 12),
+            done.heightAnchor.constraint(equalToConstant: 40),
+            made.topAnchor.constraint(equalTo: done.bottomAnchor, constant: 4), made.bottomAnchor.constraint(equalTo: guide.bottomAnchor),
+            made.leadingAnchor.constraint(equalTo: guide.leadingAnchor), made.trailingAnchor.constraint(equalTo: guide.trailingAnchor),
+        ])
+        popup = made
+        popupBox = box
+        SLTikTokLauncher.log?("TIKTOK TEST: the page opened a sign-in window (\(navigationAction.request.url?.host ?? "?")). Shown inside ScreenLink.")
+        return made
+    }
+
+    func webViewDidClose(_ webView: WKWebView) {
+        if webView === popup { closePopup() }
+    }
+
+    @objc private func closePopup() {
+        guard popup != nil || popupBox != nil else { return }
+        popupBox?.removeFromSuperview()
+        popupBox = nil
+        popup = nil
+        shareLogin()
+    }
 
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
         SLTikTokLauncher.log?("TIKTOK TEST: page did not load: \(error.localizedDescription)")
