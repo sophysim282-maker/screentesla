@@ -53,6 +53,9 @@ final class TikTokViewController: UIViewController, WKNavigationDelegate, WKUIDe
     private var popup: WKWebView?
     private var popupBox: UIView?
     private var blockedLog = Date.distantPast
+    private var autoOn = UserDefaults.standard.bool(forKey: "tiktokAuto")
+    private let autoButton = UIButton(type: .system)
+    private var lastMoved = 0
 
     // Marks every video on the page as allowed for AirPlay and reports what kind of video is playing.
     private static let probe = """
@@ -63,10 +66,30 @@ final class TikTokViewController: UIViewController, WKNavigationDelegate, WKUIDe
     return kind+'|'+(best.paused?'paused':'playing')+'|'+(best.webkitCurrentPlaybackTargetIsWireless?'airplay':'local')+'|'+(best.webkitShowPlaybackTargetPicker?'picker':'nopicker');})()
     """
 
+
+    // Build 113: runs inside the TikTok page. (1) Takes away the "Open app" asking: presses "Not now"
+    // on such boxes and hides small "Open app" buttons. (2) Auto scroll: when the video in the middle
+    // of the screen ends or starts over, moves to the next one.
+    private static let helper = """
+    (function(){if(window.__slTik)return;var S=window.__slTik={auto:false,last:null,lastT:0,since:Date.now(),nextAt:0,moved:0,hidden:0};
+    function center(){var vs=[].slice.call(document.querySelectorAll('video')),mid=innerHeight/2,best=null,bd=1e9;vs.forEach(function(v){var r=v.getBoundingClientRect();if(r.height<50)return;var d=Math.abs((r.top+r.bottom)/2-mid);if(d<bd){bd=d;best=v;}});return best;}
+    function scroller(el){for(var n=el;n&&n!==document.body&&n!==document.documentElement;n=n.parentElement){var st=getComputedStyle(n);if(/(auto|scroll)/.test(st.overflowY)&&n.scrollHeight>n.clientHeight+80)return n;}return null;}
+    S.next=function(){var v=center(),sc=v&&scroller(v),h=sc?sc.clientHeight:innerHeight;try{(sc||window).scrollBy({top:h,behavior:'smooth'});}catch(e){(sc||window).scrollBy(0,h);}S.since=Date.now();S.moved++;};
+    function nag(){var no=/^(not now|maybe later|continue on web|continue in browser|stay on web|no thanks|not interested)$/i,ask=/open (the )?(tiktok|app)|get (the )?(tiktok )?app|tiktok app|in the app/i;
+     [].slice.call(document.querySelectorAll('button,[role=button],a')).forEach(function(b){var t=(b.innerText||'').trim();if(!t||t.length>30||!no.test(t))return;var r=b.getBoundingClientRect();if(!r.width||!r.height)return;
+      var box=b.closest('[role=dialog],[class*=odal],[class*=opup],[class*=heet],[class*=anner],[class*=rawer]');if(box&&ask.test(box.innerText||'')){b.click();S.hidden++;}});
+     var open=/^(open app|open tiktok|open tiktok app|get app|get the app|get tiktok app|open in app|use app|use the app|watch in app)$/i;
+     [].slice.call(document.querySelectorAll('a,button,[role=button],div,span')).forEach(function(e){if(e.__slHid||e.children.length>3)return;var t=(e.innerText||'').trim();if(!t||t.length>24||!open.test(t))return;var r=e.getBoundingClientRect();if(r.height&&r.height<140){e.style.setProperty('display','none','important');e.__slHid=1;S.hidden++;}});}
+    setInterval(function(){try{nag();}catch(e){}if(!S.auto)return;var v=center();if(!v)return;if(v!==S.last){S.last=v;S.lastT=0;S.since=Date.now();return;}
+     var t=v.currentTime||0,d=v.duration||0,wrapped=S.lastT>1&&t<S.lastT-1,ended=d>0&&t>=d-0.35,waited=(Date.now()-S.since)/1000;S.lastT=t;if(Date.now()<S.nextAt)return;
+     if(wrapped||ended||(d>0&&waited>d+4)||(!(d>0)&&waited>60)){S.nextAt=Date.now()+2500;S.lastT=0;S.next();}},400);})();
+    """
+
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .black
         let config = WKWebViewConfiguration()
+        config.userContentController.addUserScript(WKUserScript(source: Self.helper, injectionTime: .atDocumentEnd, forMainFrameOnly: true))
         config.allowsInlineMediaPlayback = true
         config.allowsAirPlayForMediaPlayback = true
         config.mediaTypesRequiringUserActionForPlayback = []
@@ -81,7 +104,7 @@ final class TikTokViewController: UIViewController, WKNavigationDelegate, WKUIDe
         close.titleLabel?.font = .boldSystemFont(ofSize: 16)
         close.addTarget(self, action: #selector(closeTapped), for: .touchUpInside)
         let title = UILabel()
-        title.text = "TikTok (test)"
+        title.text = "TikTok"
         title.textColor = .white
         title.font = .boldSystemFont(ofSize: 16)
         title.textAlignment = .center
@@ -95,7 +118,10 @@ final class TikTokViewController: UIViewController, WKNavigationDelegate, WKUIDe
         send.setTitle("Send to car", for: .normal)
         send.titleLabel?.font = .boldSystemFont(ofSize: 16)
         send.addTarget(self, action: #selector(sendTapped), for: .touchUpInside)
-        let bar = UIStackView(arrangedSubviews: [close, title, send, route])
+        autoButton.titleLabel?.font = .boldSystemFont(ofSize: 15)
+        autoButton.addTarget(self, action: #selector(autoTapped), for: .touchUpInside)
+        showAuto()
+        let bar = UIStackView(arrangedSubviews: [close, title, autoButton, send, route])
         bar.axis = .horizontal
         bar.spacing = 10
         bar.alignment = .center
@@ -226,7 +252,35 @@ final class TikTokViewController: UIViewController, WKNavigationDelegate, WKUIDe
         }
     }
 
+    private func showAuto() {
+        autoButton.setTitle(autoOn ? "Auto ON" : "Auto off", for: .normal)
+        autoButton.setTitleColor(autoOn ? .systemGreen : .lightGray, for: .normal)
+    }
+
+    @objc private func autoTapped() {
+        autoOn.toggle()
+        UserDefaults.standard.set(autoOn, forKey: "tiktokAuto")
+        showAuto()
+        applyHelper()
+        status.text = autoOn ? "Auto scroll ON: the next video starts when this one ends." : "Auto scroll off."
+        SLTikTokLauncher.log?("TIKTOK TEST: auto scroll \(autoOn ? "ON" : "off").")
+    }
+
+    /// Keeps the page helper installed (TikTok changes pages without reloading) and in the chosen mode.
+    private func applyHelper() {
+        let js = Self.helper + ";window.__slTik.auto=\(autoOn ? "true" : "false");window.__slTik.moved+'|'+window.__slTik.hidden"
+        web.evaluateJavaScript(js) { [weak self] result, _ in
+            guard let self, let text = result as? String else { return }
+            let moved = Int(text.split(separator: "|").first ?? "") ?? 0
+            if moved != self.lastMoved {
+                self.lastMoved = moved
+                SLTikTokLauncher.log?("TIKTOK TEST: auto scroll moved to the next video (\(moved) so far).")
+            }
+        }
+    }
+
     private func check(announce: Bool) {
+        applyHelper()
         web.evaluateJavaScript(Self.probe) { [weak self] result, _ in
             guard let self else { return }
             let state = result as? String ?? "none"
