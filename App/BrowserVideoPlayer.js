@@ -20,8 +20,8 @@ function chooseLevel(levels,quality='auto'){
 
 class BrowserVideoPlayer{
  static supported(){return !!(self.Hls&&self.Hls.isSupported());}
- constructor(canvas,{onerror=()=>{},quality='auto',audioContext=null}={}){
-  this.canvas=canvas;this.ctx=canvas.getContext('2d',{alpha:false});this.onerror=onerror;this.quality=quality;this.audioContext=audioContext;
+ constructor(canvas,{onerror=()=>{},quality='auto',audioContext=null,file=false}={}){
+  this.file=!!file;this.canvas=canvas;this.ctx=canvas.getContext('2d',{alpha:false});this.onerror=onerror;this.quality=quality;this.audioContext=audioContext;
   this.engine='browser';this.closed=false;this.error=null;this.lastTransportError=null;this.hls=null;this.recoveries=0;this.selectedHeight=0;this.offeredHeights=[];
   this.stats={drawn:0,videoRecoveries:0,audioUnderruns:0,stalls:0,hlsErrors:0,dropped:0};
   // Fields the website status report reads from the WebCodecs player.
@@ -48,6 +48,9 @@ class BrowserVideoPlayer{
    const finish=error=>{if(settled)return;settled=true;clearTimeout(timer);video.removeEventListener('loadeddata',ready);error?reject(error):resolve();};
    const ready=()=>finish();
    const timer=setTimeout(()=>finish(Object.assign(Error('Video did not start within 20 seconds'),{kind:'transport'})),20000);
+   // Build 111 (TikTok test): one plain video file instead of a playlist. The browser plays it by itself.
+   if(this.file){video.addEventListener('loadeddata',ready);video.addEventListener('error',()=>{if(this.closed)return;const error=Error('Video file could not be played (media error '+(video.error?.code||0)+')');this.error=error;if(settled)this.onerror(error);else finish(error);});
+    video.addEventListener('loadedmetadata',()=>{this.selectedHeight=video.videoHeight||0;this.offeredHeights=this.selectedHeight?[this.selectedHeight]:[];if(start>0){try{video.currentTime=start;}catch{}}},{once:true});video.src=url;video.load();return;}
    const hls=this.hls=new Hls({maxBufferLength:20,maxMaxBufferLength:40,backBufferLength:15,capLevelToPlayerSize:false,autoStartLoad:false,startPosition:start>0?start:-1});
    hls.on(Hls.Events.MANIFEST_PARSED,()=>{if(this.hls!==hls)return;
     this.offeredHeights=hls.levels.map(height).filter(Boolean);

@@ -1,9 +1,12 @@
-# Handoff for the next Claude session (written 2026-11-10, after build 110)
+# Handoff for the next Claude session (written 2026-11-10, after build 111)
 
 Read this first. It replaces reading the old 400k-token conversation.
 
 ## WHERE WE ARE NOW (read this part first)
-Latest build sent to the user: **110 (0.20.73)**, branch `release/build110-awake-proof`
+Also sent: **111 TEST (0.20.74)**, branch `release/build111-tiktok-test`: TikTok inside the app
+without screen recording (`BUILD111.md`). An experiment; read the `TIKTOK TEST:` log lines.
+The user refuses screen recording / mirroring for TikTok.
+Latest stability build sent to the user: **110 (0.20.73)**, branch `release/build110-awake-proof`
 (`BUILD110.md`): heartbeat that proves iOS pausing the app + silent-sound keep-alive + listener
 priority; removes 109's 4 s deadline and page reload. **The map-steals-connections theory was
 wrong for the main failure: build 109 (maps closed, fast internet) still lost the phone for up to

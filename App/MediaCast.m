@@ -29,6 +29,12 @@ static NSDictionary *readPlist(NSData *data){id object=[NSPropertyListSerializat
 static NSString *header(http_request_t *r,const char *key){const char *v=http_request_get_header(r,key);return v?[NSString stringWithUTF8String:v]:@"";}
 static BOOL webURL(NSURL *url){return [@[@"http",@"https"] containsObject:url.scheme.lowercaseString] && url.host.length && !url.user.length && !url.password.length;}
 static BOOL virtualURL(NSURL *url){return [url.scheme.lowercaseString isEqual:@"mlhls"] && url.host.length;}
+// Build 111 (TikTok test): YouTube hands over a playlist ("hls"). A web page video is usually one
+// plain file ("file"); the car page plays that with the browser's own video element.
+@protocol SLMediaHeadersAPI
++ (NSDictionary<NSString *,NSString *> *)headersForHost:(NSString *)host;
+@end
+static NSString *SLMediaKind(NSString *location){NSURL *url=location.length?[NSURL URLWithString:location]:nil;if(!url||virtualURL(url))return @"hls";return [url.path.lowercaseString containsString:@".m3u8"]?@"hls":@"file";}
 static BOOL stablePlaylist(NSData *data){NSString *text=[[NSString alloc]initWithData:data encoding:NSUTF8StringEncoding];return [text hasPrefix:@"#EXTM3U"] && ([text containsString:@"#EXT-X-ENDLIST"] || [text containsString:@"#EXT-X-STREAM-INF:"] || [text containsString:@"#EXT-X-I-FRAME-STREAM-INF:"]);}
 static BOOL sendBytes(int fd,NSData *data){const char *p=data.bytes;NSUInteger n=data.length;while(n){ssize_t k=send(fd,p,n,0);if(k<0 && errno==EINTR)continue;if(k<=0)return NO;p+=k;n-=(NSUInteger)k;}return YES;}
 @implementation MediaCast
@@ -127,7 +133,7 @@ static BOOL sendBytes(int fd,NSData *data){const char *p=data.bytes;NSUInteger n
         if(expired){[self log:@"MEDIA: a playlist request timed out; retaining the current session for retry."];[self drivePrefetch];}
     });
 }
-- (NSDictionary *)state{[_ready lock];NSString *path=_primary?[self registerURL:_primary]:nil;NSDictionary *state=@{@"receiverProfile":@"AppleTV3,2",@"sourceHeights":_sourceHeights?:@[],@"active":@(_active),@"ready":@(_readyToPlay),@"epoch":_epoch,@"url":path?:@"",@"command":@(_command),@"commandKind":_commandKind?:@"rate",@"seek":@(_seekPosition),@"paused":@(_paused),@"position":@(_position),@"duration":@(_duration),@"start":@(_start),@"fraction":@(_fraction),@"error":_error?:@""};[_ready unlock];return state;}
+- (NSDictionary *)state{[_ready lock];NSString *path=_primary?[self registerURL:_primary]:nil;NSDictionary *state=@{@"receiverProfile":@"AppleTV3,2",@"sourceHeights":_sourceHeights?:@[],@"active":@(_active),@"ready":@(_readyToPlay),@"epoch":_epoch,@"url":path?:@"",@"command":@(_command),@"commandKind":_commandKind?:@"rate",@"seek":@(_seekPosition),@"paused":@(_paused),@"position":@(_position),@"duration":@(_duration),@"start":@(_start),@"fraction":@(_fraction),@"error":_error?:@"",@"kind":SLMediaKind(_primary)};[_ready unlock];return state;}
 - (void)report:(NSDictionary *)report{
     NSString *event=nil,*session=nil,*newError=nil;[_ready lock];
     if(![report[@"epoch"] isEqual:_epoch] || !_active){[_ready unlock];return;}
@@ -182,6 +188,7 @@ static BOOL sendBytes(int fd,NSData *data){const char *p=data.bytes;NSUInteger n
         [_ready lock];_active=YES;_readyToPlay=NO;_paused=NO;_position=0;_duration=0;_heartbeat=0;_rate=1;_command=0;_commandKind=@"rate";_seekPosition=0;_start=MAX(0,[plist[@"Start-Position-Seconds"] doubleValue]);_fraction=MAX(0,MIN(1,[plist[@"Start-Position"] doubleValue]));_error=nil;_eventState=@"loading";_appleSession=session;_sourceHeights=@[];_primary=target.absoluteString;_uuid=[plist[@"uuid"] isKindOfClass:NSString.class]?plist[@"uuid"]:NSUUID.UUID.UUIDString;_epoch=NSUUID.UUID.UUIDString;[_resources removeAllObjects];[_identifiers removeAllObjects];[_playlistLinks removeAllObjects];[_playlistTimes removeAllObjects];[_inflight removeAllObjects];[_retiredLinks removeAllObjects];[_selectedPlaylists removeAllObjects];[_cache removeAllObjects];[_pending removeAllObjects];[_prefetch removeAllObjects];[_ready broadcast];[_ready unlock];
         [self reply:response status:200 type:nil data:nil];
         [self log:@"MEDIA PLAY REQUEST: native video-only handoff received. Open the hotspot viewer; its video player will show only the playing media."];
+        if(!virtualURL(target))[self log:[NSString stringWithFormat:@"MEDIA SOURCE: a web video from %@ was handed over, kind %@ (not YouTube's playlist hand-over).",target.host?:@"?",SLMediaKind(target.absoluteString)]];
         [self sendEvent:@{@"category":@"video",@"state":@"loading"} session:session];if(virtualURL(target))[self requestURL:target.absoluteString];return YES;
     }
     if([path isEqual:@"/action"] && [method isEqual:@"POST"]){
@@ -238,6 +245,9 @@ static BOOL sendBytes(int fd,NSData *data){const char *p=data.bytes;NSUInteger n
         [_ready unlock];mime=@"application/vnd.apple.mpegurl";
     }else if(webURL(url)){
         NSMutableURLRequest *request=[NSMutableURLRequest requestWithURL:url];[request setValue:@"AppleCoreMedia/1.0 ScreenLink" forHTTPHeaderField:@"User-Agent"];
+        // Build 111 (TikTok test): TikTok only answers downloads that carry its page's referer, browser name and login.
+        // SLMediaHeaders returns nothing for every other host, so YouTube downloads are exactly as before.
+        {Class provider=NSClassFromString(@"SLMediaHeaders");NSDictionary *more=provider&&url.host.length?[(id<SLMediaHeadersAPI>)provider headersForHost:url.host]:nil;if([more isKindOfClass:NSDictionary.class])for(NSString *name in more)if([more[name] isKindOfClass:NSString.class])[request setValue:more[name] forHTTPHeaderField:name];}
         if(range.length<128 && [range hasPrefix:@"bytes="] && [range rangeOfCharacterFromSet:NSCharacterSet.newlineCharacterSet].location==NSNotFound)[request setValue:range forHTTPHeaderField:@"Range"];
 #if SL_BROADCAST_EXTENSION
         NSUInteger budget=6*1024*1024;
