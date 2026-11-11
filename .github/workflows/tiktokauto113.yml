@@ -1,5 +1,5 @@
 name: Build113 TikTok auto scroll
-# Build 113 TEST: TikTok page hides the open-app asking and has auto scroll to the next video. Run 1.
+# Build 113 TEST: TikTok page hides the open-app asking and has auto scroll to the next video. Run 2.
 on:
   push:
     branches: ['release/build113-tiktok-auto']
