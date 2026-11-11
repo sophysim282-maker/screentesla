@@ -227,6 +227,13 @@ static NSString *slNetworkSnapshot(void){
         if(!strncmp(p->ifa_name,"bridge",6)){char t[INET_ADDRSTRLEN]={0};inet_ntop(AF_INET,&((struct sockaddr_in *)p->ifa_addr)->sin_addr,t,sizeof t);[hotspot addObject:[NSString stringWithFormat:@"%s %s",p->ifa_name,t]];}}freeifaddrs(head);}
     return [NSString stringWithFormat:@"Personal Hotspot: %@. VPN address 3.3.3.3: %@.",hotspot.count?[@"ON (" stringByAppendingString:[[hotspot componentsJoinedByString:@", "] stringByAppendingString:@")"]]:@"OFF or no car joined",alias?@"present":@"MISSING"];
 }
+- (NSDictionary *)linkHealth {
+    struct ifaddrs *head=NULL;BOOL hotspot=NO,alias=NO;
+    if(getifaddrs(&head)==0){for(struct ifaddrs *p=head;p;p=p->ifa_next){if(!p->ifa_addr||p->ifa_addr->sa_family!=AF_INET)continue;
+        if(ntohl(((struct sockaddr_in *)p->ifa_addr)->sin_addr.s_addr)==0x03030303u)alias=YES;if(!strncmp(p->ifa_name,"bridge",6))hotspot=YES;}freeifaddrs(head);}
+    pthread_mutex_lock(&webWatchLock);double last=webWatch.lastSecure;pthread_mutex_unlock(&webWatchLock);
+    return @{@"hotspot":@(hotspot),@"vpn":@(alias),@"carSeconds":@(last>0?NSProcessInfo.processInfo.systemUptime-last:-1)};
+}
 - (void)resetWebWatch {pthread_mutex_lock(&webWatchLock);memset(&webWatch,0,sizeof webWatch);webBusyLogAt=webTLSLogAt=webHostLogAt=0;pthread_mutex_unlock(&webWatchLock);}
 - (void)startWebWatchTimer {
     static dispatch_source_t timer;static dispatch_once_t once;webWatchOwner=self;
@@ -296,7 +303,7 @@ _decodeQueue=dispatch_queue_create("ScreenLink.decode",DISPATCH_QUEUE_SERIAL);_j
             if(current){[owner resetVideo];[owner emit:@"Video processing overloaded. Compressed history and decoder reset; waiting for a fresh keyframe. The network thread was not blocked."];}
         }];
     } return self; }
-- (NSDictionary *)nativeMediaState {NSMutableDictionary *state=[[_media state] mutableCopy];state[@"viewerControls"]=[_viewerControls snapshotForMedia:state];state[@"receiverRunning"]=@(self.isRunning);return state;}
+- (NSDictionary *)nativeMediaState {NSMutableDictionary *state=[[_media state] mutableCopy];state[@"viewerControls"]=[_viewerControls snapshotForMedia:state];state[@"receiverRunning"]=@(self.isRunning);state[@"internetBack"]=@(self.internetBackCount);return state;}
 - (BOOL)applyPhoneViewerControl:(NSDictionary *)request {return [_viewerControls update:request media:[_media state]];}
 - (void)prepareMediaOnly {if(_running)return;self.mediaOnly=YES;_screenStream=[[H264Stream alloc]initWithMaxBytes:3*1024*1024 packets:120];_compressedOnlyInBackground=YES;[self setScreenHidden:YES];}
 - (void)authorizeNextLocalViewer {[_localViewer armAutomaticAt:NSProcessInfo.processInfo.systemUptime];[self setScreenHidden:YES];}

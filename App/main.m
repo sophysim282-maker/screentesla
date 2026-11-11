@@ -12,6 +12,7 @@
 #import "RTCPrototypeController.h"
 #import "SLMediaController.h"
 #import <ReplayKit/ReplayKit.h>
+#import <Network/Network.h>
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 #import "IdentityStore.h"
 #import "StreamNotifier.h"
@@ -78,6 +79,12 @@ static void SLActivityFinish(void) {
 @property(nonatomic,strong) NSArray<NSLayoutConstraint *> *previewConstraints;
 @property(nonatomic,strong) SLDisconnectFlow *disconnectFlow;
 @property(nonatomic) BOOL keepAwakeLogged;
+// Build 106: status light, background self-repair and internet watch.
+@property(nonatomic,strong) NSTimer *healthTimer;
+@property(nonatomic) NSInteger vpnMissingChecks;
+@property(nonatomic) NSTimeInterval lastVPNRepair;
+@property(nonatomic) BOOL internetLost;
+@property(nonatomic,strong) nw_path_monitor_t internetMonitor;
 @property(nonatomic) BOOL userDisconnected,disconnectNeedsAttention;
 @property(nonatomic) NSUInteger previewIndex;
 @property(nonatomic,strong) NSURLSession *disconnectSession;
@@ -138,7 +145,8 @@ static void SLActivityFinish(void) {
         [owner append:@"BACKGROUND RUNTIME ENDED: receiver, viewer link and media session retained. iOS may suspend this app without PiP. Returning to ScreenLink resumes the existing receiver; Start is not required to rebuild it."];
         if(!owner.preview.active&&!owner.youtubePiP.active && UIApplication.sharedApplication.applicationState==UIApplicationStateBackground)[owner beginGrace];
     };
-    [self append:@"Version 0.20.68 / build 105: (1) ScreenLink stays awake in the background while sharing, without PiP (location keep-alive, blue mark). (2) New fast car map: the car draws it itself from map squares this iPhone hands over, so drag and zoom are instant and the car never contacts Google. Needs Map Tiles API on your Google key; the map screen shows an orange button if it is missing. Video unchanged."];
+    [self append:@"Version 0.20.69 / build 106: stability. (A) Status light on Home: green Car connected, yellow or red with the one thing to do (hotspot, 3.3.3.3 link, phone internet, phone hot, car not opened). (B) Self-repair every 5 s also in the background: dead listeners are rebound and the 3.3.3.3 link is reconnected. (D) When the phone internet returns, the car retries the video at once. 4K and 1440p choices unchanged. Player unchanged."];
+    [self append:@"Earlier build 105: (1) ScreenLink stays awake in the background while sharing, without PiP (location keep-alive, blue mark). (2) New fast car map: the car draws it itself from map squares this iPhone hands over, so drag and zoom are instant and the car never contacts Google. Needs Map Tiles API on your Google key; the map screen shows an orange button if it is missing. Video unchanged."];
     [self append:@"Earlier build 104: for China-version cars the car browser now talks only to this iPhone and never to Google. The car map comes from the phone as pictures; search, place card, Start, zoom, drag and tap-a-place work through the phone. If the map picture for a locked phone fails, an orange Tap to fix button says why (Maps Static API). The Google-drawn car map is a switch in Maps Settings, off by default. Cube status now lists what the cube offers."];
     [self append:@"Earlier build 103: new switch in the map settings, Orbit Cube (Bluetooth): sends the next turn, distance, road name and minutes left of the ScreenLink Maps route to an Orbit Cube display. Off by default. Nothing else changed. Includes build 102."];
     [self append:@"Earlier build 102: the log now says how long each video took to show its first picture (CAR PLAYER: start took ...), to find why the first video is slow. Measuring only; playback is unchanged. Includes build 101."];
@@ -222,7 +230,41 @@ static void SLActivityFinish(void) {
  else if(self.broadcastArmed){status=@"Screen broadcast selected";detail=@"Manage this screen-sharing mode in Developer.";}
  else if(self.youtubePiP.active){status=@"Floating video active";detail=@"Your floating video is active. Keep the viewer on your hotspot.";}
  else if(self.receiver.isRunning){status=@"Ready for AirPlay";detail=@"Choose ScreenLink in YouTube’s AirPlay menu, then return here once to prepare PiP.";}
+ // Build 106: status light. While sharing, say in plain words whether the car is really connected
+ // and, if not, the one thing to do. Green = car connected, yellow = wait / care, red = link broken.
+ NSInteger level=0;
+ if(self.receiver.isRunning&&!self.broadcastArmed&&!busy&&!self.userDisconnected&&!self.homeFailure.length&&!self.discoveryPolicyDenied){
+  NSDictionary *health=[self.receiver linkHealth];double car=[health[@"carSeconds"] doubleValue];
+  if(![health[@"vpn"] boolValue]){level=3;status=@"Link to the car is off";detail=@"The 3.3.3.3 link is missing. ScreenLink is reconnecting it by itself. If this stays for a minute, tap Start.";}
+  else if(![health[@"hotspot"] boolValue]){level=3;status=@"Hotspot is off or the car left it";detail=@"Turn on Personal Hotspot in iPhone Settings and check that the car’s Wi-Fi shows this iPhone.";}
+  else if(self.internetLost){level=2;status=@"No internet on the phone";detail=@"Mobile data is gone. The video continues by itself when it comes back.";}
+  else if(NSProcessInfo.processInfo.thermalState>=NSProcessInfoThermalStateSerious){level=2;status=@"Phone is hot";detail=@"Take it off the wireless charger and out of the sun, and close the floating video. Heat can drop the hotspot.";}
+  else if(car<0||car>12){level=2;status=@"Waiting for the car";detail=@"Open car.tesla4khmer.com/video in the car browser.";}
+  else{level=1;status=@"Car connected";detail=self.youtubePiP.active?@"Floating video is on. You can close it; ScreenLink stays awake without it.":@"Choose ScreenLink in YouTube’s AirPlay menu. You can leave this app; it stays awake.";}
+ }
+ self.dashboard.healthLevel=level;
  [self.dashboard showStatus:status detail:detail busy:busy sharing:sharing disconnecting:self.disconnectFlow.running attention:self.disconnectNeedsAttention||self.discoveryPolicyDenied||self.homeFailure.length>0];
+}
+// Build 106: every 5 s while sharing (also in the background, the app stays awake since 105):
+// rebind dead listeners, bring the 3.3.3.3 link back, and refresh the status light.
+- (void)startHealthWatch {
+ if(!self.healthTimer){self.healthTimer=[NSTimer timerWithTimeInterval:5 target:self selector:@selector(healthTick) userInfo:nil repeats:YES];[NSRunLoop.mainRunLoop addTimer:self.healthTimer forMode:NSRunLoopCommonModes];}
+ if(!self.internetMonitor){nw_path_monitor_t monitor=nw_path_monitor_create();self.internetMonitor=monitor;__weak typeof(self) weak=self;nw_path_monitor_set_queue(monitor,dispatch_get_main_queue());
+  nw_path_monitor_set_update_handler(monitor,^(nw_path_t path){typeof(self) owner=weak;if(!owner)return;BOOL lost=nw_path_get_status(path)!=nw_path_status_satisfied;if(lost==owner.internetLost)return;owner.internetLost=lost;
+   if(lost)[owner append:@"PHONE INTERNET LOST: mobile data is gone. The receiver and the car link are kept; video continues when it returns."];
+   else{owner.receiver.internetBackCount=owner.receiver.internetBackCount+1;[owner append:@"PHONE INTERNET BACK: the car is told to retry the video now."];}
+   [owner updateHome];});
+  nw_path_monitor_start(monitor);}
+}
+- (void)stopHealthWatch {[self.healthTimer invalidate];self.healthTimer=nil;if(self.internetMonitor){nw_path_monitor_cancel(self.internetMonitor);self.internetMonitor=nil;}self.internetLost=NO;self.vpnMissingChecks=0;}
+- (void)healthTick {
+ if(!self.receiver.isRunning||self.userDisconnected||self.disconnectFlow.running||self.broadcastArmed){[self updateHome];return;}
+ [self.receiver resumeListenersIfNeeded];
+ if(![[self.receiver linkHealth][@"vpn"] boolValue]){self.vpnMissingChecks++;NSTimeInterval now=NSProcessInfo.processInfo.systemUptime;
+  if(self.vpnMissingChecks>=2&&now-self.lastVPNRepair>30&&!self.mediaOnlyRestarting){self.lastVPNRepair=now;[self append:@"SELF-REPAIR: the 3.3.3.3 link is missing. Reconnecting ScreenLink VPN; the receiver keeps running."];
+   __weak typeof(self) weak=self;[self.vpn connectRouteProbe:^(BOOL ok){typeof(self) owner=weak;if(!owner)return;[owner append:ok?@"SELF-REPAIR: ScreenLink VPN is back.":@"SELF-REPAIR: ScreenLink VPN could not reconnect. Open ScreenLink and tap Start."];if(ok&&owner.receiver.isRunning)[owner.receiver refreshDiscovery];[owner updateHome];}];}
+ }else self.vpnMissingChecks=0;
+ [self updateHome];
 }
 - (void)startHome {[SLStreamNotifier requestPermission];
  if(![self permitExplicitStart])return;[self startYouTubePiP];[self updateHome];
@@ -419,12 +461,13 @@ static void SLActivityFinish(void) {
 - (void)startReceiver {
     if(!self.receiver.isRunning)self.receiver.discoveryMode=2-self.discoveryMode.selectedSegmentIndex;
     if([self.receiver start]){[NSUserDefaults.standardUserDefaults setBool:YES forKey:@"receiverArmed"];UIApplication.sharedApplication.idleTimerDisabled=YES;[self links];
+        [self startHealthWatch];
         // Build 105: stay awake in the background without PiP (location keep-alive, blue mark).
         Class awake=NSClassFromString(@"SLKeepAwake");if(awake){[(id<SLKeepAwakeAPI>)awake start];if(!self.keepAwakeLogged){self.keepAwakeLogged=YES;[self append:@"KEEP AWAKE ON: while sharing, ScreenLink uses location in the background (blue mark at the top of the iPhone) so iOS does not put it to sleep when there is no PiP window. If iOS asks, allow location While Using."];
             dispatch_after(dispatch_time(DISPATCH_TIME_NOW,8*NSEC_PER_SEC),dispatch_get_main_queue(),^{NSString *problem=[(id<SLKeepAwakeAPI>)awake problem];if([problem isKindOfClass:NSString.class]&&problem.length)[self append:[@"KEEP AWAKE NOT ACTIVE: " stringByAppendingString:problem]];});}}
     }
 }
-- (void)stop {{Class awake=NSClassFromString(@"SLKeepAwake");if(awake)[(id<SLKeepAwakeAPI>)awake stop];self.keepAwakeLogged=NO;}self.discoveryPolicyDenied=NO;[self.dashboard showPlayerState:@{}];self.youtubePiPRequested=NO;[self.youtubePiP reset];[self.youtubePiP removeFromSuperview];self.youtubePiP=nil;SLActivityFinish();self.mediaStartGeneration++;self.mediaOnlyRestarting=NO;[NSUserDefaults.standardUserDefaults setBool:NO forKey:@"resumeYouTubeOnReturn"]; [self stopBroadcast]; [NSUserDefaults.standardUserDefaults setBool:NO forKey:@"receiverArmed"];[self.session finish];[self endGrace];[self.receiver stop];[self.preview reset];[self.preview removeFromSuperview];self.preview=nil;if(_lastPixel){CVPixelBufferRelease(_lastPixel);_lastPixel=NULL;}UIApplication.sharedApplication.idleTimerDisabled=NO;[self append:@"Stopped. Video frames cleared."]; }
+- (void)stop {{Class awake=NSClassFromString(@"SLKeepAwake");if(awake)[(id<SLKeepAwakeAPI>)awake stop];self.keepAwakeLogged=NO;}[self stopHealthWatch];self.discoveryPolicyDenied=NO;[self.dashboard showPlayerState:@{}];self.youtubePiPRequested=NO;[self.youtubePiP reset];[self.youtubePiP removeFromSuperview];self.youtubePiP=nil;SLActivityFinish();self.mediaStartGeneration++;self.mediaOnlyRestarting=NO;[NSUserDefaults.standardUserDefaults setBool:NO forKey:@"resumeYouTubeOnReturn"]; [self stopBroadcast]; [NSUserDefaults.standardUserDefaults setBool:NO forKey:@"receiverArmed"];[self.session finish];[self endGrace];[self.receiver stop];[self.preview reset];[self.preview removeFromSuperview];self.preview=nil;if(_lastPixel){CVPixelBufferRelease(_lastPixel);_lastPixel=NULL;}UIApplication.sharedApplication.idleTimerDisabled=NO;[self append:@"Stopped. Video frames cleared."]; }
 - (void)startMedia {
     if(![self permitExplicitStart])return;
     if(self.broadcastArmed){[self probeBroadcast];[self append:@"In screen broadcast mode, select ScreenLink VPN Phone inside YouTube AirPlay, then open Google Maps. The extension owns the receiver; no timed task or floating preview is needed for the main app. Verify both streams on your iPhone."];return;}

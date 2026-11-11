@@ -1,11 +1,13 @@
-# Handoff for the next Claude session (written 2026-11-10, after build 105)
+# Handoff for the next Claude session (written 2026-11-10, after build 106)
 
 Read this first. It replaces reading the old 400k-token conversation.
 
 ## WHERE WE ARE NOW (read this part first)
-Latest build sent to the user: **105 (0.20.68)**, branch `release/build105-awake-tiles`
-(same commits on `claude/build-98-car-map-handoff-tlhw9w`). Not car-tested yet. Use 105 only;
-98–104 are inside it or replaced by it.
+Latest build sent to the user: **106 (0.20.69)**, branch `release/build106-stability`
+(same commits on `claude/build-98-car-map-handoff-tlhw9w`). 106 = 105 + status light,
+background self-repair, retry when the phone internet returns (`BUILD106.md`). The user tested
+105 in the car: **it keeps working with no PiP** (keep-awake confirmed). The user wants to keep
+the 4K / 1440p quality choices: do not remove them. 98–104 are inside 106 or replaced.
 
 What the user has said, in order of importance:
 1. **Ask before building.** "I ask first and tell me before build." Explain the plan in simple

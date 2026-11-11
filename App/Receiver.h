@@ -38,6 +38,11 @@ typedef NS_ENUM(NSInteger, SLVideoProfile) { SLVideoFast=0, SLVideoBalanced=1, S
 - (void)refreshDiscovery;
 /// Rebind dead listeners on foreground without clearing media or viewer authorization.
 - (BOOL)resumeListenersIfNeeded;
+/// Build 106: facts for the Home status light. hotspot / vpn are BOOL numbers; carSeconds is the
+/// time since the car's last HTTPS request (-1 = never).
+- (NSDictionary *)linkHealth;
+/// Build 106: goes up by one each time the phone's internet comes back; the car retries at once.
+@property(atomic) NSInteger internetBackCount;
 - (void)stop;
 @end
 
