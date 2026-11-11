@@ -41,6 +41,19 @@ Orbit Cube (third person, through the user), Bluetooth LE, `Maps/CubeLink.swift`
   byte1 N points 2–16, then N × int8 x,y; car at 0,0, forward up, 1 unit = 3 m; ≤ 1 per second)
   and to send the GATT Service Changed indication after firmware updates.
 - Road line is NOT built. Ask the user before building it.
+- **Cube maker's answer (2026-11-11), confirmed format for …0F14 (road line):** byte 0 = 1;
+  byte 1 = N (2–16); then N points, x then y, signed 8-bit; car at 0,0; forward is up (+y);
+  +x is right; 1 unit = 3 m; length must be exactly 2 + 2N or it is ignored; write with
+  response; at most once per second, at least every 4 s while navigating (cube hides the line
+  after 5 s); maneuver code 0 on …0F13 also clears the line; the cube scales the line to fit, so
+  the full −128..127 range may be used and points behind the car (negative y) are allowed.
+- Cube firmware v23 sends GATT Service Changed after a firmware update; they ask the app to
+  handle `peripheral(_:didModifyServices:)` by discovering the service and characteristics again.
+- **Proposed build 106 (told the user, waiting for "go"):** road line sender on …0F14 (route
+  ahead of the car, about 350 m, heading-up, ≤ 16 points, once per second) + didModifyServices.
+  Nothing else to be touched.
+- Still wanted from the user: the cube status line after "forget device + restart"
+  ("Cube connected ✓" or "It offers: …").
 - An earlier Wi-Fi picture sender for the cube was removed (never approved).
 
 Research done for the user (told them, nothing built):
