@@ -1,5 +1,5 @@
 name: Build119 keep playing
-# Build 119: Keep playing (ignore pause and stop from YouTube) and AirPlay sound log. Run 1.
+# Build 119: Keep playing (ignore pause and stop from YouTube) and AirPlay sound log. Run 2.
 on:
   push:
     branches: ['release/build119-keep-playing']
