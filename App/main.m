@@ -96,6 +96,7 @@ static void SLActivityFinish(void) {
 @property(nonatomic) BOOL keepAwakeLogged;
 @property(nonatomic) NSInteger homeWaitingVersion;
 @property(nonatomic) BOOL homeWaitingLoaded;
+@property(nonatomic) BOOL mapsChoiceShown;
 // Build 106: status light, background self-repair and internet watch.
 @property(nonatomic,strong) NSTimer *healthTimer;
 @property(nonatomic) NSInteger vpnMissingChecks;
@@ -162,7 +163,8 @@ static void SLActivityFinish(void) {
         [owner append:@"BACKGROUND RUNTIME ENDED: receiver, viewer link and media session retained. iOS may suspend this app without PiP. Returning to ScreenLink resumes the existing receiver; Start is not required to rebuild it."];
         if(!owner.preview.active&&!owner.youtubePiP.active && UIApplication.sharedApplication.applicationState==UIApplicationStateBackground)[owner beginGrace];
     };
-    [self append:@"Version 0.20.87 / build 124: Phone sound. New line on Home (on by default): in YouTube mode ScreenLink is announced as a picture-only AirPlay device, so the sound of other apps (Messenger, Telegram …) stays on the phone speaker while the car plays the video. If ScreenLink VPN Phone is missing in YouTube with it on, switch it off, then Disconnect all and Start. Includes build 123."];
+    [self append:@"Version 0.20.88 / build 125: Maps switch. Home > Maps asks to open the maps. Closed (default): no map system runs and the car asks for no map, only the video. Open: the phone map, the map beside the video in the car and the Orbit Cube turns work again; the car gives the video first place. Tap Maps again to show the map or to close all maps. Includes build 124."];
+    [self append:@"Earlier build 124: Phone sound. New line on Home (on by default): in YouTube mode ScreenLink is announced as a picture-only AirPlay device, so the sound of other apps (Messenger, Telegram …) stays on the phone speaker while the car plays the video. If ScreenLink VPN Phone is missing in YouTube with it on, switch it off, then Disconnect all and Start. Includes build 123."];
     [self append:@"Earlier build 123: TikTok auto scroll, more ways and proof. After each try ScreenLink checks whether the page really moved; if not it tries the next way: scroll to the next video, the page\'s next button, the arrow key, then a finger swipe made by the app. The log says which way worked (TIKTOK: auto scroll result) and what the page is made of (TIKTOK PAGE lines: number of videos, how the list scrolls, control names, boxes on top, what ScreenLink hid). Includes build 122."];
     [self append:@"Earlier build 122: TikTok auto scroll and next video ready. Auto scroll now follows the car: when the car reaches the end of the video, ScreenLink moves the page to the next one (and tries three ways to move it). The playing TikTok video and the next ones on the page are downloaded whole to the phone, so the car gets them from memory. Log: TIKTOK: the car reached the end …, TIKTOK: preparing the next …, MEDIA FILE READY. Includes build 121."];
     [self append:@"Earlier build 121: lighter 4K. A picture larger than 1440p is painted at the size of the car screen instead of at full 4K size, about four times less painting work; 1440p and smaller are unchanged. The CAR PLAYER summary line now shows the real video size and the painted size, paint time, screen step time, and LIKELY CAR TOO SLOW or LIKELY INTERNET TOO SLOW. Includes build 120."];
@@ -260,14 +262,24 @@ static void SLActivityFinish(void) {
 - (void)refreshHomeExtras {
  [self.dashboard setSubtitle:[NSUserDefaults.standardUserDefaults boolForKey:@"keepPlaying"]?@"On · other apps cannot pause the car video":@"Off · YouTube can pause the car video" forRow:@"keep"];
  [self.dashboard setSubtitle:[NSUserDefaults.standardUserDefaults boolForKey:@"phoneSound"]?@"On · Messenger, Telegram … play on the phone":@"Off · other apps' sound goes to AirPlay (silent)" forRow:@"phonesound"];
+ {BOOL mapsOpen=[NSUserDefaults.standardUserDefaults boolForKey:@"mapsOpen"];[self.dashboard setSubtitle:mapsOpen?@"Open · tap to show or close":@"Closed · tap to open" forRow:@"maps"];[self.dashboard setSubtitle:mapsOpen?@"Shows the turns of a Maps route":@"Needs Maps (closed)" forRow:@"cube"];}
  Class store=NSClassFromString(@"SLWaitingStore");if(!store||!self.dashboard)return;
  [self.dashboard setSubtitle:[(id<SLWaitingHomeAPI>)store summary] forRow:@"waiting"];
  NSInteger version=[(id<SLWaitingHomeAPI>)store versionNumber];if(version==self.homeWaitingVersion&&self.homeWaitingLoaded)return;self.homeWaitingVersion=version;self.homeWaitingLoaded=YES;
  NSData *picture=[(id<SLWaitingHomeAPI>)store firstPicture];[self.dashboard showHeroImage:picture.length?[UIImage imageWithData:picture]:nil];
 }
 - (void)showMaps {
- // Build 108: all map systems are closed at the user's request (video only). Remove these two lines to open them again.
- {UIAlertController *closed=[UIAlertController alertControllerWithTitle:@"Maps are closed" message:@"All map systems are turned off so only the video runs." preferredStyle:UIAlertControllerStyleAlert];[closed addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleCancel handler:nil]];[self presentViewController:closed animated:YES completion:nil];return;}
+ // Build 125: Maps have a switch. Closed (default): no map system runs, only the video. Open: the phone map,
+ // the car map and the cube work as before build 108; the car gives the video first place.
+ BOOL open=[NSUserDefaults.standardUserDefaults boolForKey:@"mapsOpen"];__weak typeof(self) weakMaps=self;
+ if(!open){UIAlertController *ask=[UIAlertController alertControllerWithTitle:@"Maps are closed" message:@"Closed: only the video runs (most stable). Open: the map works on the phone and beside the video in the car. The video always goes first." preferredStyle:UIAlertControllerStyleAlert];
+  [ask addAction:[UIAlertAction actionWithTitle:@"Open maps" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action){[NSUserDefaults.standardUserDefaults setBool:YES forKey:@"mapsOpen"];[weakMaps append:@"MAPS OPENED by the switch on Home."];[weakMaps refreshHomeExtras];[weakMaps showMaps];}]];
+  [ask addAction:[UIAlertAction actionWithTitle:@"Keep closed" style:UIAlertActionStyleCancel handler:nil]];[self presentViewController:ask animated:YES completion:nil];return;}
+ if(!self.mapsChoiceShown){self.mapsChoiceShown=YES;}
+ else{UIAlertController *choice=[UIAlertController alertControllerWithTitle:@"Maps" message:nil preferredStyle:UIAlertControllerStyleAlert];
+  [choice addAction:[UIAlertAction actionWithTitle:@"Show the map" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action){weakMaps.mapsChoiceShown=NO;[weakMaps showMaps];}]];
+  [choice addAction:[UIAlertAction actionWithTitle:@"Close all maps (video only)" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *action){[NSUserDefaults.standardUserDefaults setBool:NO forKey:@"mapsOpen"];weakMaps.mapsChoiceShown=NO;[weakMaps append:@"MAPS CLOSED by the switch on Home: only the video runs."];[weakMaps refreshHomeExtras];}]];
+  [choice addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];[self presentViewController:choice animated:YES completion:nil];return;}
  Class cls=NSClassFromString(@"SLMapsLauncher");if(!cls){[self append:@"ScreenLink Maps is not available in this build."];return;}
  UIViewController *maps=[(id<SLMapsLauncherAPI>)cls mapsController];if(maps.presentingViewController)return;
  [self presentViewController:maps animated:YES completion:nil];[self append:@"SCREENLINK MAPS: navigation opened. The car screen shows a small map beside the video while you navigate."];
