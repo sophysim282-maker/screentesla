@@ -220,3 +220,23 @@ if 'ScreenLink listener resume repair' not in s:
     s = s.replace('if (!httpd->running || httpd->joined)', 'if (httpd->joined)', 1)
     s += '\n/* ScreenLink listener resume repair: real liveness and join-before-rebind. */\n'
     p.write_text(s)
+
+# Build 128: remember which kind of sound the iPhone announces (ct: 2 Apple Lossless, 4 AAC, 8 AAC-ELD)
+# and how many samples each packet holds (spf), so ScreenLink can unpack and play it on the phone.
+p = vendor / 'lib' / 'raop_handlers.h'
+s = p.read_text()
+if 'sl_audio_ct' not in s:
+    marker = '                } case 96: {\n                    // Audio\n'
+    assert marker in s
+    s = s.replace(marker, marker + """                    {
+                        uint64_t sl_value = 0;
+                        plist_t sl_node = plist_dict_get_item(req_stream_node, "ct");
+                        if (sl_node && plist_get_node_type(sl_node) == PLIST_UINT) { plist_get_uint_val(sl_node, &sl_value); sl_audio_ct = (int) sl_value; }
+                        sl_value = 0;
+                        sl_node = plist_dict_get_item(req_stream_node, "spf");
+                        if (sl_node && plist_get_node_type(sl_node) == PLIST_UINT) { plist_get_uint_val(sl_node, &sl_value); sl_audio_spf = (int) sl_value; }
+                    }
+""", 1)
+    s = 'int sl_audio_ct = 0;\nint sl_audio_spf = 0;\n' + s
+    p.write_text(s)
+

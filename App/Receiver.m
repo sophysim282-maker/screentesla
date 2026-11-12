@@ -160,11 +160,15 @@ static void log_message(void *c,int level,const char *m) {
 }
 int sl_media_handle(void *owner,void *connection,int socket,http_request_t *request,http_response_t **response){return [(__bridge Receiver *)owner mediaRequest:request connection:connection socket:socket response:response];}
 void sl_media_closed(void *owner,void *connection){[(__bridge Receiver *)owner mediaClosed:connection];}
-// Build 119: ScreenLink does not play AirPlay sound. Say so in the log when the iPhone sends some, so a test
-// shows whether another app's sound (a Telegram voice message) is being sent here instead of the phone speaker.
+// Build 128: each AirPlay sound packet goes to SLAirPlaySound (Maps/AirPlaySound.swift), which can play the
+// sound of other apps on the phone speaker. sl_audio_ct / sl_audio_spf come from the library patch.
+extern int sl_audio_ct,sl_audio_spf;
+@protocol SLAirPlaySoundAPI
++ (void)packet:(NSData *)data ct:(NSInteger)ct spf:(NSInteger)spf;
+@end
 static void audio(void *c,raop_ntp_t *n,aac_decode_struct *d) {
-    static CFAbsoluteTime last=0;static NSUInteger count=0;count++;CFAbsoluteTime now=CFAbsoluteTimeGetCurrent();
-    if(now-last>20){last=now;NSUInteger total=count;count=0;[(__bridge Receiver *)c emit:[NSString stringWithFormat:@"AIRPLAY SOUND ARRIVING: the iPhone is sending sound to ScreenLink over AirPlay (%lu packets). ScreenLink does not play this sound, so it is silent. If this appears while another app plays, that app's sound went to AirPlay instead of the phone speaker.",(unsigned long)total]];}
+    static Class player;static dispatch_once_t once;dispatch_once(&once,^{player=NSClassFromString(@"SLAirPlaySound");});
+    if(player&&d->data&&d->data_len>0&&d->data_len<65536)[(id<SLAirPlaySoundAPI>)player packet:[NSData dataWithBytes:d->data length:(NSUInteger)d->data_len] ct:sl_audio_ct spf:sl_audio_spf];
 }
 static void flush(void *c) {}
 static void connection(void *c) { [(__bridge Receiver *)c controlOpened]; }
