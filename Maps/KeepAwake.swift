@@ -25,14 +25,42 @@ final class SLKeepAwake: NSObject, CLLocationManagerDelegate {
     private var inBackground = false
     private var observers: [NSObjectProtocol] = []
     private var lastReport = Date.distantPast
+    // Build 126: a plain report of each time ScreenLink was off the screen.
+    private var leftAt: Date?
+    private var pauses = 0
+    private var pausedSeconds = 0.0
+    private var slowed = 0
+    private var beatCount = 0
+
+    private func left() {
+        inBackground = true
+        leftAt = Date(); pauses = 0; pausedSeconds = 0; slowed = 0
+        startSilentSound()
+        let pipOff = UserDefaults.standard.bool(forKey: "pipOff")
+        let status = manager.authorizationStatus
+        let location = status == .authorizedWhenInUse || status == .authorizedAlways
+        Self.log?("BACKGROUND: ScreenLink left the screen. Small window (PiP) switch: \(pipOff ? "Off" : "On"). Silent sound playing: \(silent?.isPlaying == true ? "yes" : "NO"). Location keep-awake allowed: \(location ? "yes" : "NO").")
+    }
+
+    private func cameBack() {
+        inBackground = false
+        guard let since = leftAt else { return }
+        leftAt = nil
+        let away = Date().timeIntervalSince(since)
+        if pauses == 0 && slowed == 0 {
+            Self.log?(String(format: "BACKGROUND REPORT: away %.0f s. iOS did NOT pause ScreenLink. Good.", away))
+        } else {
+            Self.log?(String(format: "BACKGROUND REPORT: away %.0f s. iOS PAUSED ScreenLink %d time(s), %.0f s in total, and slowed it %d time(s). The car was not answered during the pauses.", away, pauses, pausedSeconds, slowed))
+        }
+    }
 
     private func startHeartbeat() {
         guard beats.isEmpty else { return }
         inBackground = UIApplication.shared.applicationState == .background
         let center = NotificationCenter.default
         observers = [
-            center.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main) { [weak self] _ in self?.inBackground = true },
-            center.addObserver(forName: UIApplication.willEnterForegroundNotification, object: nil, queue: .main) { [weak self] _ in self?.inBackground = false },
+            center.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main) { [weak self] _ in self?.left() },
+            center.addObserver(forName: UIApplication.willEnterForegroundNotification, object: nil, queue: .main) { [weak self] _ in self?.cameBack() },
         ]
         for (name, qos) in [("fast", DispatchQoS.userInteractive), ("slow", DispatchQoS.utility)] {
             let timer = DispatchSource.makeTimerSource(queue: DispatchQueue(label: "screenlink.heartbeat." + name, qos: qos))
@@ -43,6 +71,8 @@ final class SLKeepAwake: NSObject, CLLocationManagerDelegate {
                 let up = ProcessInfo.processInfo.systemUptime, wall = Date()
                 let gapUp = up - lastUp, gapWall = wall.timeIntervalSince(lastWall)
                 lastUp = up; lastWall = wall
+                // Build 126: every 5 s make sure the silent sound is still playing (a call can stop it).
+                if name == "fast" { DispatchQueue.main.async { self?.keepSilentSound() } }
                 guard gapWall > 3.5 else { return }
                 // The uptime clock stops while the iPhone sleeps; if it also jumped, the phone was awake.
                 let awake = gapUp > 3.5
@@ -68,6 +98,7 @@ final class SLKeepAwake: NSObject, CLLocationManagerDelegate {
         if !wholeApp && Date().timeIntervalSince(lastReport) < 2 { return }
         lastReport = Date()
         let place = inBackground ? "in the background" : "on screen"
+        if inBackground && phoneAwake { if wholeApp { pauses += 1; pausedSeconds += seconds } else { slowed += 1 } }
         let heat = ProcessInfo.processInfo.thermalState.rawValue
         if !phoneAwake {
             Self.log?(String(format: "IPHONE SLEPT for %.0f s (ScreenLink %@). The car could not be answered during that time.", seconds, place))
@@ -76,6 +107,12 @@ final class SLKeepAwake: NSObject, CLLocationManagerDelegate {
         } else {
             Self.log?(String(format: "BACKGROUND WORK SLOWED by iOS for %.0f s (ScreenLink %@, thermal state %d).", seconds, place, heat))
         }
+        startSilentSound()
+    }
+
+    private func keepSilentSound() {
+        beatCount += 1
+        guard wanted, beatCount % 5 == 0, silent?.isPlaying != true else { return }
         startSilentSound()
     }
 
@@ -118,6 +155,7 @@ final class SLKeepAwake: NSObject, CLLocationManagerDelegate {
     private func begin() {
         wanted = true
         startHeartbeat()
+        startSilentSound()   // Build 126: from the first second, not only after iOS already paused the app.
         manager.delegate = self
         manager.desiredAccuracy = kCLLocationAccuracyThreeKilometers
         manager.distanceFilter = 500

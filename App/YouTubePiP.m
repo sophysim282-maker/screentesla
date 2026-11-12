@@ -138,6 +138,8 @@
   if(self.recoveryCount>=2&&!self.recoveryScheduled){self.requested=NO;[self report:@"PiP recovery paused after two real-source retries. Return to ScreenLink or tap Start + PiP to retry."];}
   return;
  }
+ // Build 126: Home > Small window (PiP) Off: never open the small window; the silent sound keeps the app awake.
+ if([NSUserDefaults.standardUserDefaults boolForKey:@"pipOff"]){self.requested=NO;self.attempting=NO;[self report:@"PiP IS SWITCHED OFF on Home: no small window opens. ScreenLink stays awake with the silent sound and location."];return;}
  if(self.pip.pictureInPicturePossible){[self.pip startPictureInPicture];return;}
  if(!remaining){self.requested=NO;self.attempting=NO;[self report:@"PiP is not ready. Keep ScreenLink visible, verify live YouTube, then retry PiP."];return;}
  __weak YouTubePiP *weak=self;dispatch_after(dispatch_time(DISPATCH_TIME_NOW,(int64_t)(.3*NSEC_PER_SEC)),dispatch_get_main_queue(),^{[weak attempt:remaining-1 generation:generation];});

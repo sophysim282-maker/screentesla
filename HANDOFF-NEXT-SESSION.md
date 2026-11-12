@@ -4,6 +4,8 @@ Read this first. It replaces reading the old 400k-token conversation.
 
 ## WHERE WE ARE NOW (read this part first)
 
+- **Build 126 (0.20.89), branch `release/build126-no-pip`:** silent sound from Start, PiP switch (`pipOff`), BACKGROUND REPORT log. See BUILD126.md.
+
 - **Build 125 (0.20.88), branch `release/build125-maps-switch`:** Maps switch on Home (`mapsOpen`), car loops start only when open. See BUILD125.md.
 
 - **Build 124 (0.20.87), branch `release/build124-phone-sound`:** Phone sound switch (picture-only AirPlay announce). Experiment; see BUILD124.md.
