@@ -4,6 +4,8 @@ Read this first. It replaces reading the old 400k-token conversation.
 
 ## WHERE WE ARE NOW (read this part first)
 
+- **Build 122 (0.20.85), branch `release/build122-tiktok-next`:** TikTok auto scroll follows the car + whole-file cache/prefetch. Waiting for the user's TikTok log. See BUILD122.md.
+
 - **Build 121 (0.20.84), branch `release/build121-lighter-4k`:** 4K painted at screen size + car speed in the summary line. Waiting for a 4K car log. See BUILD121.md.
 
 - **Build 120 (0.20.83), branch `release/build120-tiktok-stay`:** TikTok navigations use the allow-without-app-links policy. See BUILD120.md.

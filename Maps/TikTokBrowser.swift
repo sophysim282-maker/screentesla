@@ -57,6 +57,8 @@ final class TikTokViewController: UIViewController, WKNavigationDelegate, WKUIDe
     private var autoOn = UserDefaults.standard.bool(forKey: "tiktokAuto")
     private let autoButton = UIButton(type: .system)
     private var lastMoved = 0
+    private var scrolledEpoch = ""
+    private var preparedCount = 0
 
     // Marks every video on the page as allowed for AirPlay and reports what kind of video is playing.
     private static let probe = """
@@ -75,7 +77,16 @@ final class TikTokViewController: UIViewController, WKNavigationDelegate, WKUIDe
     (function(){if(window.__slTik)return;var S=window.__slTik={auto:false,last:null,lastT:0,since:Date.now(),nextAt:0,moved:0,hidden:0};
     function center(){var vs=[].slice.call(document.querySelectorAll('video')),mid=innerHeight/2,best=null,bd=1e9;vs.forEach(function(v){var r=v.getBoundingClientRect();if(r.height<50)return;var d=Math.abs((r.top+r.bottom)/2-mid);if(d<bd){bd=d;best=v;}});return best;}
     function scroller(el){for(var n=el;n&&n!==document.body&&n!==document.documentElement;n=n.parentElement){var st=getComputedStyle(n);if(/(auto|scroll)/.test(st.overflowY)&&n.scrollHeight>n.clientHeight+80)return n;}return null;}
-    S.next=function(){var v=center(),sc=v&&scroller(v),h=sc?sc.clientHeight:innerHeight;try{(sc||window).scrollBy({top:h,behavior:'smooth'});}catch(e){(sc||window).scrollBy(0,h);}S.since=Date.now();S.moved++;};
+    S.next=function(){var v=center(),done=false;
+     // Build 122: first bring the next video on the page into the middle (works for every kind of scrolling list).
+     if(v){var top=v.getBoundingClientRect().top,nx=null,nt=1e9;[].slice.call(document.querySelectorAll('video')).forEach(function(o){if(o===v)return;var t=o.getBoundingClientRect().top;if(t>top+50&&t<nt){nt=t;nx=o;}});
+      if(nx){try{nx.scrollIntoView({behavior:'smooth',block:'center'});done=true;}catch(e){}}}
+     if(!done){var sc=v&&scroller(v),h=sc?sc.clientHeight:innerHeight;try{(sc||window).scrollBy({top:h,behavior:'smooth'});}catch(e){(sc||window).scrollBy(0,h);}}
+     // If the page did not move, press its own "next" control, then the down-arrow key.
+     setTimeout(function(){if(center()!==v)return;var b=document.querySelector('[data-e2e=\"arrow-right\"],[data-e2e=\"video-switch-next\"],button[aria-label*=\"next\" i],button[aria-label*=\"Next\"]');if(b){b.click();return;}
+      ['keydown','keyup'].forEach(function(k){document.dispatchEvent(new KeyboardEvent(k,{key:'ArrowDown',code:'ArrowDown',keyCode:40,which:40,bubbles:true}));});},1500);
+     S.since=Date.now();S.moved++;};
+    S.upcoming=function(){var v=center();if(!v)return '';var top=v.getBoundingClientRect().top,list=[];[].slice.call(document.querySelectorAll('video')).forEach(function(o){if(o===v)return;var s=o.currentSrc||o.src||'';if(s.indexOf('http')!==0)return;var t=o.getBoundingClientRect().top;if(t>top+50)list.push([t,s]);});list.sort(function(a,b){return a[0]-b[0];});return list.slice(0,2).map(function(x){return x[1];}).join('\\n');};
     function nag(){var no=/^(not now|maybe later|continue on web|continue in browser|stay on web|no thanks|not interested)$/i,ask=/open (the )?(tiktok|app)|get (the )?(tiktok )?app|tiktok app|in the app/i;
      [].slice.call(document.querySelectorAll('button,[role=button],a')).forEach(function(b){var t=(b.innerText||'').trim();if(!t||t.length>30||!no.test(t))return;var r=b.getBoundingClientRect();if(!r.width||!r.height)return;
       var box=b.closest('[role=dialog],[class*=odal],[class*=opup],[class*=heet],[class*=anner],[class*=rawer]');if(box&&ask.test(box.innerText||'')){b.click();S.hidden++;}});
@@ -151,7 +162,7 @@ final class TikTokViewController: UIViewController, WKNavigationDelegate, WKUIDe
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         timer?.invalidate()
-        timer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in self?.check(announce: false) }
+        timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in self?.check(announce: false) }
     }
 
     override func viewWillDisappear(_ animated: Bool) {
@@ -281,8 +292,40 @@ final class TikTokViewController: UIViewController, WKNavigationDelegate, WKUIDe
         }
     }
 
+    /// Build 122: ScreenLink itself knows where the car is in the video. When the car reaches the end,
+    /// move the page to the next video. This does not depend on what the page thinks while AirPlay is on.
+    private func followCar() {
+        guard autoOn, let cast = NSClassFromString("MediaCast") as? NSObject.Type,
+              let info = cast.perform(NSSelectorFromString("currentProgress"))?.takeUnretainedValue() as? [String: Any],
+              (info["active"] as? Bool) == true, (info["kind"] as? String) == "file",
+              let epoch = info["epoch"] as? String, epoch != scrolledEpoch,
+              let position = info["position"] as? Double, let duration = info["duration"] as? Double,
+              duration > 1, position >= duration - 0.9 else { return }
+        scrolledEpoch = epoch
+        let js = "(function(){var S=window.__slTik;if(!S)return 'no helper';if(Date.now()<S.nextAt)return 'just moved';S.nextAt=Date.now()+4000;S.lastT=0;S.next();return 'moved';})()"
+        web.evaluateJavaScript(js) { result, _ in
+            SLTikTokLauncher.log?(String(format: "TIKTOK: the car reached the end (%.0f of %.0f s). Auto scroll: %@.", position, duration, result as? String ?? "no answer"))
+        }
+    }
+
+    /// Build 122: the next videos on the page are downloaded to the phone early, so they start fast in the car.
+    private func prepareNext() {
+        web.evaluateJavaScript("window.__slTik&&window.__slTik.upcoming?window.__slTik.upcoming():''") { [weak self] result, _ in
+            guard let self, let text = result as? String, !text.isEmpty, let cast = NSClassFromString("MediaCast") as? NSObject.Type else { return }
+            let list = text.split(separator: "\n").map(String.init)
+            for address in list { _ = cast.perform(NSSelectorFromString("prefetchFile:"), with: address) }
+            if list.count != self.preparedCount {
+                self.preparedCount = list.count
+                SLTikTokLauncher.log?("TIKTOK: preparing the next \(list.count) video(s) on the phone.")
+            }
+        }
+    }
+
     private func check(announce: Bool) {
         applyHelper()
+        followCar()
+        shareLogin()
+        prepareNext()
         web.evaluateJavaScript(Self.probe) { [weak self] result, _ in
             guard let self else { return }
             let state = result as? String ?? "none"

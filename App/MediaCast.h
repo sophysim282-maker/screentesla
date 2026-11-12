@@ -17,4 +17,7 @@
 - (void)report:(NSDictionary *)report;
 - (NSDictionary *)resource:(NSString *)identifier range:(NSString *)range;
 - (void)stop;
+/// Build 122 (TikTok): where the car is in the current video; and download a whole file video early.
++ (NSDictionary *)currentProgress;
++ (void)prefetchFile:(NSString *)location;
 @end

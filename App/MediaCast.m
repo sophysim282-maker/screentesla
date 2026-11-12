@@ -85,7 +85,32 @@ static NSArray<NSString *> *SLWarmPick(NSString *text,NSURL *base,NSInteger want
 static NSString *SLMediaKind(NSString *location){NSURL *url=location.length?[NSURL URLWithString:location]:nil;if(!url||virtualURL(url))return @"hls";return [url.path.lowercaseString containsString:@".m3u8"]?@"hls":@"file";}
 static BOOL stablePlaylist(NSData *data){NSString *text=[[NSString alloc]initWithData:data encoding:NSUTF8StringEncoding];return [text hasPrefix:@"#EXTM3U"] && ([text containsString:@"#EXT-X-ENDLIST"] || [text containsString:@"#EXT-X-STREAM-INF:"] || [text containsString:@"#EXT-X-I-FRAME-STREAM-INF:"]);}
 static BOOL sendBytes(int fd,NSData *data){const char *p=data.bytes;NSUInteger n=data.length;while(n){ssize_t k=send(fd,p,n,0);if(k<0 && errno==EINTR)continue;if(k<=0)return NO;p+=k;n-=(NSUInteger)k;}return YES;}
+// Build 122 (TikTok): whole file videos kept on the phone for a short time (the playing one and the next
+// ones on the page). The car asks for a file video in byte ranges; with the whole file here every range is
+// answered at once from memory, so the next video starts without waiting for the internet.
+static __weak MediaCast *SLCurrentCast;
+static NSMutableDictionary<NSString *,NSData *> *SLFiles;static NSMutableArray<NSString *> *SLFileOrder;static NSMutableSet<NSString *> *SLFileLoading;
+static NSData *SLWholeFile(NSString *location){@synchronized(MediaCast.class){return location?SLFiles[location]:nil;}}
 @implementation MediaCast
++ (NSDictionary *)currentProgress {
+    MediaCast *cast=SLCurrentCast;if(!cast)return @{};
+    [cast->_ready lock];NSDictionary *answer=@{@"position":@(cast->_position),@"duration":@(cast->_duration),@"active":@(cast->_active),@"epoch":cast->_epoch?:@"",@"kind":SLMediaKind(cast->_primary)};[cast->_ready unlock];return answer;
+}
++ (void)prefetchFile:(NSString *)location {
+    NSURL *url=location.length?[NSURL URLWithString:location]:nil;if(!url||!webURL(url)||![SLMediaKind(location) isEqual:@"file"])return;
+    @synchronized(MediaCast.class){if(!SLFiles){SLFiles=[NSMutableDictionary dictionary];SLFileOrder=[NSMutableArray array];SLFileLoading=[NSMutableSet set];}
+        if(SLFiles[location]||[SLFileLoading containsObject:location]||SLFileLoading.count>=2)return;[SLFileLoading addObject:location];}
+    MediaCast *cast=SLCurrentCast;
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY,0),^{
+        NSMutableURLRequest *request=[NSMutableURLRequest requestWithURL:url];[request setValue:@"AppleCoreMedia/1.0 ScreenLink" forHTTPHeaderField:@"User-Agent"];
+        Class provider=NSClassFromString(@"SLMediaHeaders");NSDictionary *more=provider&&url.host.length?[(id<SLMediaHeadersAPI>)provider headersForHost:url.host]:nil;if([more isKindOfClass:NSDictionary.class])for(NSString *name in more)if([more[name] isKindOfClass:NSString.class])[request setValue:more[name] forHTTPHeaderField:name];
+        NSDictionary *download=SLBoundedDownload(request,40*1024*1024);NSData *data=download[@"data"];BOOL good=[download[@"code"] integerValue]==200&&data.length>1024;
+        @synchronized(MediaCast.class){[SLFileLoading removeObject:location];
+            if(good){SLFiles[location]=data;[SLFileOrder addObject:location];NSUInteger total=0;for(NSData *each in SLFiles.allValues)total+=each.length;
+                while(SLFileOrder.count>4||(total>96*1024*1024&&SLFileOrder.count>1)){NSString *old=SLFileOrder.firstObject;total-=SLFiles[old].length;[SLFiles removeObjectForKey:old];[SLFileOrder removeObjectAtIndex:0];}}}
+        [cast log:good?[NSString stringWithFormat:@"MEDIA FILE READY: a whole video is on the phone (%lu KB, %.1f s). The car gets its parts from memory.",(unsigned long)(data.length/1024),[download[@"ms"] doubleValue]/1000.0]:[NSString stringWithFormat:@"MEDIA FILE NOT PREPARED: HTTP %ld, %@.",(long)[download[@"code"] integerValue],download[@"why"]?:@"no data"]];
+    });
+}
 - (instancetype)init{if((self=[super init])){_ready=[NSCondition new];_events=dispatch_queue_create("ScreenLink.media.events",DISPATCH_QUEUE_SERIAL);_reverse=-1;_resources=[NSMutableDictionary dictionary];_identifiers=[NSMutableDictionary dictionary];_cache=[NSMutableDictionary dictionary];_late=[NSMutableDictionary dictionary];_pending=[NSMutableDictionary dictionary];_prefetch=[NSMutableOrderedSet orderedSet];_playlistLinks=[NSMutableDictionary dictionary];_playlistTimes=[NSMutableDictionary dictionary];_inflight=[NSMutableDictionary dictionary];_retiredLinks=[NSMutableArray array];_selectedPlaylists=[NSMutableOrderedSet orderedSet];_warm=[NSMutableDictionary dictionary];_warming=[NSMutableSet set];_warmTargets=[NSMutableOrderedSet orderedSet];_epoch=NSUUID.UUID.UUIDString;}return self;}
 - (void)log:(NSString *)text{if(self.status)self.status(text);}
 - (BOOL)active{[_ready lock];BOOL value=_active;[_ready unlock];return value;}
@@ -262,6 +287,7 @@ static BOOL sendBytes(int fd,NSData *data){const char *p=data.bytes;NSUInteger n
         [_ready lock];_active=YES;_readyToPlay=NO;_paused=NO;_position=0;_duration=0;_heartbeat=0;_rate=1;_command=0;_commandKind=@"rate";_seekPosition=0;_start=MAX(0,[plist[@"Start-Position-Seconds"] doubleValue]);_fraction=MAX(0,MIN(1,[plist[@"Start-Position"] doubleValue]));_error=nil;_eventState=@"loading";_appleSession=session;_sourceHeights=@[];_primary=target.absoluteString;_uuid=[plist[@"uuid"] isKindOfClass:NSString.class]?plist[@"uuid"]:NSUUID.UUID.UUIDString;_epoch=NSUUID.UUID.UUIDString;[_resources removeAllObjects];[_identifiers removeAllObjects];[_playlistLinks removeAllObjects];[_playlistTimes removeAllObjects];[_inflight removeAllObjects];[_retiredLinks removeAllObjects];[_selectedPlaylists removeAllObjects];[_cache removeAllObjects];[_pending removeAllObjects];[_prefetch removeAllObjects];[_warm removeAllObjects];[_warming removeAllObjects];[_warmTargets removeAllObjects];_warmBytes=0;_warmLogged=NO;[_ready broadcast];[_ready unlock];
         [self reply:response status:200 type:nil data:nil];
         [self log:@"MEDIA PLAY REQUEST: native video-only handoff received. Open the hotspot viewer; its video player will show only the playing media."];
+        SLCurrentCast=self;if(!virtualURL(target)&&[SLMediaKind(target.absoluteString) isEqual:@"file"])[MediaCast prefetchFile:target.absoluteString];
         if(!virtualURL(target))[self log:[NSString stringWithFormat:@"MEDIA SOURCE: a web video from %@ was handed over, kind %@ (not YouTube's playlist hand-over).",target.host?:@"?",SLMediaKind(target.absoluteString)]];
         [self sendEvent:@{@"category":@"video",@"state":@"loading"} session:session];if(virtualURL(target))[self requestURL:target.absoluteString];return YES;
     }
@@ -325,7 +351,16 @@ static BOOL sendBytes(int fd,NSData *data){const char *p=data.bytes;NSUInteger n
         NSDictionary *warm=nil;
         if(!range.length){[_ready lock];NSDate *limit=[NSDate dateWithTimeIntervalSinceNow:8];while([epoch isEqual:_epoch]&&[_warming containsObject:location])if(![_ready waitUntilDate:limit])break;
             warm=[epoch isEqual:_epoch]?_warm[location]:nil;if(warm){[_warm removeObjectForKey:location];_warmBytes-=(NSInteger)[warm[@"data"] length];}[_ready unlock];}
-        if(warm){data=warm[@"data"];code=200;mime=warm[@"mime"];}else{
+        // Build 122: the whole file is on the phone: answer the whole thing or the asked byte range from memory.
+        NSData *whole=SLWholeFile(location);
+        if(whole){mime=@"video/mp4";long long first=0,last=(long long)whole.length-1;
+            if([range hasPrefix:@"bytes="]){NSArray<NSString *> *ends=[[range substringFromIndex:6] componentsSeparatedByString:@"-"];
+                if(ends.count==2&&[ends[0] length]){first=ends[0].longLongValue;if([ends[1] length])last=MIN(last,ends[1].longLongValue);}
+                else if(ends.count==2&&[ends[1] length]){first=MAX(0,(long long)whole.length-ends[1].longLongValue);}
+                if(first<0||first>last)return @{@"code":@416};
+                data=[whole subdataWithRange:NSMakeRange((NSUInteger)first,(NSUInteger)(last-first+1))];code=206;contentRange=[NSString stringWithFormat:@"bytes %lld-%lld/%lu",first,last,(unsigned long)whole.length];
+            }else{data=whole;code=200;}
+        }else if(warm){data=warm[@"data"];code=200;mime=warm[@"mime"];}else{
         NSMutableURLRequest *request=[NSMutableURLRequest requestWithURL:url];[request setValue:@"AppleCoreMedia/1.0 ScreenLink" forHTTPHeaderField:@"User-Agent"];
         // Build 111 (TikTok test): TikTok only answers downloads that carry its page's referer, browser name and login.
         // SLMediaHeaders returns nothing for every other host, so YouTube downloads are exactly as before.
