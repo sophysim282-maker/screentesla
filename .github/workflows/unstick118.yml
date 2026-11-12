@@ -1,5 +1,5 @@
 name: Build118 unstick downloads
-# Build 118: retry stuck video downloads and log slow pieces. Run 1.
+# Build 118: retry stuck video downloads and log slow pieces. Run 2.
 on:
   push:
     branches: ['release/build118-unstick-downloads']
