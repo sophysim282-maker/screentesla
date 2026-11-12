@@ -4,6 +4,8 @@ Read this first. It replaces reading the old 400k-token conversation.
 
 ## WHERE WE ARE NOW (read this part first)
 
+- **Build 120 (0.20.83), branch `release/build120-tiktok-stay`:** TikTok navigations use the allow-without-app-links policy. See BUILD120.md.
+
 - **Build 119 (0.20.82), branch `release/build119-keep-playing`:** Keep playing switch (ignore sender pause/stop) + `AIRPLAY SOUND ARRIVING` log. Telegram sound itself not fixed yet; waiting for the user's log. See BUILD119.md.
 
 - **Build 118 (0.20.81), branch `release/build118-unstick-downloads`:** retry stuck downloads + `MEDIA PIECE …` log lines. Waiting for the user's car log. See BUILD118.md.

@@ -53,6 +53,7 @@ final class TikTokViewController: UIViewController, WKNavigationDelegate, WKUIDe
     private var popup: WKWebView?
     private var popupBox: UIView?
     private var blockedLog = Date.distantPast
+    private var stayLog = Date.distantPast
     private var autoOn = UserDefaults.standard.bool(forKey: "tiktokAuto")
     private let autoButton = UIButton(type: .system)
     private var lastMoved = 0
@@ -177,14 +178,15 @@ final class TikTokViewController: UIViewController, WKNavigationDelegate, WKUIDe
             decisionHandler(.cancel)
             return
         }
-        // A tapped link to tiktok.com lets iOS open the TikTok app instead (a "universal link").
-        // Cancelling the tap and loading the same address ourselves keeps it in this page.
-        if navigationAction.navigationType == .linkActivated, navigationAction.targetFrame?.isMainFrame == true {
-            decisionHandler(.cancel)
-            webView.load(navigationAction.request)
-            return
+        // Build 120: a tiktok.com address lets iOS open the TikTok app instead of this page (a "universal
+        // link"), also when the page itself moves there after a tap, not only for a tapped link. This answer
+        // means "open it here and do not offer it to another app" (the same answer other iOS browsers use).
+        let stayHere = WKNavigationActionPolicy(rawValue: WKNavigationActionPolicy.allow.rawValue + 2) ?? .allow
+        if navigationAction.targetFrame?.isMainFrame == true, Date().timeIntervalSince(stayLog) > 30 {
+            stayLog = Date()
+            SLTikTokLauncher.log?("TIKTOK: page moved to \(host); kept inside ScreenLink.")
         }
-        decisionHandler(.allow)
+        decisionHandler(stayHere)
     }
 
     /// The page asks for a new window. Sign-in buttons do this: show it on top, inside ScreenLink.
