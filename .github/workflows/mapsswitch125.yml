@@ -1,5 +1,5 @@
 name: Build125 maps switch
-# Build 125: Maps open/closed switch on Home; closed costs the car nothing. Run 1.
+# Build 125: Maps open/closed switch on Home; closed costs the car nothing. Run 2.
 on:
   push:
     branches: ['release/build125-maps-switch']
