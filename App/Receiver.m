@@ -825,7 +825,10 @@ static NSArray *txtStrings(const char *bytes,int length) {
         if([object isKindOfClass:NSDictionary.class]){[self logCarPlayer:object[@"carLog"]];[_media report:object];[_viewerControls acknowledge:object];mime=@"application/json";body=[@"{}" dataUsingEncoding:NSUTF8StringEncoding];}else status=@"400 Bad Request";
     }
     else if([url.path hasPrefix:@"/media/resource/"]){
-        NSDictionary *part;if(dispatch_semaphore_wait(_mediaSlots,dispatch_time(DISPATCH_TIME_NOW,2*NSEC_PER_SEC)))part=@{@"code":@503};else{@try{part=[_media resource:[url.path substringFromIndex:16] range:byteRange];}@finally{dispatch_semaphore_signal(_mediaSlots);}}NSInteger code=[part[@"code"] integerValue];
+        CFAbsoluteTime pieceStart=CFAbsoluteTimeGetCurrent();
+        NSDictionary *part;if(dispatch_semaphore_wait(_mediaSlots,dispatch_time(DISPATCH_TIME_NOW,2*NSEC_PER_SEC))){part=@{@"code":@503};[self emit:@"MEDIA PIECE REFUSED: every download place on the phone was busy for 2 s, so the car was told to ask again. Earlier downloads are stuck."];}else{@try{part=[_media resource:[url.path substringFromIndex:16] range:byteRange];}@finally{dispatch_semaphore_signal(_mediaSlots);}}NSInteger code=[part[@"code"] integerValue];
+        // Build 118: remember when this piece was ready, to time the sending to the car below.
+        NSThread.currentThread.threadDictionary[@"slPiece"]=@[@(pieceStart),@(CFAbsoluteTimeGetCurrent())];
         status=[NSString stringWithFormat:@"%ld %@",(long)code,code==200?@"OK":(code==206?@"Partial Content":@"Media Request Failed")];mime=part[@"mime"]?:@"text/plain";body=part[@"data"]?:[NSData data];if(part[@"range"])extra=[NSString stringWithFormat:@"Content-Range: %@\r\n",part[@"range"]];
     }
     else if([url.path isEqual:@"/video"] || [@[@"/media/hls.js",@"/media/canvas.js",@"/media/mp4box.js",@"/media/mux.js"] containsObject:url.path]){
@@ -873,7 +876,11 @@ static NSArray *txtStrings(const char *bytes,int length) {
     if(aliasClient && ([url.path isEqual:@"/media/state"] || [url.path hasPrefix:@"/media/resource/"]))body=SLRetokenLocalMediaData(body,mime,self.token,token);
     BOOL keep=secureTransport&&current&&parts.count>2&&[parts[2] hasPrefix:@"HTTP/1.1"]&&![[wsHeaders[@"connection"] lowercaseString] containsString:@"close"];
     NSString *header=[NSString stringWithFormat:@"HTTP/1.1 %@\r\nContent-Type: %@\r\nContent-Length: %lu\r\nCache-Control: %@\r\n%@X-Content-Type-Options: nosniff\r\n%@\r\n",status,mime,(unsigned long)body.length,cacheControl,keep?@"Connection: keep-alive\r\nKeep-Alive: timeout=600, max=100000\r\n":@"Connection: close\r\n",extra];
-    NSData *h=[header dataUsingEncoding:NSUTF8StringEncoding];if(send_all(client,h.bytes,h.length)&&send_all(client,body.bytes,body.length))webKeepAlive=keep;
+    NSData *h=[header dataUsingEncoding:NSUTF8StringEncoding];BOOL sent=send_all(client,h.bytes,h.length)&&send_all(client,body.bytes,body.length);if(sent)webKeepAlive=keep;
+    // Build 118: one line when a video piece was slow or could not be handed to the car, and which side it was.
+    NSArray *piece=NSThread.currentThread.threadDictionary[@"slPiece"];
+    if(piece){[NSThread.currentThread.threadDictionary removeObjectForKey:@"slPiece"];double got=[piece[1] doubleValue]-[piece[0] doubleValue],gave=CFAbsoluteTimeGetCurrent()-[piece[1] doubleValue];
+     if(got>=3||gave>=3||!sent)[self emit:[NSString stringWithFormat:@"MEDIA PIECE TO CAR %@: getting it ready took %.1f s, sending %lu KB to the car took %.1f s%@.",sent?@"SLOW":@"NOT DELIVERED",got,(unsigned long)(body.length/1024),gave,sent?@"":@" and the car connection broke"]];}
 }
 - (void)screenSocket:(int)client generation:(NSUInteger)generation token:(NSString *)token peer:(NSString *)peer {
     NSString *epoch=nil;uint64_t after=0;

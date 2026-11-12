@@ -313,7 +313,10 @@ static BOOL sendBytes(int fd,NSData *data){const char *p=data.bytes;NSUInteger n
 #else
         NSUInteger budget=32*1024*1024;
 #endif
-        NSDictionary *download=SLBoundedDownload(request,budget);data=download[@"data"];code=[download[@"code"] integerValue];mime=download[@"mime"];contentRange=download[@"range"];}
+        NSDictionary *download=SLBoundedDownload(request,budget);data=download[@"data"];code=[download[@"code"] integerValue];mime=download[@"mime"];contentRange=download[@"range"];
+        // Build 118: say so when the internet side was slow, needed another try, or failed.
+        {NSInteger ms=[download[@"ms"] integerValue],tries=[download[@"tries"] integerValue];BOOL good=code>=200&&code<300&&data.length;
+         if(ms>=3000||tries>1||!good)[self log:[NSString stringWithFormat:@"MEDIA PIECE %@: internet to phone took %.1f s, %ld %@, %lu KB%@. This is the download from the video site, not the car link.",good?(tries>1?@"RECOVERED":@"SLOW"):@"FAILED",ms/1000.0,(long)tries,tries==1?@"try":@"tries",(unsigned long)(data.length/1024),download[@"why"]?[@", reason: " stringByAppendingString:download[@"why"]]:@""]];}}
     }else return @{@"code":@400};
     if(code<200 || code>=300 || !data.length){[self log:[NSString stringWithFormat:@"MEDIA RESOURCE FAILED: HTTP %ld from %@, %lu bytes. No signed URLs are included in this log.",(long)code,url.host?:@"sender",(unsigned long)data.length]];return @{@"code":@(code>=400?code:502)};}
     NSString *text=[[NSString alloc]initWithData:data encoding:NSUTF8StringEncoding];
