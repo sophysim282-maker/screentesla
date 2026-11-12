@@ -1,5 +1,5 @@
 name: Build117 entrance
-# Build 117: cinematic entrance on the phone Home screen. Run 1.
+# Build 117: cinematic entrance on the phone Home screen. Run 2.
 on:
   push:
     branches: ['release/build117-entrance']
