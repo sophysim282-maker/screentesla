@@ -87,7 +87,27 @@ static UIColor *SLRGB(CGFloat r,CGFloat g,CGFloat b){return [UIColor colorWithRe
 }
 @end
 
-@interface ScreenLinkHomeView ()
+// Build 117: soft dark edge on the entrance pictures, so they melt into the black screen.
+@interface SLFadeView : UIView
+@end
+@implementation SLFadeView
++ (Class)layerClass {return CAGradientLayer.class;}
+@end
+static CGFloat SLStep(CGFloat a,CGFloat b,CGFloat x){CGFloat t=MAX(0,MIN(1,(x-a)/(b-a)));return t*t*(3-2*t);}
+static CGFloat SLMix(CGFloat a,CGFloat b,CGFloat t){return a+(b-a)*MAX(0,MIN(1,t));}
+
+@interface ScreenLinkHomeView () <UIScrollViewDelegate>
+@property(nonatomic,strong) UIView *entrance,*entranceBack,*entranceStatus;
+@property(nonatomic,strong) UIScrollView *entranceScroll;
+@property(nonatomic,strong) NSArray<UIImageView *> *entranceImages;
+@property(nonatomic,strong) NSMutableArray<UIView *> *entranceFades;
+@property(nonatomic,strong) UILabel *entranceTitle,*entranceStatusText;
+@property(nonatomic,strong) UIView *entranceHint;
+@property(nonatomic,strong) CADisplayLink *entranceLink;
+@property(nonatomic) CFTimeInterval entranceStart;
+@property(nonatomic) CGFloat entranceFrom,entranceNow;
+@property(nonatomic) BOOL entranceLeaving;
+@property(nonatomic,strong) UIImage *heroDefault;
 @property(nonatomic,strong,readwrite) UIView *previewHost;
 @property(nonatomic,strong) UILabel *statusLabel,*detailLabel;
 @property(nonatomic,strong) UIButton *startButton,*disconnectButton;
@@ -145,7 +165,7 @@ static UIColor *SLHomeGrey(void){return [UIColor colorWithRed:.49 green:.51 blue
 - (void)videoRowTapped {[UIView animateWithDuration:.25 animations:^{self.controlsCard.hidden=!self.controlsCard.hidden;self.controlsCard.alpha=self.controlsCard.hidden?0:1;}];}
 - (void)waitingQuickTapped {if(self.moreAction)self.moreAction(@"waiting");}
 - (void)setSubtitle:(NSString *)text forRow:(NSString *)key {UILabel *label=self.rowDetails[key];if(label&&text.length&&![label.text isEqual:text])label.text=text;}
-- (void)showHeroImage:(UIImage *)image {self.heroImage.image=image;self.heroImage.hidden=image==nil;}
+- (void)showHeroImage:(UIImage *)image {if(self.heroDefault)image=self.heroDefault;self.heroImage.image=image;self.heroImage.hidden=image==nil;}
 - (UIButton *)button:(NSString *)title symbol:(NSString *)symbol action:(SEL)action filled:(BOOL)filled {
  UIButtonConfiguration *config=filled?UIButtonConfiguration.filledButtonConfiguration:UIButtonConfiguration.tintedButtonConfiguration;
  config.title=title;config.image=[UIImage systemImageNamed:symbol];config.imagePadding=10;config.cornerStyle=UIButtonConfigurationCornerStyleCapsule;config.contentInsets=NSDirectionalEdgeInsetsMake(16,18,16,18);
@@ -177,6 +197,8 @@ static UIColor *SLHomeGrey(void){return [UIColor colorWithRed:.49 green:.51 blue
   // The user's own waiting screen picture, when there is one, covers the car clip.
   self.heroImage=[UIImageView new];self.heroImage.contentMode=UIViewContentModeScaleAspectFill;self.heroImage.clipsToBounds=YES;self.heroImage.layer.cornerRadius=28;self.heroImage.hidden=YES;self.heroImage.translatesAutoresizingMaskIntoConstraints=NO;[self.car insertSubview:self.heroImage belowSubview:self.liveBadge];
   [NSLayoutConstraint activateConstraints:@[[self.heroImage.topAnchor constraintEqualToAnchor:self.car.topAnchor],[self.heroImage.bottomAnchor constraintEqualToAnchor:self.car.bottomAnchor],[self.heroImage.leadingAnchor constraintEqualToAnchor:self.car.leadingAnchor],[self.heroImage.trailingAnchor constraintEqualToAnchor:self.car.trailingAnchor]]];
+  // Build 117: the user's own car picture (added to the app when it is packaged) is the Home picture.
+  {NSString *path=[NSBundle.mainBundle pathForResource:@"entrance-4" ofType:@"jpg"];self.heroDefault=path?[UIImage imageWithContentsOfFile:path]:nil;if(self.heroDefault)[self showHeroImage:nil];}
   self.statusGlow=[SLGlowBorder new];self.statusGlow.userInteractionEnabled=NO;self.statusGlow.translatesAutoresizingMaskIntoConstraints=NO;[self.car addSubview:self.statusGlow];[NSLayoutConstraint activateConstraints:@[[self.statusGlow.topAnchor constraintEqualToAnchor:self.car.topAnchor],[self.statusGlow.bottomAnchor constraintEqualToAnchor:self.car.bottomAnchor],[self.statusGlow.leadingAnchor constraintEqualToAnchor:self.car.leadingAnchor],[self.statusGlow.trailingAnchor constraintEqualToAnchor:self.car.trailingAnchor]]];
   self.previewHost=[UIView new];self.previewHost.backgroundColor=UIColor.blackColor;self.previewHost.layer.cornerRadius=20;self.previewHost.clipsToBounds=YES;self.previewHost.hidden=YES;
   NSLayoutConstraint *previewHeight=[self.previewHost.heightAnchor constraintEqualToConstant:160];previewHeight.priority=750;previewHeight.active=YES;[stack addArrangedSubview:self.previewHost];
@@ -221,7 +243,7 @@ static UIColor *SLHomeGrey(void){return [UIColor colorWithRed:.49 green:.51 blue
  return self;
 }
 - (void)dealloc {[NSNotificationCenter.defaultCenter removeObserver:self];[self stopAmbient];}
-- (void)didMoveToWindow {[super didMoveToWindow];[self updateAmbient];[self playEntrance];}
+- (void)didMoveToWindow {[super didMoveToWindow];[self updateAmbient];dispatch_async(dispatch_get_main_queue(),^{[self playEntrance];});}
 - (void)setHidden:(BOOL)hidden {[super setHidden:hidden];[self updateAmbient];}
 - (void)ambientStateChanged:(NSNotification *)note {if([note.name isEqual:UIApplicationWillResignActiveNotification]||[note.name isEqual:UIApplicationDidEnterBackgroundNotification])[self stopAmbient];else [self updateAmbient];}
 - (void)stopAmbient {[self.ambientPlayer pause];self.car.videoLayer.player=nil;[self.ambientLooper disableLooping];self.ambientLooper=nil;[self.ambientPlayer removeAllItems];self.ambientPlayer=nil;}
@@ -318,10 +340,83 @@ static UIColor *SLHomeGrey(void){return [UIColor colorWithRed:.49 green:.51 blue
 // Sections rise in one after another the first time Home appears.
 - (void)playEntrance {
  if(self.entranceDone||!self.window)return;self.entranceDone=YES;if(!SLMotionAllowed())return;
+ [self.window layoutIfNeeded];
+ if([self startCinematicEntrance])return;
+ [self revealHomeParts:.05];
+}
+- (void)revealHomeParts:(NSTimeInterval)delay {
  NSArray<UIView *> *views=self.mainStack.arrangedSubviews;
  [views enumerateObjectsUsingBlock:^(UIView *view,NSUInteger index,BOOL *stop){
   view.alpha=0;if(view!=self.car)view.transform=CGAffineTransformMakeTranslation(0,28);
-  [UIView animateWithDuration:.75 delay:.05+index*.055 usingSpringWithDamping:.8 initialSpringVelocity:.4 options:UIViewAnimationOptionAllowUserInteraction animations:^{view.alpha=1;if(view!=self.car)view.transform=CGAffineTransformIdentity;} completion:nil];
+  [UIView animateWithDuration:.75 delay:delay+index*.055 usingSpringWithDamping:.8 initialSpringVelocity:.4 options:UIViewAnimationOptionAllowUserInteraction animations:^{view.alpha=1;if(view!=self.car)view.transform=CGAffineTransformIdentity;} completion:nil];
+ }];
+}
+// Build 117: cinematic entrance. Four car pictures (entrance-1…4.jpg, added to the app when it is packaged;
+// without them this is skipped). The finger scrolls the camera: back of the car, along the side, the
+// three-quarter view, then the lights come on and the picture flies into its place on Home.
+- (BOOL)startCinematicEntrance {
+ if(self.bounds.size.height<300||UIApplication.sharedApplication.applicationState==UIApplicationStateBackground)return NO;
+ NSMutableArray<UIImage *> *pictures=[NSMutableArray array];
+ for(int i=1;i<=4;i++){NSString *path=[NSBundle.mainBundle pathForResource:[NSString stringWithFormat:@"entrance-%d",i] ofType:@"jpg"];UIImage *image=path?[UIImage imageWithContentsOfFile:path]:nil;if(!image)return NO;[pictures addObject:image];}
+ UIView *cover=[[UIView alloc]initWithFrame:self.bounds];cover.autoresizingMask=UIViewAutoresizingFlexibleWidth|UIViewAutoresizingFlexibleHeight;cover.clipsToBounds=YES;cover.accessibilityIdentifier=@"home.entrance";[self addSubview:cover];self.entrance=cover;
+ self.entranceBack=[[UIView alloc]initWithFrame:cover.bounds];self.entranceBack.autoresizingMask=cover.autoresizingMask;self.entranceBack.backgroundColor=UIColor.blackColor;[cover addSubview:self.entranceBack];
+ NSMutableArray *views=[NSMutableArray array];self.entranceFades=[NSMutableArray array];
+ for(UIImage *picture in pictures){
+  UIImageView *view=[[UIImageView alloc]initWithFrame:CGRectMake(0,0,160,90)];view.image=picture;view.contentMode=UIViewContentModeScaleAspectFill;view.clipsToBounds=YES;view.alpha=0;[cover addSubview:view];[views addObject:view];
+  for(int edge=0;edge<2;edge++){SLFadeView *fade=[[SLFadeView alloc]initWithFrame:CGRectMake(0,edge?66:0,160,24)];fade.autoresizingMask=UIViewAutoresizingFlexibleWidth|UIViewAutoresizingFlexibleHeight|(edge?UIViewAutoresizingFlexibleTopMargin:UIViewAutoresizingFlexibleBottomMargin);
+   CAGradientLayer *gradient=(CAGradientLayer *)fade.layer;gradient.colors=edge?@[(id)UIColor.clearColor.CGColor,(id)UIColor.blackColor.CGColor]:@[(id)UIColor.blackColor.CGColor,(id)UIColor.clearColor.CGColor];[view addSubview:fade];[self.entranceFades addObject:fade];}
+ }
+ self.entranceImages=views;
+ CGFloat top=self.safeAreaInsets.top,bottom=self.safeAreaInsets.bottom,W=cover.bounds.size.width,H=cover.bounds.size.height;
+ UILabel *title=[[UILabel alloc]initWithFrame:CGRectMake(0,top+18,W,34)];title.autoresizingMask=UIViewAutoresizingFlexibleWidth;title.text=@"ScreenLink";title.textAlignment=NSTextAlignmentCenter;title.textColor=UIColor.whiteColor;title.font=[UIFont systemFontOfSize:26 weight:UIFontWeightSemibold];[cover addSubview:title];self.entranceTitle=title;
+ UIView *status=[[UIView alloc]initWithFrame:CGRectMake(0,top+58,W,24)];status.autoresizingMask=UIViewAutoresizingFlexibleWidth;status.alpha=0;[cover addSubview:status];self.entranceStatus=status;
+ UILabel *text=[[UILabel alloc]initWithFrame:status.bounds];text.autoresizingMask=UIViewAutoresizingFlexibleWidth;text.textAlignment=NSTextAlignmentCenter;text.textColor=UIColor.whiteColor;text.font=[UIFont systemFontOfSize:16 weight:UIFontWeightMedium];[status addSubview:text];self.entranceStatusText=text;
+ UIView *hint=[[UIView alloc]initWithFrame:CGRectMake(0,H-bottom-92,W,60)];hint.autoresizingMask=UIViewAutoresizingFlexibleWidth|UIViewAutoresizingFlexibleTopMargin;[cover addSubview:hint];self.entranceHint=hint;
+ UIImageView *arrow=[[UIImageView alloc]initWithImage:[UIImage systemImageNamed:@"chevron.down" withConfiguration:[UIImageSymbolConfiguration configurationWithPointSize:20 weight:UIImageSymbolWeightMedium]]];arrow.tintColor=UIColor.whiteColor;arrow.contentMode=UIViewContentModeCenter;arrow.frame=CGRectMake(0,0,W,26);arrow.autoresizingMask=UIViewAutoresizingFlexibleWidth;[hint addSubview:arrow];
+ UILabel *explore=[[UILabel alloc]initWithFrame:CGRectMake(0,30,W,24)];explore.autoresizingMask=UIViewAutoresizingFlexibleWidth;explore.text=@"Scroll to explore";explore.textAlignment=NSTextAlignmentCenter;explore.textColor=[UIColor colorWithWhite:1 alpha:.85];explore.font=[UIFont systemFontOfSize:16 weight:UIFontWeightMedium];[hint addSubview:explore];
+ CABasicAnimation *bob=[CABasicAnimation animationWithKeyPath:@"transform.translation.y"];bob.fromValue=@0;bob.toValue=@7;bob.duration=.9;bob.autoreverses=YES;bob.repeatCount=HUGE_VALF;bob.timingFunction=[CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseInEaseOut];[arrow.layer addAnimation:bob forKey:@"bob"];
+ UIScrollView *scroll=[[UIScrollView alloc]initWithFrame:cover.bounds];scroll.autoresizingMask=cover.autoresizingMask;scroll.contentSize=CGSizeMake(W,H*3.4);scroll.showsVerticalScrollIndicator=NO;scroll.bounces=NO;scroll.contentInsetAdjustmentBehavior=UIScrollViewContentInsetAdjustmentNever;scroll.decelerationRate=UIScrollViewDecelerationRateNormal;scroll.delegate=self;scroll.backgroundColor=UIColor.clearColor;[cover addSubview:scroll];self.entranceScroll=scroll;
+ [scroll addGestureRecognizer:[[UITapGestureRecognizer alloc]initWithTarget:self action:@selector(entranceTapped)]];
+ for(UIView *part in self.mainStack.arrangedSubviews)part.alpha=0;
+ [self entranceProgress:0];cover.alpha=0;[UIView animateWithDuration:.6 animations:^{cover.alpha=1;}];
+ return YES;
+}
+- (void)scrollViewDidScroll:(UIScrollView *)scrollView {
+ if(scrollView!=self.entranceScroll||self.entranceLeaving||self.entranceLink)return;
+ CGFloat range=scrollView.contentSize.height-scrollView.bounds.size.height;if(range>1)[self entranceProgress:scrollView.contentOffset.y/range];
+}
+// A tap plays the rest alone.
+- (void)entranceTapped {
+ if(self.entranceLeaving||self.entranceLink)return;self.entranceScroll.scrollEnabled=NO;self.entranceFrom=self.entranceNow;self.entranceStart=CACurrentMediaTime();
+ self.entranceLink=[CADisplayLink displayLinkWithTarget:self selector:@selector(entranceFrame:)];[self.entranceLink addToRunLoop:NSRunLoop.mainRunLoop forMode:NSRunLoopCommonModes];
+}
+- (void)entranceFrame:(CADisplayLink *)link {
+ CGFloat length=.5+2.6*(1-self.entranceFrom),t=MIN(1,(CACurrentMediaTime()-self.entranceStart)/length),eased=t*t*(3-2*t);
+ [self entranceProgress:self.entranceFrom+(1-self.entranceFrom)*eased];
+}
+- (void)entranceProgress:(CGFloat)p {
+ if(self.entranceLeaving||!self.entrance)return;p=MAX(0,MIN(1,p));self.entranceNow=p;
+ CGFloat W=self.entrance.bounds.size.width,H=self.entrance.bounds.size.height;
+ // from, to, zoom at start, zoom at end, focus x at start, focus x at end, focus y, place on screen (y)
+ static const CGFloat k[4][8]={{0,.36,3.4,2.3,.518,.518,.51,.50},{.25,.68,2.6,2.6,.32,.68,.49,.48},{.56,.92,2.4,1.9,.50,.50,.50,.48},{.82,1,1.5,1.2,.52,.52,.52,.47}};
+ CGFloat alpha[4]={1-SLStep(.25,.36,p),SLStep(.25,.36,p)*(1-SLStep(.56,.68,p)),SLStep(.56,.68,p)*(1-SLStep(.82,.92,p)),SLStep(.82,.92,p)};
+ for(NSUInteger i=0;i<4&&i<self.entranceImages.count;i++){
+  CGFloat t=(p-k[i][0])/(k[i][1]-k[i][0]),w=SLMix(k[i][2],k[i][3],t)*W,h=w*.5625,fx=SLMix(k[i][4],k[i][5],t);
+  UIImageView *view=self.entranceImages[i];view.frame=CGRectMake(W/2-fx*w,k[i][7]*H-k[i][6]*h,w,h);view.alpha=alpha[i];
+ }
+ self.entranceHint.alpha=1-SLStep(0,.08,p);self.entranceStatus.alpha=SLStep(.86,.96,p);
+ self.entranceStatusText.text=[NSString stringWithFormat:@"●  %@",self.statusLabel.text?:@""];
+ if(p>=.995)[self finishEntrance];
+}
+- (void)finishEntrance {
+ if(self.entranceLeaving)return;self.entranceLeaving=YES;[self.entranceLink invalidate];self.entranceLink=nil;self.entranceScroll.userInteractionEnabled=NO;
+ [self layoutIfNeeded];UIImageView *last=self.entranceImages.lastObject;CGRect target=[self.car convertRect:self.car.bounds toView:self.entrance];
+ [self revealHomeParts:.2];
+ UIView *cover=self.entrance;
+ [UIView animateWithDuration:.85 delay:0 usingSpringWithDamping:.88 initialSpringVelocity:0 options:0 animations:^{
+  last.frame=target;last.layer.cornerRadius=28;self.entranceBack.alpha=0;self.entranceTitle.alpha=0;self.entranceStatus.alpha=0;for(UIView *fade in self.entranceFades)fade.alpha=0;
+ } completion:^(BOOL finished){
+  [UIView animateWithDuration:.25 animations:^{cover.alpha=0;} completion:^(BOOL done){[cover removeFromSuperview];self.entrance=nil;self.entranceImages=nil;self.entranceFades=nil;self.entranceScroll=nil;}];
  }];
 }
 @end
