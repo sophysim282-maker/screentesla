@@ -1,5 +1,5 @@
 name: Build114 fast start
-# Build 114: faster video start (phone warm-up of lists and first pieces, quicker notice, smart first quality). Run 1.
+# Build 114: faster video start (phone warm-up of lists and first pieces, quicker notice, smart first quality). Run 2.
 on:
   push:
     branches: ['release/build114-fast-start']
