@@ -1,5 +1,5 @@
 name: Build120 TikTok stays in app
-# Build 120: TikTok page moves stay inside ScreenLink. Run 1.
+# Build 120: TikTok page moves stay inside ScreenLink. Run 2.
 on:
   push:
     branches: ['release/build120-tiktok-stay']
