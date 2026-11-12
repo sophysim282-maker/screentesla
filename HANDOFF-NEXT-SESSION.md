@@ -1,9 +1,11 @@
-# Handoff for the next Claude session (written 2026-11-10, after build 113)
+# Handoff for the next Claude session (written 2026-11-10, after build 114)
 
 Read this first. It replaces reading the old 400k-token conversation.
 
 ## WHERE WE ARE NOW (read this part first)
-Also sent: **113 TEST (0.20.76)**, branch `release/build113-tiktok-auto` (`BUILD113.md`): hides the
+Latest build sent: **114 (0.20.77)**, branch `release/build114-fast-start` (`BUILD114.md`): phone
+warm-up of the two needed YouTube lists and the first pieces, 0.4 s idle polling, smart first quality.
+Before: **113 TEST (0.20.76)**, branch `release/build113-tiktok-auto` (`BUILD113.md`): hides the
 "Open app" asking and adds auto scroll in the TikTok page.
 Before: **112 TEST (0.20.75)**, branch `release/build112-tiktok-stay` (`BUILD112.md`): TikTok page
 stays in the app and shows sign-in windows. **The user confirmed build 111's TikTok hand-over works

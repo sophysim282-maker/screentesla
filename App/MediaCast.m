@@ -12,6 +12,8 @@
     void *_reverseConnection;
     NSString *_appleSession,*_epoch,*_primary,*_uuid;
     NSMutableDictionary *_resources,*_identifiers,*_cache,*_pending,*_late;
+    // Build 114 warm-up: first pieces downloaded before the car asks (see warmSegments:).
+    NSMutableDictionary *_warm;NSMutableSet *_warming;NSMutableOrderedSet *_warmTargets;NSInteger _warmBytes;BOOL _warmLogged;
     NSMutableDictionary *_playlistLinks,*_playlistTimes,*_inflight;
     NSMutableArray *_retiredLinks;
     NSMutableOrderedSet *_selectedPlaylists;
@@ -34,11 +36,36 @@ static BOOL virtualURL(NSURL *url){return [url.scheme.lowercaseString isEqual:@"
 @protocol SLMediaHeadersAPI
 + (NSDictionary<NSString *,NSString *> *)headersForHost:(NSString *)host;
 @end
+// Build 114: which of YouTube's lists will the car use? Same rule as the car page (chooseVariant in
+// CanvasPlayer.js): the tallest picture not above the wanted quality (Auto and 1080p: at most 1080 lines
+// and 1920x1088 points; 720p: 1280x720; the 1440p / 4K tests: their own size), then the highest data rate.
+// Returns the picture list and its sound list, as full addresses. A wrong guess only wastes one download.
+static NSString *SLWarmAttribute(NSString *line,NSString *name){NSRange r=[line rangeOfString:[name stringByAppendingString:@"=\""]];if(r.location==NSNotFound)return nil;NSString *rest=[line substringFromIndex:NSMaxRange(r)];NSRange end=[rest rangeOfString:@"\""];return end.location==NSNotFound?nil:[rest substringToIndex:end.location];}
+static NSArray<NSString *> *SLWarmPick(NSString *text,NSURL *base,NSInteger wanted){
+    NSArray<NSString *> *lines=[text componentsSeparatedByCharactersInSet:NSCharacterSet.newlineCharacterSet];NSCharacterSet *space=NSCharacterSet.whitespaceCharacterSet;
+    NSInteger limitHeight=wanted>=1440?wanted:(wanted>0?MIN(1080,wanted):1080);long long limitPoints=wanted>=2160?3840LL*2176:(wanted>=1440?2560LL*1440:(wanted==720?1280LL*720:1920LL*1088));
+    NSString *best=nil,*group=nil;NSInteger bestHeight=-1;long long bestRate=-1;
+    for(NSUInteger i=0;i<lines.count;i++){NSString *line=[lines[i] stringByTrimmingCharactersInSet:space];if(![line hasPrefix:@"#EXT-X-STREAM-INF:"])continue;
+        NSInteger width=0,height=0;long long rate=0;NSRange r=[line rangeOfString:@"RESOLUTION="];
+        if(r.location!=NSNotFound){NSScanner *scan=[NSScanner scannerWithString:[line substringFromIndex:NSMaxRange(r)]];[scan scanInteger:&width];[scan scanString:@"x" intoString:NULL];[scan scanInteger:&height];}
+        r=[line rangeOfString:@",BANDWIDTH="];if(r.location==NSNotFound)r=[line rangeOfString:@":BANDWIDTH="];if(r.location!=NSNotFound)[[NSScanner scannerWithString:[line substringFromIndex:NSMaxRange(r)]] scanLongLong:&rate];
+        NSString *uri=nil;for(NSUInteger j=i+1;j<lines.count;j++){NSString *next=[lines[j] stringByTrimmingCharactersInSet:space];if(!next.length||[next hasPrefix:@"#"])continue;uri=next;break;}
+        if(!uri||height<=0||height>limitHeight||(width>0&&(long long)width*height>limitPoints))continue;
+        if(height>bestHeight||(height==bestHeight&&rate>bestRate)){bestHeight=height;bestRate=rate;best=uri;group=SLWarmAttribute(line,@"AUDIO");}
+    }
+    NSString *sound=nil;
+    for(NSString *raw in lines){NSString *line=[raw stringByTrimmingCharactersInSet:space];if(![line hasPrefix:@"#EXT-X-MEDIA:"]||![line containsString:@"TYPE=AUDIO"])continue;
+        if(group&&![SLWarmAttribute(line,@"GROUP-ID") isEqual:group])continue;NSString *uri=SLWarmAttribute(line,@"URI");if(!uri)continue;
+        if(!sound||[line containsString:@"DEFAULT=YES"]){sound=uri;if([line containsString:@"DEFAULT=YES"])break;}}
+    NSMutableArray<NSString *> *picks=[NSMutableArray array];
+    for(NSString *uri in @[best?:@"",sound?:@""]){if(!uri.length)continue;NSString *full=[NSURL URLWithString:uri relativeToURL:base].absoluteURL.absoluteString;if(full.length&&![picks containsObject:full])[picks addObject:full];}
+    return picks;
+}
 static NSString *SLMediaKind(NSString *location){NSURL *url=location.length?[NSURL URLWithString:location]:nil;if(!url||virtualURL(url))return @"hls";return [url.path.lowercaseString containsString:@".m3u8"]?@"hls":@"file";}
 static BOOL stablePlaylist(NSData *data){NSString *text=[[NSString alloc]initWithData:data encoding:NSUTF8StringEncoding];return [text hasPrefix:@"#EXTM3U"] && ([text containsString:@"#EXT-X-ENDLIST"] || [text containsString:@"#EXT-X-STREAM-INF:"] || [text containsString:@"#EXT-X-I-FRAME-STREAM-INF:"]);}
 static BOOL sendBytes(int fd,NSData *data){const char *p=data.bytes;NSUInteger n=data.length;while(n){ssize_t k=send(fd,p,n,0);if(k<0 && errno==EINTR)continue;if(k<=0)return NO;p+=k;n-=(NSUInteger)k;}return YES;}
 @implementation MediaCast
-- (instancetype)init{if((self=[super init])){_ready=[NSCondition new];_events=dispatch_queue_create("ScreenLink.media.events",DISPATCH_QUEUE_SERIAL);_reverse=-1;_resources=[NSMutableDictionary dictionary];_identifiers=[NSMutableDictionary dictionary];_cache=[NSMutableDictionary dictionary];_late=[NSMutableDictionary dictionary];_pending=[NSMutableDictionary dictionary];_prefetch=[NSMutableOrderedSet orderedSet];_playlistLinks=[NSMutableDictionary dictionary];_playlistTimes=[NSMutableDictionary dictionary];_inflight=[NSMutableDictionary dictionary];_retiredLinks=[NSMutableArray array];_selectedPlaylists=[NSMutableOrderedSet orderedSet];_epoch=NSUUID.UUID.UUIDString;}return self;}
+- (instancetype)init{if((self=[super init])){_ready=[NSCondition new];_events=dispatch_queue_create("ScreenLink.media.events",DISPATCH_QUEUE_SERIAL);_reverse=-1;_resources=[NSMutableDictionary dictionary];_identifiers=[NSMutableDictionary dictionary];_cache=[NSMutableDictionary dictionary];_late=[NSMutableDictionary dictionary];_pending=[NSMutableDictionary dictionary];_prefetch=[NSMutableOrderedSet orderedSet];_playlistLinks=[NSMutableDictionary dictionary];_playlistTimes=[NSMutableDictionary dictionary];_inflight=[NSMutableDictionary dictionary];_retiredLinks=[NSMutableArray array];_selectedPlaylists=[NSMutableOrderedSet orderedSet];_warm=[NSMutableDictionary dictionary];_warming=[NSMutableSet set];_warmTargets=[NSMutableOrderedSet orderedSet];_epoch=NSUUID.UUID.UUIDString;}return self;}
 - (void)log:(NSString *)text{if(self.status)self.status(text);}
 - (BOOL)active{[_ready lock];BOOL value=_active;[_ready unlock];return value;}
 - (BOOL)videoIsLive{[_ready lock];BOOL value=_active && _readyToPlay && NSProcessInfo.processInfo.systemUptime-_heartbeat<10;[_ready unlock];return value;}
@@ -112,8 +139,34 @@ static BOOL sendBytes(int fd,NSData *data){const char *p=data.bytes;NSUInteger n
     if(![text containsString:@"#EXT-X-STREAM-INF:"] && ![text containsString:@"#EXT-X-MEDIA:"])return;
     NSMutableOrderedSet *children=[NSMutableOrderedSet orderedSet];NSURL *base=[NSURL URLWithString:location];
     SLRewritePlaylist(text,^NSString *(NSString *uri){NSURL *target=[NSURL URLWithString:uri relativeToURL:base].absoluteURL;if(virtualURL(target) && children.count<64)[children addObject:target.absoluteString];return uri;},NULL);
-    [_ready lock];if(_active && [location isEqual:_primary])for(NSString *child in children)if(!_cache[child] && !_pending[child])[_prefetch addObject:child];[_ready unlock];
+    // Build 114: YouTube offers about 20 lists and they are fetched one at a time. Fetch the two the car
+    // will really use (its picture quality and the sound) first, and remember them for the piece warm-up.
+    NSArray<NSString *> *first=SLWarmPick(text,base,self.warmHeight);NSMutableOrderedSet *ordered=[NSMutableOrderedSet orderedSet];
+    for(NSString *pick in first)if([children containsObject:pick])[ordered addObject:pick];[ordered unionOrderedSet:children];
+    [_ready lock];if(_active && [location isEqual:_primary]){for(NSString *pick in first)if([children containsObject:pick])[_warmTargets addObject:pick];NSMutableOrderedSet *queue=[NSMutableOrderedSet orderedSet];for(NSString *child in ordered)if(!_cache[child] && !_pending[child])[queue addObject:child];[queue unionOrderedSet:_prefetch];[_prefetch removeAllObjects];[_prefetch unionOrderedSet:queue];}[_ready unlock];
     [self drivePrefetch];
+}
+// Build 114: when one of those two lists arrives, download its first pieces at once, in the background.
+// The car asks for them a moment later and gets them from memory instead of waiting for YouTube.
+- (void)warmSegments:(NSData *)data location:(NSString *)location {
+    [_ready lock];BOOL target=_active&&[_warmTargets containsObject:location];NSString *epoch=_epoch;if(target)[_warmTargets removeObject:location];[_ready unlock];
+    if(!target)return;
+    NSString *text=[[NSString alloc]initWithData:data encoding:NSUTF8StringEncoding];
+    if(![text hasPrefix:@"#EXTM3U"]||[text containsString:@"#EXT-X-STREAM-INF:"]||[text containsString:@"#EXT-X-BYTERANGE"])return;
+    NSURL *base=[NSURL URLWithString:location];NSMutableArray<NSString *> *urls=[NSMutableArray array];
+    SLRewritePlaylist(text,^NSString *(NSString *uri){NSURL *piece=[NSURL URLWithString:uri relativeToURL:base].absoluteURL;if(webURL(piece)&&urls.count<2&&![urls containsObject:piece.absoluteString])[urls addObject:piece.absoluteString];return uri;},NULL);
+    for(NSString *url in urls){
+        [_ready lock];BOOL go=[epoch isEqual:_epoch]&&!_warm[url]&&![_warming containsObject:url]&&_warmBytes<48*1024*1024;if(go)[_warming addObject:url];BOOL say=go&&!_warmLogged;if(say)_warmLogged=YES;[_ready unlock];
+        if(!go)continue;
+        if(say)[self log:@"MEDIA WARM-UP: downloading the first pieces of this video now, before the car asks for them."];
+        dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED,0),^{
+            NSMutableURLRequest *request=[NSMutableURLRequest requestWithURL:[NSURL URLWithString:url]];[request setValue:@"AppleCoreMedia/1.0 ScreenLink" forHTTPHeaderField:@"User-Agent"];
+            NSDictionary *download=SLBoundedDownload(request,16*1024*1024);NSData *body=download[@"data"];NSInteger code=[download[@"code"] integerValue];
+            [self->_ready lock];[self->_warming removeObject:url];
+            if([epoch isEqual:self->_epoch]&&code==200&&body.length){self->_warm[url]=@{@"data":body,@"mime":download[@"mime"]?:@"application/octet-stream"};self->_warmBytes+=(NSInteger)body.length;}
+            [self->_ready broadcast];[self->_ready unlock];
+        });
+    }
 }
 - (void)recordSourceHeights:(NSData *)data location:(NSString *)location epoch:(NSString *)epoch{
     NSString *text=[[NSString alloc]initWithData:data encoding:NSUTF8StringEncoding];NSArray *heights=SLPlaylistVideoHeights(text?:@"");if(!heights.count)return;
@@ -185,7 +238,7 @@ static BOOL sendBytes(int fd,NSData *data){const char *p=data.bytes;NSUInteger n
         if(!location){NSString *text=[[NSString alloc]initWithData:body encoding:NSUTF8StringEncoding];for(NSString *line in [text componentsSeparatedByCharactersInSet:NSCharacterSet.newlineCharacterSet])if([line hasPrefix:@"Content-Location:"])location=[[line substringFromIndex:17] stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceCharacterSet];}
         NSURL *target=[NSURL URLWithString:location?:@""];
         if(!session.length || session.length>128 || [session rangeOfCharacterFromSet:NSCharacterSet.newlineCharacterSet].location!=NSNotFound || (!webURL(target)&&!virtualURL(target))){[self log:[NSString stringWithFormat:@"MEDIA PLAY REJECTED: session %@, content URL scheme %@, plist keys %@.",session.length?@"present":@"missing",target.scheme?:@"missing",[[plist.allKeys sortedArrayUsingSelector:@selector(compare:)] componentsJoinedByString:@", "]?:@"none"]];[self reply:response status:400 type:nil data:nil];return YES;}
-        [_ready lock];_active=YES;_readyToPlay=NO;_paused=NO;_position=0;_duration=0;_heartbeat=0;_rate=1;_command=0;_commandKind=@"rate";_seekPosition=0;_start=MAX(0,[plist[@"Start-Position-Seconds"] doubleValue]);_fraction=MAX(0,MIN(1,[plist[@"Start-Position"] doubleValue]));_error=nil;_eventState=@"loading";_appleSession=session;_sourceHeights=@[];_primary=target.absoluteString;_uuid=[plist[@"uuid"] isKindOfClass:NSString.class]?plist[@"uuid"]:NSUUID.UUID.UUIDString;_epoch=NSUUID.UUID.UUIDString;[_resources removeAllObjects];[_identifiers removeAllObjects];[_playlistLinks removeAllObjects];[_playlistTimes removeAllObjects];[_inflight removeAllObjects];[_retiredLinks removeAllObjects];[_selectedPlaylists removeAllObjects];[_cache removeAllObjects];[_pending removeAllObjects];[_prefetch removeAllObjects];[_ready broadcast];[_ready unlock];
+        [_ready lock];_active=YES;_readyToPlay=NO;_paused=NO;_position=0;_duration=0;_heartbeat=0;_rate=1;_command=0;_commandKind=@"rate";_seekPosition=0;_start=MAX(0,[plist[@"Start-Position-Seconds"] doubleValue]);_fraction=MAX(0,MIN(1,[plist[@"Start-Position"] doubleValue]));_error=nil;_eventState=@"loading";_appleSession=session;_sourceHeights=@[];_primary=target.absoluteString;_uuid=[plist[@"uuid"] isKindOfClass:NSString.class]?plist[@"uuid"]:NSUUID.UUID.UUIDString;_epoch=NSUUID.UUID.UUIDString;[_resources removeAllObjects];[_identifiers removeAllObjects];[_playlistLinks removeAllObjects];[_playlistTimes removeAllObjects];[_inflight removeAllObjects];[_retiredLinks removeAllObjects];[_selectedPlaylists removeAllObjects];[_cache removeAllObjects];[_pending removeAllObjects];[_prefetch removeAllObjects];[_warm removeAllObjects];[_warming removeAllObjects];[_warmTargets removeAllObjects];_warmBytes=0;_warmLogged=NO;[_ready broadcast];[_ready unlock];
         [self reply:response status:200 type:nil data:nil];
         [self log:@"MEDIA PLAY REQUEST: native video-only handoff received. Open the hotspot viewer; its video player will show only the playing media."];
         if(!virtualURL(target))[self log:[NSString stringWithFormat:@"MEDIA SOURCE: a web video from %@ was handed over, kind %@ (not YouTube's playlist hand-over).",target.host?:@"?",SLMediaKind(target.absoluteString)]];
@@ -207,7 +260,7 @@ static BOOL sendBytes(int fd,NSData *data){const char *p=data.bytes;NSUInteger n
                 // non-playlist, or actual HTTP failure response.
                 code=SLFCUPPlaylistStatus(code,data);
                 _cache[location]=@{@"data":data?:[NSData data],@"code":@(code),@"time":@(NSProcessInfo.processInfo.systemUptime)};[_pending removeObjectForKey:location];[_ready broadcast];}[_ready unlock];
-            [self reply:response status:valid?200:409 type:nil data:nil];if(!valid)[self log:@"MEDIA PLAYLIST RESPONSE REJECTED: session, URL, or request ID did not match an outstanding request."];if(valid){[self log:[NSString stringWithFormat:@"MEDIA PLAYLIST RESPONSE: %lu bytes received; sender status %@. Status 0 requires a valid HLS playlist.",(unsigned long)data.length,params[@"FCUP_Response_StatusCode"]?:@200]];[self recordSourceHeights:data location:location epoch:nil];[self prefetchChildren:data base:location];[self drivePrefetch];}return YES;
+            [self reply:response status:valid?200:409 type:nil data:nil];if(!valid)[self log:@"MEDIA PLAYLIST RESPONSE REJECTED: session, URL, or request ID did not match an outstanding request."];if(valid){[self log:[NSString stringWithFormat:@"MEDIA PLAYLIST RESPONSE: %lu bytes received; sender status %@. Status 0 requires a valid HLS playlist.",(unsigned long)data.length,params[@"FCUP_Response_StatusCode"]?:@200]];[self recordSourceHeights:data location:location epoch:nil];[self prefetchChildren:data base:location];[self warmSegments:data location:location];[self drivePrefetch];}return YES;
         }
         if([type isEqual:@"playlistRemove"]){[_ready lock];NSDictionary *item=[params[@"item"] isKindOfClass:NSDictionary.class]?params[@"item"]:@{};if([session isEqual:_appleSession] && [item[@"uuid"] isEqual:_uuid]){_active=NO;_readyToPlay=NO;[_ready broadcast];}[_ready unlock];[self reply:response status:200 type:nil data:nil];return YES;}
         [self reply:response status:501 type:nil data:nil];[self log:@"MEDIA: sender requested an unsupported playlist action. Copy test log if playback stops here."];return YES;
@@ -244,6 +297,12 @@ static BOOL sendBytes(int fd,NSData *data){const char *p=data.bytes;NSUInteger n
         // must not cancel another waiter or a new epoch request for the same URL.
         [_ready unlock];mime=@"application/vnd.apple.mpegurl";
     }else if(webURL(url)){
+        // Build 114: a piece the phone downloaded early (or is still downloading: wait for it rather than
+        // downloading the same piece twice). Only whole-piece requests; ranges take the normal path.
+        NSDictionary *warm=nil;
+        if(!range.length){[_ready lock];NSDate *limit=[NSDate dateWithTimeIntervalSinceNow:8];while([epoch isEqual:_epoch]&&[_warming containsObject:location])if(![_ready waitUntilDate:limit])break;
+            warm=[epoch isEqual:_epoch]?_warm[location]:nil;if(warm){[_warm removeObjectForKey:location];_warmBytes-=(NSInteger)[warm[@"data"] length];}[_ready unlock];}
+        if(warm){data=warm[@"data"];code=200;mime=warm[@"mime"];}else{
         NSMutableURLRequest *request=[NSMutableURLRequest requestWithURL:url];[request setValue:@"AppleCoreMedia/1.0 ScreenLink" forHTTPHeaderField:@"User-Agent"];
         // Build 111 (TikTok test): TikTok only answers downloads that carry its page's referer, browser name and login.
         // SLMediaHeaders returns nothing for every other host, so YouTube downloads are exactly as before.
@@ -254,7 +313,7 @@ static BOOL sendBytes(int fd,NSData *data){const char *p=data.bytes;NSUInteger n
 #else
         NSUInteger budget=32*1024*1024;
 #endif
-        NSDictionary *download=SLBoundedDownload(request,budget);data=download[@"data"];code=[download[@"code"] integerValue];mime=download[@"mime"];contentRange=download[@"range"];
+        NSDictionary *download=SLBoundedDownload(request,budget);data=download[@"data"];code=[download[@"code"] integerValue];mime=download[@"mime"];contentRange=download[@"range"];}
     }else return @{@"code":@400};
     if(code<200 || code>=300 || !data.length){[self log:[NSString stringWithFormat:@"MEDIA RESOURCE FAILED: HTTP %ld from %@, %lu bytes. No signed URLs are included in this log.",(long)code,url.host?:@"sender",(unsigned long)data.length]];return @{@"code":@(code>=400?code:502)};}
     NSString *text=[[NSString alloc]initWithData:data encoding:NSUTF8StringEncoding];

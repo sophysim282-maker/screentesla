@@ -7,6 +7,8 @@
 @property(nonatomic,copy) void (^status)(NSString *);
 @property(nonatomic,copy) NSString *token;
 @property(nonatomic,copy) NSString *deviceID;
+/// Build 114: the quality the car will ask for (0 = Auto). Used to download the first pieces early.
+@property(atomic) NSInteger warmHeight;
 @property(nonatomic,readonly) BOOL active;
 @property(nonatomic,readonly) BOOL videoIsLive;
 - (BOOL)handle:(http_request_t *)request connection:(void *)connection socket:(int)socket response:(http_response_t **)response;
