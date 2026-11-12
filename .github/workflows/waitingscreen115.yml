@@ -1,5 +1,5 @@
 name: Build115 waiting screen
-# Build 115: My waiting screen (own pictures, GIFs, short videos on the car while waiting, with transitions). Run 1.
+# Build 115: My waiting screen (own pictures, GIFs, short videos on the car while waiting, with transitions). Run 2.
 on:
   push:
     branches: ['release/build115-waiting-screen']
