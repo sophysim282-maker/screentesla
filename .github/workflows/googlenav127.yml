@@ -1,5 +1,5 @@
 name: Build127 Google navigation
-# Build 127: Google Navigation SDK as the guidance engine. Run 1.
+# Build 127: Google Navigation SDK as the guidance engine. Run 2.
 on:
   push:
     branches: ['release/build127-google-navigation']
