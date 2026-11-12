@@ -162,7 +162,8 @@ static void SLActivityFinish(void) {
         [owner append:@"BACKGROUND RUNTIME ENDED: receiver, viewer link and media session retained. iOS may suspend this app without PiP. Returning to ScreenLink resumes the existing receiver; Start is not required to rebuild it."];
         if(!owner.preview.active&&!owner.youtubePiP.active && UIApplication.sharedApplication.applicationState==UIApplicationStateBackground)[owner beginGrace];
     };
-    [self append:@"Version 0.20.81 / build 118: unstick video downloads. A download from the video site that gets no data for 5 seconds is dropped and tried again on a new connection (up to 3 tries) instead of blocking the car for 21 seconds. New log lines: MEDIA PIECE SLOW / RECOVERED / FAILED (internet to phone), MEDIA PIECE TO CAR SLOW / NOT DELIVERED (phone to car), MEDIA PIECE REFUSED (all download places busy). Includes build 117."];
+    [self append:@"Version 0.20.82 / build 119: Keep playing. New line on Home (on by default): a pause or stop that YouTube sends when another app takes the sound, for example a Telegram voice message, is ignored and the car plays this video to its end. Pause with the ScreenLink pause button. Log: KEEP PLAYING …, and AIRPLAY SOUND ARRIVING when the iPhone sends sound to ScreenLink instead of the phone speaker. Includes build 118."];
+    [self append:@"Earlier build 118: unstick video downloads. A download from the video site that gets no data for 5 seconds is dropped and tried again on a new connection (up to 3 tries) instead of blocking the car for 21 seconds. New log lines: MEDIA PIECE SLOW / RECOVERED / FAILED (internet to phone), MEDIA PIECE TO CAR SLOW / NOT DELIVERED (phone to car), MEDIA PIECE REFUSED (all download places busy). Includes build 117."];
     [self append:@"Earlier build 117: cinematic entrance. When the app opens, the car pictures fill the screen; scrolling moves the camera (back, side, three-quarter view), then the status appears and the picture flies into its place on Home. A tap plays the rest alone. It needs the four entrance pictures inside the app; without them the old short entrance plays. Nothing in the video path changed. Includes build 116."];
     [self append:@"Earlier build 116: new Home screen. Dark and simple: the status under the name, one big picture (your waiting screen picture when you have one), round quick buttons (Start, pause, video settings, waiting screen, Disconnect all) and a list: Video, TikTok, Waiting screen, Maps, Orbit Cube, Help. The menu button at the top right opens the Developer screen and the test log. Every function works as before. Includes build 115."];
     [self append:@"Earlier build 115: My waiting screen. Home, Maps button, Waiting screen: choose pictures, GIFs or short videos from Photos. The car shows them while it waits and while a video loads, and changes to the YouTube picture with the transition you pick (Fade, Zoom, Slide, Flash, Dark dip). Files stay on the phone and go only to your car. Includes build 114."];
@@ -210,7 +211,7 @@ static void SLActivityFinish(void) {
  [NSLayoutConstraint activateConstraints:@[[self.dashboard.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor],[self.dashboard.bottomAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.bottomAnchor],[self.dashboard.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],[self.dashboard.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor]]];
  __weak Controller *weak=self;
  self.dashboard.playerAction=^(NSDictionary *request){[weak phonePlayerControl:request];};
- self.dashboard.startAction=^{[weak startHome];};self.dashboard.mapAction=^{[weak showMaps];};self.dashboard.moreAction=^(NSString *key){[weak openMore:key];};self.dashboard.disconnectAction=^{[weak disconnectAll];};self.dashboard.developerAction=^{[weak showDeveloper];};self.dashboard.copyAction=^{[weak youtubeOnlyWebsite];};
+ self.dashboard.startAction=^{[weak startHome];};self.dashboard.mapAction=^{[weak showMaps];};[NSUserDefaults.standardUserDefaults registerDefaults:@{@"keepPlaying":@YES}];self.dashboard.moreAction=^(NSString *key){[weak openMore:key];};self.dashboard.disconnectAction=^{[weak disconnectAll];};self.dashboard.developerAction=^{[weak showDeveloper];};self.dashboard.copyAction=^{[weak youtubeOnlyWebsite];};
  [self showHome];
 }
 - (void)phonePlayerControl:(NSDictionary *)command {
@@ -240,6 +241,7 @@ static void SLActivityFinish(void) {
 // Build 116: the Home list lines that open their own screen.
 - (void)openMore:(NSString *)key {
  __weak typeof(self) weakSelf=self;
+ if([key isEqual:@"keep"]){BOOL on=![NSUserDefaults.standardUserDefaults boolForKey:@"keepPlaying"];[NSUserDefaults.standardUserDefaults setBool:on forKey:@"keepPlaying"];[self append:on?@"KEEP PLAYING ON: a pause or stop from YouTube (for example when a Telegram voice message plays) no longer pauses the car video.":@"KEEP PLAYING OFF: YouTube can pause and stop the car video again."];[self refreshHomeExtras];return;}
  if([key isEqual:@"tiktok"]){Class launcher=NSClassFromString(@"SLTikTokLauncher");if(!launcher)return;
   [(id<SLTikTokLauncherAPI>)launcher setLog:^(NSString *line){dispatch_async(dispatch_get_main_queue(),^{[weakSelf append:line];});}];
   [self presentViewController:[(id<SLTikTokLauncherAPI>)launcher controller] animated:YES completion:nil];return;}
@@ -249,6 +251,7 @@ static void SLActivityFinish(void) {
 }
 // Build 116: the waiting screen line and the big picture on Home follow what the user chose.
 - (void)refreshHomeExtras {
+ [self.dashboard setSubtitle:[NSUserDefaults.standardUserDefaults boolForKey:@"keepPlaying"]?@"On · other apps cannot pause the car video":@"Off · YouTube can pause the car video" forRow:@"keep"];
  Class store=NSClassFromString(@"SLWaitingStore");if(!store||!self.dashboard)return;
  [self.dashboard setSubtitle:[(id<SLWaitingHomeAPI>)store summary] forRow:@"waiting"];
  NSInteger version=[(id<SLWaitingHomeAPI>)store versionNumber];if(version==self.homeWaitingVersion&&self.homeWaitingLoaded)return;self.homeWaitingVersion=version;self.homeWaitingLoaded=YES;

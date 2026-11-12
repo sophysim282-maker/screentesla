@@ -1,5 +1,26 @@
 #import "MediaCast.h"
 #import "BoundedDownload.h"
+#if TARGET_OS_IPHONE
+#import <AVFoundation/AVFoundation.h>
+#endif
+// Build 119: "Keep playing". When it is on, a pause or stop that YouTube sends (iOS makes YouTube do this
+// when another app, such as a Telegram voice message, takes the sound) does not pause the car video.
+// The phone already knows where the pieces of this video are, so the car plays on to the end of it.
+// Pause from ScreenLink's own button and from the car screen still works. Off in tests and the extension.
+static BOOL SLKeepPlaying(void){
+#if TARGET_OS_IPHONE && !SL_BROADCAST_EXTENSION
+    return [NSUserDefaults.standardUserDefaults boolForKey:@"keepPlaying"];
+#else
+    return NO;
+#endif
+}
+static NSString *SLOtherSound(void){
+#if TARGET_OS_IPHONE && !SL_BROADCAST_EXTENSION
+    AVAudioSession *session=AVAudioSession.sharedInstance;return [NSString stringWithFormat:@"other app sound playing: %@, asks others to be quiet: %@",session.isOtherAudioPlaying?@"yes":@"no",session.secondaryAudioShouldBeSilencedHint?@"yes":@"no"];
+#else
+    return @"";
+#endif
+}
 #import "HLSPlaylist.h"
 #import <sys/socket.h>
 #import <unistd.h>
@@ -273,7 +294,9 @@ static BOOL sendBytes(int fd,NSData *data){const char *p=data.bytes;NSUInteger n
         [_ready lock];if([method isEqual:@"POST"] && query[@"position"]){double value=[query[@"position"] doubleValue];if(isfinite(value) && value>=0){_seekPosition=value;_commandKind=@"seek";_command++;}}
         NSData *result=[[NSString stringWithFormat:@"duration: %.6f\nposition: %.6f\n",_duration,_position] dataUsingEncoding:NSUTF8StringEncoding];[_ready unlock];[self reply:response status:200 type:@"text/parameters" data:result];return YES;
     }
+    if([path isEqual:@"/rate"]&&[query[@"value"] doubleValue]==0&&SLKeepPlaying()){[self reply:response status:200 type:nil data:nil];[self log:[NSString stringWithFormat:@"KEEP PLAYING: YouTube sent a pause and it was ignored, the car plays on (%@). To pause, use the pause button in ScreenLink.",SLOtherSound()]];return YES;}
     if([path isEqual:@"/rate"]){[_ready lock];double rate=[query[@"value"] doubleValue];_paused=rate==0;_rate=_paused?0:1;_commandKind=@"rate";_command++;[_ready unlock];[self reply:response status:200 type:nil data:nil];return YES;}
+    if([path isEqual:@"/stop"]&&SLKeepPlaying()){[_ready lock];BOOL playing=_active;[_ready unlock];if(playing){[self reply:response status:200 type:nil data:nil];[self log:[NSString stringWithFormat:@"KEEP PLAYING: YouTube sent a stop and it was ignored, the car plays this video to its end (%@). A new video from YouTube replaces it. To stop, use Disconnect all.",SLOtherSound()]];return YES;}}
     if([path isEqual:@"/stop"]){[_ready lock];_active=NO;_readyToPlay=NO;_command++;[_ready broadcast];[_ready unlock];[self reply:response status:200 type:nil data:nil];[self log:@"MEDIA: sender stopped native playback."];return YES;}
     [self reply:response status:200 type:@"text/x-apple-plist+xml" data:plistData(@{@"errorCode":@0})];return YES;
 }

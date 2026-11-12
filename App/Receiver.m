@@ -160,7 +160,12 @@ static void log_message(void *c,int level,const char *m) {
 }
 int sl_media_handle(void *owner,void *connection,int socket,http_request_t *request,http_response_t **response){return [(__bridge Receiver *)owner mediaRequest:request connection:connection socket:socket response:response];}
 void sl_media_closed(void *owner,void *connection){[(__bridge Receiver *)owner mediaClosed:connection];}
-static void audio(void *c,raop_ntp_t *n,aac_decode_struct *d) { /* Video-only first prototype. */ }
+// Build 119: ScreenLink does not play AirPlay sound. Say so in the log when the iPhone sends some, so a test
+// shows whether another app's sound (a Telegram voice message) is being sent here instead of the phone speaker.
+static void audio(void *c,raop_ntp_t *n,aac_decode_struct *d) {
+    static CFAbsoluteTime last=0;static NSUInteger count=0;count++;CFAbsoluteTime now=CFAbsoluteTimeGetCurrent();
+    if(now-last>20){last=now;NSUInteger total=count;count=0;[(__bridge Receiver *)c emit:[NSString stringWithFormat:@"AIRPLAY SOUND ARRIVING: the iPhone is sending sound to ScreenLink over AirPlay (%lu packets). ScreenLink does not play this sound, so it is silent. If this appears while another app plays, that app's sound went to AirPlay instead of the phone speaker.",(unsigned long)total]];}
+}
 static void flush(void *c) {}
 static void connection(void *c) { [(__bridge Receiver *)c controlOpened]; }
 static void disconnection(void *c) { [(__bridge Receiver *)c controlClosed]; }
