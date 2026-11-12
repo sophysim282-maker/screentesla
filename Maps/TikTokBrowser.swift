@@ -58,6 +58,8 @@ final class TikTokViewController: UIViewController, WKNavigationDelegate, WKUIDe
     private let autoButton = UIButton(type: .system)
     private var lastMoved = 0
     private var scrolledEpoch = ""
+    private var lastMoveText = ""
+    private var describedAt = Date.distantPast
     private var preparedCount = 0
 
     // Marks every video on the page as allowed for AirPlay and reports what kind of video is playing.
@@ -74,25 +76,47 @@ final class TikTokViewController: UIViewController, WKNavigationDelegate, WKUIDe
     // on such boxes and hides small "Open app" buttons. (2) Auto scroll: when the video in the middle
     // of the screen ends or starts over, moves to the next one.
     private static let helper = """
-    (function(){if(window.__slTik)return;var S=window.__slTik={auto:false,last:null,lastT:0,since:Date.now(),nextAt:0,moved:0,hidden:0};
+    (function(){if(window.__slTik&&window.__slTik.v===123)return;if(window.__slTik&&window.__slTik.timer)clearInterval(window.__slTik.timer);var S=window.__slTik={v:123,auto:false,last:null,lastT:0,since:Date.now(),nextAt:0,moved:0,hidden:0};
     function center(){var vs=[].slice.call(document.querySelectorAll('video')),mid=innerHeight/2,best=null,bd=1e9;vs.forEach(function(v){var r=v.getBoundingClientRect();if(r.height<50)return;var d=Math.abs((r.top+r.bottom)/2-mid);if(d<bd){bd=d;best=v;}});return best;}
     function scroller(el){for(var n=el;n&&n!==document.body&&n!==document.documentElement;n=n.parentElement){var st=getComputedStyle(n);if(/(auto|scroll)/.test(st.overflowY)&&n.scrollHeight>n.clientHeight+80)return n;}return null;}
+    S.key=function(){var v=center();if(!v)return 'none';var r=v.getBoundingClientRect();return (v.currentSrc||v.src||'').slice(-40)+'@'+Math.round(r.top/20)+'@'+[].slice.call(document.querySelectorAll('video')).indexOf(v);};
+    S.swipe=function(){var x=innerWidth/2,y0=innerHeight*0.75,y1=innerHeight*0.18,el=document.elementFromPoint(x,innerHeight/2)||document.body,bad=[];
+     function pt(type,y){try{el.dispatchEvent(new PointerEvent(type,{bubbles:true,cancelable:true,composed:true,pointerId:7,pointerType:'touch',isPrimary:true,clientX:x,clientY:y,screenX:x,screenY:y,buttons:type==='pointerup'?0:1}));}catch(e){if(bad.indexOf('pointer '+e.name)<0)bad.push('pointer '+e.name);}}
+     function tc(type,y){try{var t=new Touch({identifier:7,target:el,clientX:x,clientY:y,screenX:x,screenY:y,pageX:x,pageY:y+scrollY});var end=type==='touchend';el.dispatchEvent(new TouchEvent(type,{bubbles:true,cancelable:true,composed:true,touches:end?[]:[t],targetTouches:end?[]:[t],changedTouches:[t]}));}catch(e){if(bad.indexOf('touch '+e.name)<0)bad.push('touch '+e.name);}}
+     pt('pointerdown',y0);tc('touchstart',y0);var i=0,id=setInterval(function(){i++;var y=y0+(y1-y0)*i/8;pt('pointermove',y);tc('touchmove',y);if(i>=8){clearInterval(id);pt('pointerup',y1);tc('touchend',y1);}},16);
+     try{el.dispatchEvent(new WheelEvent('wheel',{bubbles:true,cancelable:true,deltaY:innerHeight,clientX:x,clientY:y0}));}catch(e){bad.push('wheel '+e.name);}
+     return bad.join(', ');};
+    // What the page is made of, for the log: how many videos, how the list scrolls, which controls exist.
+    S.describe=function(){var vs=[].slice.call(document.querySelectorAll('video')),v=center(),out=[];
+     out.push('page '+location.pathname.slice(0,40)+' videos '+vs.length+' docHeight '+document.documentElement.scrollHeight+'/'+innerHeight+' Touch '+(typeof Touch)+' Pointer '+(typeof PointerEvent));
+     out.push('videos: '+vs.slice(0,6).map(function(o){var r=o.getBoundingClientRect(),src=o.currentSrc||o.src||'';return Math.round(r.top)+'/'+Math.round(r.height)+(src.indexOf('blob:')===0?' blob':(src?' file':' empty'))+(o.loop?' loop':'')+(o.paused?' paused':' playing');}).join(' ; '));
+     var chain=[];for(var n=v,i=0;n&&i<7;n=n.parentElement,i++){var st=getComputedStyle(n);chain.push(n.tagName.toLowerCase()+(n.getAttribute('data-e2e')?'['+n.getAttribute('data-e2e')+']':'')+' '+st.overflowY+(st.transform&&st.transform!=='none'?' moved':'')+(st.scrollSnapType&&st.scrollSnapType!=='none'?' snap':'')+' '+n.scrollHeight+'/'+n.clientHeight);}
+     out.push('around the video: '+chain.join(' < '));
+     var names={};[].slice.call(document.querySelectorAll('[data-e2e]')).forEach(function(e){names[e.getAttribute('data-e2e')]=1;});out.push('controls: '+Object.keys(names).slice(0,30).join(','));
+     var boxes=[].slice.call(document.querySelectorAll('[role=dialog]')).map(function(d){return (d.innerText||'').trim().slice(0,60).split(String.fromCharCode(10)).join(' ');}).filter(function(t){return t;});if(boxes.length)out.push('boxes on top: '+boxes.slice(0,3).join(' | '));
+     out.push('hidden by ScreenLink: '+S.hidden+(S.hiddenText?' ('+S.hiddenText+')':'')+' ; last move: '+(S.lastMove||'none yet'));
+     return out.join(String.fromCharCode(10));};
     S.next=function(){var v=center(),done=false;
      // Build 122: first bring the next video on the page into the middle (works for every kind of scrolling list).
      if(v){var top=v.getBoundingClientRect().top,nx=null,nt=1e9;[].slice.call(document.querySelectorAll('video')).forEach(function(o){if(o===v)return;var t=o.getBoundingClientRect().top;if(t>top+50&&t<nt){nt=t;nx=o;}});
       if(nx){try{nx.scrollIntoView({behavior:'smooth',block:'center'});done=true;}catch(e){}}}
      if(!done){var sc=v&&scroller(v),h=sc?sc.clientHeight:innerHeight;try{(sc||window).scrollBy({top:h,behavior:'smooth'});}catch(e){(sc||window).scrollBy(0,h);}}
-     // If the page did not move, press its own "next" control, then the down-arrow key.
-     setTimeout(function(){if(center()!==v)return;var b=document.querySelector('[data-e2e=\"arrow-right\"],[data-e2e=\"video-switch-next\"],button[aria-label*=\"next\" i],button[aria-label*=\"Next\"]');if(b){b.click();return;}
-      ['keydown','keyup'].forEach(function(k){document.dispatchEvent(new KeyboardEvent(k,{key:'ArrowDown',code:'ArrowDown',keyCode:40,which:40,bubbles:true}));});},1500);
+     // Build 123: check after each try whether the page really moved; if not, try the next way; remember what worked.
+     var before=S.key();S.lastMove='trying';
+     setTimeout(function(){if(S.key()!==before){S.lastMove=done?'scroll to next video':'scroll by one screen';return;}
+      var b=document.querySelector('[data-e2e=arrow-right],[data-e2e=video-switch-next],[data-e2e*=next],button[aria-label*=next i]');if(b){try{b.click();}catch(e){}}
+      ['keydown','keyup'].forEach(function(k){try{document.dispatchEvent(new KeyboardEvent(k,{key:'ArrowDown',code:'ArrowDown',keyCode:40,which:40,bubbles:true}));}catch(e){}});
+      setTimeout(function(){if(S.key()!==before){S.lastMove=b?'next button':'arrow key';return;}
+       var note=S.swipe();
+       setTimeout(function(){S.lastMove=S.key()!==before?'finger swipe':'NOTHING MOVED THE PAGE'+(note?' ('+note+')':'');},1500);},1200);},1300);
      S.since=Date.now();S.moved++;};
     S.upcoming=function(){var v=center();if(!v)return '';var top=v.getBoundingClientRect().top,list=[];[].slice.call(document.querySelectorAll('video')).forEach(function(o){if(o===v)return;var s=o.currentSrc||o.src||'';if(s.indexOf('http')!==0)return;var t=o.getBoundingClientRect().top;if(t>top+50)list.push([t,s]);});list.sort(function(a,b){return a[0]-b[0];});return list.slice(0,2).map(function(x){return x[1];}).join('\\n');};
     function nag(){var no=/^(not now|maybe later|continue on web|continue in browser|stay on web|no thanks|not interested)$/i,ask=/open (the )?(tiktok|app)|get (the )?(tiktok )?app|tiktok app|in the app/i;
      [].slice.call(document.querySelectorAll('button,[role=button],a')).forEach(function(b){var t=(b.innerText||'').trim();if(!t||t.length>30||!no.test(t))return;var r=b.getBoundingClientRect();if(!r.width||!r.height)return;
       var box=b.closest('[role=dialog],[class*=odal],[class*=opup],[class*=heet],[class*=anner],[class*=rawer]');if(box&&ask.test(box.innerText||'')){b.click();S.hidden++;}});
      var open=/^(open app|open tiktok|open tiktok app|get app|get the app|get tiktok app|open in app|use app|use the app|watch in app)$/i;
-     [].slice.call(document.querySelectorAll('a,button,[role=button],div,span')).forEach(function(e){if(e.__slHid||e.children.length>3)return;var t=(e.innerText||'').trim();if(!t||t.length>24||!open.test(t))return;var r=e.getBoundingClientRect();if(r.height&&r.height<140){e.style.setProperty('display','none','important');e.__slHid=1;S.hidden++;}});}
-    setInterval(function(){try{nag();}catch(e){}if(!S.auto)return;var v=center();if(!v)return;if(v!==S.last){S.last=v;S.lastT=0;S.since=Date.now();return;}
+     [].slice.call(document.querySelectorAll('a,button,[role=button],div,span')).forEach(function(e){if(e.__slHid||e.children.length>3)return;var t=(e.innerText||'').trim();if(!t||t.length>24||!open.test(t))return;var r=e.getBoundingClientRect();if(r.height&&r.height<140){e.style.setProperty('display','none','important');e.__slHid=1;S.hidden++;S.hiddenText=((S.hiddenText||'')+' '+e.tagName.toLowerCase()+':'+t).slice(-120);}});}
+    S.timer=setInterval(function(){try{nag();}catch(e){}if(!S.auto)return;var v=center();if(!v)return;if(v!==S.last){S.last=v;S.lastT=0;S.since=Date.now();return;}
      var t=v.currentTime||0,d=v.duration||0,wrapped=S.lastT>1&&t<S.lastT-1,ended=d>0&&t>=d-0.35,waited=(Date.now()-S.since)/1000;S.lastT=t;if(Date.now()<S.nextAt)return;
      if(wrapped||ended||(d>0&&waited>d+4)||(!(d>0)&&waited>60)){S.nextAt=Date.now()+2500;S.lastT=0;S.next();}},400);})();
     """
@@ -171,7 +195,11 @@ final class TikTokViewController: UIViewController, WKNavigationDelegate, WKUIDe
         timer = nil
     }
 
-    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) { shareLogin() }
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        shareLogin()
+        guard webView === web else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 6) { [weak self] in self?.describePage("page loaded") }
+    }
 
     /// Build 112: stay inside ScreenLink. A tap must never jump to the TikTok app or the App Store.
     func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction,
@@ -276,6 +304,8 @@ final class TikTokViewController: UIViewController, WKNavigationDelegate, WKUIDe
         showAuto()
         applyHelper()
         status.text = autoOn ? "Auto scroll ON: the next video starts when this one ends." : "Auto scroll off."
+        describedAt = .distantPast
+        describePage("Auto \(autoOn ? "ON" : "off")")
         SLTikTokLauncher.log?("TIKTOK TEST: auto scroll \(autoOn ? "ON" : "off").")
     }
 
@@ -321,8 +351,30 @@ final class TikTokViewController: UIViewController, WKNavigationDelegate, WKUIDe
         }
     }
 
+    /// Build 123: writes what the TikTok page is made of to the log (no personal content: sizes, kinds, control names).
+    private func describePage(_ why: String) {
+        guard Date().timeIntervalSince(describedAt) > 20 else { return }
+        describedAt = Date()
+        web.evaluateJavaScript("window.__slTik&&window.__slTik.describe?window.__slTik.describe():'helper not ready'") { result, error in
+            let text = result as? String ?? (error?.localizedDescription ?? "no answer")
+            for line in text.split(separator: "\n") { SLTikTokLauncher.log?("TIKTOK PAGE (\(why)): \(String(line.prefix(420)))") }
+        }
+    }
+
+    private func reportMove() {
+        web.evaluateJavaScript("window.__slTik?(window.__slTik.lastMove||''):''") { [weak self] result, _ in
+            guard let self, let text = result as? String, !text.isEmpty, text != "trying", text != self.lastMoveText else { return }
+            self.lastMoveText = text
+            SLTikTokLauncher.log?("TIKTOK: auto scroll result: \(text).")
+            self.status.text = text.hasPrefix("NOTHING") ? "Auto scroll could not move this page. Send the log to Claude." : "Auto scroll: \(text)."
+            if text.hasPrefix("NOTHING") { self.describePage("auto scroll failed") }
+        }
+    }
+
     private func check(announce: Bool) {
         applyHelper()
+        reportMove()
+        if announce { describePage("Send to car") }
         followCar()
         shareLogin()
         prepareNext()

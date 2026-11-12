@@ -4,6 +4,8 @@ Read this first. It replaces reading the old 400k-token conversation.
 
 ## WHERE WE ARE NOW (read this part first)
 
+- **Build 123 (0.20.86), branch `release/build123-tiktok-scroll`:** TikTok auto scroll escalation + `TIKTOK PAGE` diagnostics. NEED the user's log to go further. See BUILD123.md.
+
 - **Build 122 (0.20.85), branch `release/build122-tiktok-next`:** TikTok auto scroll follows the car + whole-file cache/prefetch. Waiting for the user's TikTok log. See BUILD122.md.
 
 - **Build 121 (0.20.84), branch `release/build121-lighter-4k`:** 4K painted at screen size + car speed in the summary line. Waiting for a 4K car log. See BUILD121.md.
