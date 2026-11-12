@@ -220,7 +220,7 @@ static void SLActivityFinish(void) {
  [NSLayoutConstraint activateConstraints:@[[self.dashboard.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor],[self.dashboard.bottomAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.bottomAnchor],[self.dashboard.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],[self.dashboard.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor]]];
  __weak Controller *weak=self;
  self.dashboard.playerAction=^(NSDictionary *request){[weak phonePlayerControl:request];};
- self.dashboard.startAction=^{[weak startHome];};self.dashboard.mapAction=^{[weak showMaps];};[NSUserDefaults.standardUserDefaults registerDefaults:@{@"keepPlaying":@YES,@"phoneSound":@YES}];self.dashboard.moreAction=^(NSString *key){[weak openMore:key];};self.dashboard.disconnectAction=^{[weak disconnectAll];};self.dashboard.developerAction=^{[weak showDeveloper];};self.dashboard.copyAction=^{[weak youtubeOnlyWebsite];};
+ self.dashboard.startAction=^{[weak startHome];};self.dashboard.mapAction=^{[weak showMaps];};[NSUserDefaults.standardUserDefaults registerDefaults:@{@"keepPlaying":@YES,@"phoneSound":@NO}];/* Build 127: Phone sound made ScreenLink vanish from the AirPlay list on the user's iPhone (build 126), so it is off for everyone, also for phones that still have it on from 124-126. */if(![NSUserDefaults.standardUserDefaults boolForKey:@"phoneSoundReset127"]){[NSUserDefaults.standardUserDefaults setBool:YES forKey:@"phoneSoundReset127"];[NSUserDefaults.standardUserDefaults setBool:NO forKey:@"phoneSound"];}[NSUserDefaults.standardUserDefaults synchronize;self.dashboard.moreAction=^(NSString *key){[weak openMore:key];};self.dashboard.disconnectAction=^{[weak disconnectAll];};self.dashboard.developerAction=^{[weak showDeveloper];};self.dashboard.copyAction=^{[weak youtubeOnlyWebsite];};
  [self showHome];
 }
 - (void)phonePlayerControl:(NSDictionary *)command {
@@ -264,7 +264,7 @@ static void SLActivityFinish(void) {
 // Build 116: the waiting screen line and the big picture on Home follow what the user chose.
 - (void)refreshHomeExtras {
  [self.dashboard setSubtitle:[NSUserDefaults.standardUserDefaults boolForKey:@"keepPlaying"]?@"On · other apps cannot pause the car video":@"Off · YouTube can pause the car video" forRow:@"keep"];
- [self.dashboard setSubtitle:[NSUserDefaults.standardUserDefaults boolForKey:@"phoneSound"]?@"On · Messenger, Telegram … play on the phone":@"Off · other apps' sound goes to AirPlay (silent)" forRow:@"phonesound"];
+ [self.dashboard setSubtitle:[NSUserDefaults.standardUserDefaults boolForKey:@"phoneSound"]?@"On · TEST: AirPlay may disappear":@"Off · normal" forRow:@"phonesound"];
  {BOOL mapsOpen=[NSUserDefaults.standardUserDefaults boolForKey:@"mapsOpen"];[self.dashboard setSubtitle:mapsOpen?@"Open · tap to show or close":@"Closed · tap to open" forRow:@"maps"];[self.dashboard setSubtitle:mapsOpen?@"Shows the turns of a Maps route":@"Needs Maps (closed)" forRow:@"cube"];}
  [self.dashboard setSubtitle:[NSUserDefaults.standardUserDefaults boolForKey:@"pipOff"]?@"Off · stays awake with silent sound":@"On · the small window keeps the app awake" forRow:@"pip"];
  Class store=NSClassFromString(@"SLWaitingStore");if(!store||!self.dashboard)return;
