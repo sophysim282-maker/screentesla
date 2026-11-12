@@ -1,5 +1,5 @@
 name: Build128 phone sound and Google navigation
-# Build 128: other apps sound played on the phone; Google Navigation SDK engine (127). Run 1.
+# Build 128: other apps sound played on the phone; Google Navigation SDK engine (127). Run 2.
 on:
   push:
     branches: ['release/build128-phone-sound']
