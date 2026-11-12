@@ -46,6 +46,10 @@ static void SLActivityFinish(void) {
 + (UIViewController *)controller;
 + (void)setLog:(void (^)(NSString *))block;
 @end
+// Build 115: Maps/WaitingScreen.swift.
+@protocol SLWaitingLauncherAPI
++ (UIViewController *)controller;
+@end
 @protocol SLKeepAwakeAPI
 + (void)start;
 + (void)stop;
@@ -151,7 +155,8 @@ static void SLActivityFinish(void) {
         [owner append:@"BACKGROUND RUNTIME ENDED: receiver, viewer link and media session retained. iOS may suspend this app without PiP. Returning to ScreenLink resumes the existing receiver; Start is not required to rebuild it."];
         if(!owner.preview.active&&!owner.youtubePiP.active && UIApplication.sharedApplication.applicationState==UIApplicationStateBackground)[owner beginGrace];
     };
-    [self append:@"Version 0.20.77 / build 114: faster video start. The phone now fetches the two YouTube lists the car needs first (not all 20 in turn) and downloads the first video and sound pieces at once, before the car asks (log: MEDIA WARM-UP). The car notices a new video within 0.4 s instead of 1 s. On Auto, after a slowly downloaded video the next one starts at 720p. The player itself is unchanged. Includes build 113."];
+    [self append:@"Version 0.20.78 / build 115: My waiting screen. Home, Maps button, Waiting screen: choose pictures, GIFs or short videos from Photos. The car shows them while it waits and while a video loads, and changes to the YouTube picture with the transition you pick (Fade, Zoom, Slide, Flash, Dark dip). Files stay on the phone and go only to your car. Includes build 114."];
+    [self append:@"Earlier build 114: faster video start. The phone now fetches the two YouTube lists the car needs first (not all 20 in turn) and downloads the first video and sound pieces at once, before the car asks (log: MEDIA WARM-UP). The car notices a new video within 0.4 s instead of 1 s. On Auto, after a slowly downloaded video the next one starts at 720p. The player itself is unchanged. Includes build 113."];
     [self append:@"Earlier build 113 TEST: TikTok page no longer keeps asking to open the app (it presses Not now and hides Open app buttons), and has an Auto button: when it is ON the next video starts by itself when the current one ends. Everything else is build 112."];
     [self append:@"Earlier build 112 TEST: TikTok stays inside ScreenLink. Taps no longer jump to the TikTok app or the App Store, and sign-in windows (for example Continue with Google) open inside ScreenLink. If Google refuses to sign in inside an app, use email or username with a password. Everything else is build 111."];
     [self append:@"Earlier build 111 TEST: TikTok inside ScreenLink without screen recording. Tap the Maps button on Home, then Open TikTok (test). Log in, play a video, tap Send to car or the AirPlay button and choose ScreenLink VPN Phone. Every step writes a TIKTOK TEST line here. It may not work; that is what this build finds out. Everything else is build 110."];
@@ -224,11 +229,13 @@ static void SLActivityFinish(void) {
 }
 - (void)showMaps {
  // Build 108: all map systems are closed at the user's request (video only). Remove these two lines to open them again.
- {UIAlertController *closed=[UIAlertController alertControllerWithTitle:@"Maps are closed" message:@"All map systems are turned off so only the video runs.\n\nTikTok test: TikTok inside ScreenLink, no screen recording." preferredStyle:UIAlertControllerStyleAlert];
+ {UIAlertController *closed=[UIAlertController alertControllerWithTitle:@"More" message:@"Maps are closed so only the video runs.\n\nTikTok runs inside ScreenLink with no screen recording. Waiting screen lets you choose what the car shows while it waits." preferredStyle:UIAlertControllerStyleAlert];
   __weak typeof(self) weakSelf=self;
   [closed addAction:[UIAlertAction actionWithTitle:@"Open TikTok (test)" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action){typeof(self) owner=weakSelf;Class launcher=NSClassFromString(@"SLTikTokLauncher");if(!owner||!launcher)return;
    [(id<SLTikTokLauncherAPI>)launcher setLog:^(NSString *line){dispatch_async(dispatch_get_main_queue(),^{[weakSelf append:line];});}];
    [owner presentViewController:[(id<SLTikTokLauncherAPI>)launcher controller] animated:YES completion:nil];}]];
+  [closed addAction:[UIAlertAction actionWithTitle:@"Waiting screen (your pictures and videos)" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action){typeof(self) owner=weakSelf;Class launcher=NSClassFromString(@"SLWaitingLauncher");if(!owner||!launcher)return;
+   [owner presentViewController:[(id<SLWaitingLauncherAPI>)launcher controller] animated:YES completion:nil];[owner append:@"WAITING SCREEN: opened. Files you choose are shown on the car while it waits and while a video loads."];}]];
   [closed addAction:[UIAlertAction actionWithTitle:@"Close" style:UIAlertActionStyleCancel handler:nil]];[self presentViewController:closed animated:YES completion:nil];return;}
  Class cls=NSClassFromString(@"SLMapsLauncher");if(!cls){[self append:@"ScreenLink Maps is not available in this build."];return;}
  UIViewController *maps=[(id<SLMapsLauncherAPI>)cls mapsController];if(maps.presentingViewController)return;

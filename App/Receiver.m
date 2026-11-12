@@ -8,6 +8,11 @@
 + (NSData *)stateData;
 + (void)command:(NSString *)action params:(NSDictionary<NSString *,NSString *> *)params;
 @end
+// Build 115: the user's own waiting screen files (Maps/WaitingScreen.swift).
+@protocol SLWaitingStoreAPI
++ (NSData *)listData;
++ (NSDictionary *)item:(NSString *)identifier;
+@end
 // Build 105: map squares for the car, fetched by the phone (Maps/MapTiles.swift).
 @protocol SLMapTilesAPI
 + (NSData *)tile:(NSString *)path;
@@ -767,6 +772,28 @@ static NSArray *txtStrings(const char *bytes,int length) {
     else if([url.path isEqual:@"/screen/init.mp4"]){NSDictionary *part=[_screenStream initialization];body=part[@"data"]?:NSData.data;mime=@"video/mp4";extra=[NSString stringWithFormat:@"X-Stream-Epoch: %@\r\n",part[@"epoch"]?:@""];if(!body.length)status=@"503 Service Unavailable";}
     else if([url.path isEqual:@"/screen/segments"]){NSDictionary *part=[_screenStream readAfter:after epoch:epoch?:@""];if([part[@"reset"] boolValue])status=@"409 Conflict";else{body=part[@"data"]?:NSData.data;if(!body.length)status=@"204 No Content";}mime=@"video/mp4";extra=[NSString stringWithFormat:@"X-Stream-Epoch: %@\r\nX-Last-ID: %@\r\n",part[@"epoch"]?:@"",part[@"id"]?:@0];}
     else if([url.path isEqual:@"/split"] || [url.path isEqual:@"/map"]){mime=@"text/html; charset=utf-8";NSString *path=[NSBundle.mainBundle pathForResource:[url.path isEqual:@"/split"]?@"SplitViewer":@"MapPlayer" ofType:@"html"];body=path?[NSData dataWithContentsOfFile:path]:NSData.data;}
+    else if([url.path hasPrefix:@"/waiting/"]){
+        // Build 115: pictures, GIFs and short videos the user chose as the car's waiting screen.
+        Class store=NSClassFromString(@"SLWaitingStore");
+        if(!store)status=@"404 Not Found";
+        else if([url.path isEqual:@"/waiting/list"]){mime=@"application/json";body=[(id<SLWaitingStoreAPI>)store listData];}
+        else if([url.path hasPrefix:@"/waiting/item/"]){
+            NSDictionary *item=[(id<SLWaitingStoreAPI>)store item:[url.path substringFromIndex:14]];NSData *file=[item[@"data"] isKindOfClass:NSData.class]?item[@"data"]:nil;
+            if(!file.length)status=@"404 Not Found";
+            else{
+                mime=[item[@"mime"] isKindOfClass:NSString.class]?item[@"mime"]:@"application/octet-stream";cacheControl=@"private, max-age=86400";
+                NSUInteger total=file.length,from=0,to=total-1;BOOL partial=NO;
+                // A video element asks for parts of the file ("Range: bytes=a-b").
+                if([byteRange hasPrefix:@"bytes="]){NSArray<NSString *> *ends=[[byteRange substringFromIndex:6] componentsSeparatedByString:@"-"];
+                    if(ends.count==2&&ends[0].length){long long first=ends[0].longLongValue,last=ends[1].length?ends[1].longLongValue:(long long)total-1;
+                        if(first>=0&&first<(long long)total&&last>=first){from=(NSUInteger)first;to=(NSUInteger)MIN(last,(long long)total-1);partial=YES;}}}
+                body=partial?[file subdataWithRange:NSMakeRange(from,to-from+1)]:file;
+                if(partial){status=@"206 Partial Content";extra=[NSString stringWithFormat:@"Content-Range: bytes %lu-%lu/%lu\r\nAccept-Ranges: bytes\r\n",(unsigned long)from,(unsigned long)to,(unsigned long)total];}
+                else extra=@"Accept-Ranges: bytes\r\n";
+            }
+        }
+        else status=@"404 Not Found";
+    }
     else if([url.path hasPrefix:@"/map/"]){
         // Build 87: small navigation map for the (rear-seat) car screen; same approval/token as media.
         Class feed=NSClassFromString(@"SLMapFeed");

@@ -231,7 +231,7 @@ window.addEventListener('pageshow',event=>{if(!event.persisted)return;setIdleArt
 function renderPerformance(){
  if(performanceFrozen||$('performancePanel').hidden)return;
  const profile=player?.performanceProfile?.()||previousPlaybackProfile;
- const lines=['Build: 0.20.77 / 114 · '+(activeEngine||requestedEngine)+' · '+(player?.videoAcceleration||requestedDecoder),'Playback: '+(player?.currentTime||0).toFixed(2)+' s','Page: '+(profile?.visibility||document.visibilityState||'unknown'),''];
+ const lines=['Build: 0.20.78 / 115 · '+(activeEngine||requestedEngine)+' · '+(player?.videoAcceleration||requestedDecoder),'Playback: '+(player?.currentTime||0).toFixed(2)+' s','Page: '+(profile?.visibility||document.visibilityState||'unknown'),''];
  const names=[['demuxMs','Demux ms'],['decoderWaitMs','Decoder feed wait ms'],['renderCallbackGapMs','Drawing callback gap ms'],['canvasDrawMs','Canvas draw call ms'],['videoQueueDepth','Pending decode requests']];
  for(const [key,label] of names){const m=profile?.metrics[key];lines.push(label+': '+(m?'mean '+m.mean.toFixed(2)+' | max '+m.max.toFixed(2)+' | n '+m.count:'no samples'));if(m)lines.push('  max at '+(m.maxAtMs/1000).toFixed(2)+'s, media '+m.mediaTime.toFixed(2)+'s');}
  lines.push('','Decode queue now: '+(profile?.videoQueueDepth||0),'Decoded frames queued: '+(profile?.framesQueued||0),'Video recoveries: '+(player?.stats.videoRecoveries||0),'Audio buffer underruns: '+(player?.stats.audioUnderruns||0));
@@ -252,7 +252,7 @@ async function retireOfflineUI(){
  }catch(error){lastConnectionError={message:'Rescue page setup: '+error.message,time:Date.now()};}
 }
 retireOfflineUI();
-self.ScreenLinkCanvasStatus=()=>({build:'0.20.77-114',engine:activeEngine||requestedEngine,videoDecoder:player?.videoAcceleration||null,connectionPhase,approvalPhase,phoneVolume,phoneEQ,phoneSettingsRevision,phonePlaybackRevision,volumeGain:player?.gain?.gain.value??null,eqLowGain:player?.low?.gain.value??null,minimalViewer:youtubeOnly&&!developerMode,lastRequestAt,lastSuccessAt,offlineUI:false,healthFailures,lastHealthyAt,reconnections,quality:$('quality').value,transportWaiting,decoderFaults,transportError:player?.lastTransportError||null,lastPlaybackError,lastConnectionError,recoveryAttempts:retryCount,mediaRunning:player?.running||false,mediaDuration:player?.duration||0,videoFramesQueued:player?.frames.length||0,audioPacketsQueued:player?.audio.length||0,secureContext:isSecureContext,connected,connectionPending:joining,viewerMode:youtubeOnly?'youtube':'split',screenFrames:screen.framesDrawn,screenHidden:screen.hold,screenQueue:screen.decoder?.decodeQueueSize||0,mediaEpoch,mediaPosition:player?.currentTime||0,mediaPaused:player?.paused??true,mediaWidth:$('mediaCanvas').width,mediaHeight:$('mediaCanvas').height,youtubeBufferSeconds:player?.bufferSeconds||0,encodedVideoLead:player?Math.max(0,player.preparedVideoEnd-player.currentTime):0,mediaStats:player?{...player.stats}:null,performance:player?.performanceProfile?.()||null,previousPlaybackProfile,playbackEvents:player?(player.playbackEvents||[]).map(e=>({...e})):[],segmentCache:player?.segmentCache?.size||0,audioSampleRate:player?.audioContext?.sampleRate||0,decodedAudioRate:player?.lastAudioSampleRate||player?.audio[0]?.sampleRate||0,segments:player?(player.segmentDiagnostics||[]).map(s=>({...s})):[],audioLead:player?.audioContext&&player.audioTail!==null?Math.max(0,player.audioTail-player.audioContext.currentTime):0,videoLead:player?Math.max(0,player.videoEnd-player.currentTime):0,audioState:audioContext?.state||'locked',audioNodes:player?.nodes.size||0,mediaError:player?.error?.message||'',socketOpen:ws?.readyState===WebSocket.OPEN});
+self.ScreenLinkCanvasStatus=()=>({build:'0.20.78-115',engine:activeEngine||requestedEngine,videoDecoder:player?.videoAcceleration||null,connectionPhase,approvalPhase,phoneVolume,phoneEQ,phoneSettingsRevision,phonePlaybackRevision,volumeGain:player?.gain?.gain.value??null,eqLowGain:player?.low?.gain.value??null,minimalViewer:youtubeOnly&&!developerMode,lastRequestAt,lastSuccessAt,offlineUI:false,healthFailures,lastHealthyAt,reconnections,quality:$('quality').value,transportWaiting,decoderFaults,transportError:player?.lastTransportError||null,lastPlaybackError,lastConnectionError,recoveryAttempts:retryCount,mediaRunning:player?.running||false,mediaDuration:player?.duration||0,videoFramesQueued:player?.frames.length||0,audioPacketsQueued:player?.audio.length||0,secureContext:isSecureContext,connected,connectionPending:joining,viewerMode:youtubeOnly?'youtube':'split',screenFrames:screen.framesDrawn,screenHidden:screen.hold,screenQueue:screen.decoder?.decodeQueueSize||0,mediaEpoch,mediaPosition:player?.currentTime||0,mediaPaused:player?.paused??true,mediaWidth:$('mediaCanvas').width,mediaHeight:$('mediaCanvas').height,youtubeBufferSeconds:player?.bufferSeconds||0,encodedVideoLead:player?Math.max(0,player.preparedVideoEnd-player.currentTime):0,mediaStats:player?{...player.stats}:null,performance:player?.performanceProfile?.()||null,previousPlaybackProfile,playbackEvents:player?(player.playbackEvents||[]).map(e=>({...e})):[],segmentCache:player?.segmentCache?.size||0,audioSampleRate:player?.audioContext?.sampleRate||0,decodedAudioRate:player?.lastAudioSampleRate||player?.audio[0]?.sampleRate||0,segments:player?(player.segmentDiagnostics||[]).map(s=>({...s})):[],audioLead:player?.audioContext&&player.audioTail!==null?Math.max(0,player.audioTail-player.audioContext.currentTime):0,videoLead:player?Math.max(0,player.videoEnd-player.currentTime):0,audioState:audioContext?.state||'locked',audioNodes:player?.nodes.size||0,mediaError:player?.error?.message||'',socketOpen:ws?.readyState===WebSocket.OPEN});
 for(const id of ['viewMode','quality','eq'])makeInline(id);
 function autoConnect(){if(!stopped&&!connected&&!joining)connect();if(!stopped)reconnectTimer=setTimeout(autoConnect,3000);}if(isSecureContext&&typeof VideoDecoder==='function')autoConnect();
 if(!isSecureContext||typeof VideoDecoder!=='function')status.textContent='This viewer needs HTTPS and WebCodecs support.';
@@ -660,6 +660,62 @@ const mapReplace=()=>setTimeout(()=>{if(mapBgState&&!$('mapBg').hidden)placeMapB
 $('mapMini').addEventListener('click',()=>{if(document.body.classList.contains('map-big'))return;document.body.classList.toggle('map-big');mapReplace();renderMapUi(mapBgState,mapShown());setTimeout(()=>{if(jsPose)carMapFrame(jsPose);},560);});
 $('mapMini').addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){if(document.body.classList.contains('map-big'))return;e.preventDefault();document.body.classList.toggle('map-big');renderMapUi(mapBgState,mapShown());}});
 $('mediaCanvas').addEventListener('click',e=>{if(document.body.classList.contains('map-big')){document.body.classList.remove('map-big');e.stopPropagation();renderMapUi(mapBgState,mapShown());}},true);
+// Build 115: "My waiting screen". The phone lists files the user chose (/waiting/list). They are shown
+// while no video plays and while one is loading, and change to the video with the chosen transition.
+// A waiting video is stopped on its picture the moment a YouTube video starts loading, so the car never
+// plays two videos at once, and its file is released once the YouTube picture is on screen.
+const waitBox=$('waitLayer'),waitFx=$('waitFx');let waitList=null,waitVersion=null,waitIndex=0,waitTimer=0,waitState='off',waitAskedAt=0,waitFrozen=false;
+function waitItem(item){
+ const video=item.kind==='video',el=video?document.createElement('video'):new Image();
+ if(video){el.muted=true;el.defaultMuted=true;el.playsInline=true;el.setAttribute('playsinline','');el.disableRemotePlayback=true;el.autoplay=true;el.loop=waitList.items.length===1;el.onended=()=>waitNext();}
+ el.className='wait-item';el.alt='';el.draggable=false;el.style.objectFit=waitList.fit==='fit'?'contain':'cover';
+ el.src='/waiting/item/'+encodeURIComponent(item.id)+'?token='+encodeURIComponent(token)+'&v='+waitList.v;return el;
+}
+function waitDrop(el){try{el.pause?.();el.removeAttribute('src');el.load?.();}catch{}el.remove();}
+function waitShow(index){
+ const items=waitList?.items||[];if(!items.length)return;waitIndex=((index%items.length)+items.length)%items.length;
+ const old=[...waitBox.querySelectorAll('.wait-item')],next=waitItem(items[waitIndex]);waitBox.appendChild(next);
+ requestAnimationFrame(()=>requestAnimationFrame(()=>next.classList.add('on')));
+ for(const el of old){el.classList.remove('on');setTimeout(()=>waitDrop(el),800);}
+ clearTimeout(waitTimer);if(items.length>1)waitTimer=setTimeout(waitNext,1000*(items[waitIndex].kind==='video'?16:Math.max(3,Number(waitList.hold)||8)));
+}
+function waitNext(){if(waitState==='on'&&!waitFrozen)waitShow(waitIndex+1);}
+function waitFreeze(frozen){
+ if(frozen===waitFrozen)return;waitFrozen=frozen;
+ if(frozen){clearTimeout(waitTimer);for(const v of waitBox.querySelectorAll('video'))v.pause();}
+ else{for(const v of waitBox.querySelectorAll('video'))v.play().catch(()=>{});if((waitList?.items||[]).length>1){clearTimeout(waitTimer);waitTimer=setTimeout(waitNext,1000*Math.max(3,Number(waitList.hold)||8));}}
+}
+function waitFxRun(color,up,down,middle){
+ waitFx.style.transition='none';waitFx.style.background=color;waitFx.style.opacity=up?0:1;void waitFx.offsetWidth;
+ if(up){waitFx.style.transition='opacity '+up+'ms ease';waitFx.style.opacity=1;}
+ setTimeout(()=>{middle();waitFx.style.transition='opacity '+down+'ms ease';waitFx.style.opacity=0;},up||30);
+}
+function waitSet(show){
+ const kind=waitList?.transition||'fade';
+ if(show&&waitState!=='on'){
+  waitState='on';waitFrozen=false;waitBox.className='t-'+kind+' gone';waitBox.hidden=false;if(!waitBox.querySelector('.wait-item'))waitShow(waitIndex);
+  if(kind==='dip')waitFxRun('#000',240,380,()=>waitBox.classList.remove('gone'));else if(kind==='flash')waitFxRun('#fff',0,450,()=>waitBox.classList.remove('gone'));
+  else requestAnimationFrame(()=>requestAnimationFrame(()=>{if(waitState==='on')waitBox.classList.remove('gone');}));
+ }else if(!show&&waitState==='on'){
+  waitState='leaving';clearTimeout(waitTimer);
+  const done=()=>{if(waitState!=='leaving')return;waitState='off';waitBox.hidden=true;for(const el of [...waitBox.querySelectorAll('.wait-item')])waitDrop(el);};
+  if(kind==='dip')waitFxRun('#000',240,380,()=>{waitBox.classList.add('gone');done();});
+  else if(kind==='flash')waitFxRun('#fff',0,450,()=>{waitBox.classList.add('gone');done();});
+  else{waitBox.classList.add('gone');setTimeout(done,650);}
+ }
+}
+function waitLoop(){
+ try{
+  if(connected&&token&&Date.now()-waitAskedAt>15000){waitAskedAt=Date.now();
+   api('/waiting/list').then(list=>{if(!list||!Array.isArray(list.items))return;if(list.v===waitVersion)return;waitVersion=list.v;waitList=list;waitIndex=0;waitState='off';waitFrozen=false;clearTimeout(waitTimer);waitBox.hidden=true;for(const el of [...waitBox.querySelectorAll('.wait-item')])waitDrop(el);}).catch(()=>{});}
+  if(!connected||!(waitList?.items||[]).length){if(waitState!=='off'){waitState='off';clearTimeout(waitTimer);waitBox.hidden=true;for(const el of [...waitBox.querySelectorAll('.wait-item')])waitDrop(el);}}
+  else{const picture=!!player&&!mediaFailed&&(player.stats?.drawn||0)>0;
+   if(picture)waitSet(false);else{waitSet(true);waitFreeze(!!mediaEpoch);}}
+ }catch{}
+ try{setTimeout(waitLoop,150);}catch{}
+}
+if(waitBox&&waitFx)waitLoop();
+self.ScreenLinkWaiting=()=>({state:waitState,frozen:waitFrozen,items:(waitList?.items||[]).length,index:waitIndex,transition:waitList?.transition||'',shown:waitBox?[...waitBox.querySelectorAll('.wait-item')].length:0});
 // Build 108: ALL MAP SYSTEMS CLOSED at the user's request, to run the video alone. The car page asks
 // the phone for no map data at all: no map state, no squares, no pictures. The map code stays in the
 // file (and is still tested) so it can be opened again; set MAPS_CLOSED to false to do that.

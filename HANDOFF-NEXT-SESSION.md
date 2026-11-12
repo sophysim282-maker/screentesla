@@ -1,9 +1,11 @@
-# Handoff for the next Claude session (written 2026-11-10, after build 114)
+# Handoff for the next Claude session (written 2026-11-10, after build 115)
 
 Read this first. It replaces reading the old 400k-token conversation.
 
 ## WHERE WE ARE NOW (read this part first)
-Latest build sent: **114 (0.20.77)**, branch `release/build114-fast-start` (`BUILD114.md`): phone
+Latest build sent: **115 (0.20.78)**, branch `release/build115-waiting-screen` (`BUILD115.md`): the
+user's own pictures / GIFs / videos as the car's waiting screen, with transitions.
+Before: **114 (0.20.77)**, branch `release/build114-fast-start` (`BUILD114.md`): phone
 warm-up of the two needed YouTube lists and the first pieces, 0.4 s idle polling, smart first quality.
 Before: **113 TEST (0.20.76)**, branch `release/build113-tiktok-auto` (`BUILD113.md`): hides the
 "Open app" asking and adds auto scroll in the TikTok page.
