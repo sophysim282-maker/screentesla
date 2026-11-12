@@ -1,5 +1,5 @@
 name: Build123 TikTok scroll proof
-# Build 123: TikTok auto scroll tries more ways and logs the page make-up. Run 1.
+# Build 123: TikTok auto scroll tries more ways and logs the page make-up. Run 2.
 on:
   push:
     branches: ['release/build123-tiktok-scroll']
