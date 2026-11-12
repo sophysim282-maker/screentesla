@@ -3,6 +3,8 @@
 Read this first. It replaces reading the old 400k-token conversation.
 
 ## WHERE WE ARE NOW (read this part first)
+
+- **Build 116 (0.20.79), branch `release/build116-new-home`: new dark Home screen** (status under the name, big picture, round quick buttons, list). See BUILD116.md. Waiting for the user's opinion.
 Latest build sent: **115 (0.20.78)**, branch `release/build115-waiting-screen` (`BUILD115.md`): the
 user's own pictures / GIFs / videos as the car's waiting screen, with transitions.
 Before: **114 (0.20.77)**, branch `release/build114-fast-start` (`BUILD114.md`): phone

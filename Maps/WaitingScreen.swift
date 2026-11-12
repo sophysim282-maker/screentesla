@@ -52,6 +52,22 @@ final class SLWaitingStore: NSObject {
         items = items.filter { $0 != item }
     }
 
+    // MARK: - Used by the Home screen (main.m)
+
+    /// One grey line for the Home list.
+    @objc static func summary() -> String {
+        let count = items.count
+        guard count > 0 else { return "Your pictures, GIFs and videos" }
+        let name = transitions.first { $0.0 == transition }?.1 ?? "Fade"
+        return "\(count) file\(count == 1 ? "" : "s") · \(name)"
+    }
+    @objc static func versionNumber() -> Int { version }
+    /// The first chosen picture, for the big picture on Home. Empty when there is none.
+    @objc static func firstPicture() -> Data {
+        guard let first = items.first(where: { $0.kind == "image" }) else { return Data() }
+        return (try? Data(contentsOf: folder.appendingPathComponent(first.file))) ?? Data()
+    }
+
     // MARK: - Used by Receiver.m (any thread)
 
     @objc static func listData() -> Data {
