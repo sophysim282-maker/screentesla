@@ -162,7 +162,8 @@ static void SLActivityFinish(void) {
         [owner append:@"BACKGROUND RUNTIME ENDED: receiver, viewer link and media session retained. iOS may suspend this app without PiP. Returning to ScreenLink resumes the existing receiver; Start is not required to rebuild it."];
         if(!owner.preview.active&&!owner.youtubePiP.active && UIApplication.sharedApplication.applicationState==UIApplicationStateBackground)[owner beginGrace];
     };
-    [self append:@"Version 0.20.86 / build 123: TikTok auto scroll, more ways and proof. After each try ScreenLink checks whether the page really moved; if not it tries the next way: scroll to the next video, the page\'s next button, the arrow key, then a finger swipe made by the app. The log says which way worked (TIKTOK: auto scroll result) and what the page is made of (TIKTOK PAGE lines: number of videos, how the list scrolls, control names, boxes on top, what ScreenLink hid). Includes build 122."];
+    [self append:@"Version 0.20.87 / build 124: Phone sound. New line on Home (on by default): in YouTube mode ScreenLink is announced as a picture-only AirPlay device, so the sound of other apps (Messenger, Telegram …) stays on the phone speaker while the car plays the video. If ScreenLink VPN Phone is missing in YouTube with it on, switch it off, then Disconnect all and Start. Includes build 123."];
+    [self append:@"Earlier build 123: TikTok auto scroll, more ways and proof. After each try ScreenLink checks whether the page really moved; if not it tries the next way: scroll to the next video, the page\'s next button, the arrow key, then a finger swipe made by the app. The log says which way worked (TIKTOK: auto scroll result) and what the page is made of (TIKTOK PAGE lines: number of videos, how the list scrolls, control names, boxes on top, what ScreenLink hid). Includes build 122."];
     [self append:@"Earlier build 122: TikTok auto scroll and next video ready. Auto scroll now follows the car: when the car reaches the end of the video, ScreenLink moves the page to the next one (and tries three ways to move it). The playing TikTok video and the next ones on the page are downloaded whole to the phone, so the car gets them from memory. Log: TIKTOK: the car reached the end …, TIKTOK: preparing the next …, MEDIA FILE READY. Includes build 121."];
     [self append:@"Earlier build 121: lighter 4K. A picture larger than 1440p is painted at the size of the car screen instead of at full 4K size, about four times less painting work; 1440p and smaller are unchanged. The CAR PLAYER summary line now shows the real video size and the painted size, paint time, screen step time, and LIKELY CAR TOO SLOW or LIKELY INTERNET TOO SLOW. Includes build 120."];
     [self append:@"Earlier build 120: TikTok stays inside ScreenLink. Every page move in the TikTok screen is now opened in place and is not offered to the TikTok app or Safari, also when the page itself jumps after a tap. Log: TIKTOK: page moved to … kept inside ScreenLink. Includes build 119."];
@@ -215,7 +216,7 @@ static void SLActivityFinish(void) {
  [NSLayoutConstraint activateConstraints:@[[self.dashboard.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor],[self.dashboard.bottomAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.bottomAnchor],[self.dashboard.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],[self.dashboard.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor]]];
  __weak Controller *weak=self;
  self.dashboard.playerAction=^(NSDictionary *request){[weak phonePlayerControl:request];};
- self.dashboard.startAction=^{[weak startHome];};self.dashboard.mapAction=^{[weak showMaps];};[NSUserDefaults.standardUserDefaults registerDefaults:@{@"keepPlaying":@YES}];self.dashboard.moreAction=^(NSString *key){[weak openMore:key];};self.dashboard.disconnectAction=^{[weak disconnectAll];};self.dashboard.developerAction=^{[weak showDeveloper];};self.dashboard.copyAction=^{[weak youtubeOnlyWebsite];};
+ self.dashboard.startAction=^{[weak startHome];};self.dashboard.mapAction=^{[weak showMaps];};[NSUserDefaults.standardUserDefaults registerDefaults:@{@"keepPlaying":@YES,@"phoneSound":@YES}];self.dashboard.moreAction=^(NSString *key){[weak openMore:key];};self.dashboard.disconnectAction=^{[weak disconnectAll];};self.dashboard.developerAction=^{[weak showDeveloper];};self.dashboard.copyAction=^{[weak youtubeOnlyWebsite];};
  [self showHome];
 }
 - (void)phonePlayerControl:(NSDictionary *)command {
@@ -245,6 +246,8 @@ static void SLActivityFinish(void) {
 // Build 116: the Home list lines that open their own screen.
 - (void)openMore:(NSString *)key {
  __weak typeof(self) weakSelf=self;
+ if([key isEqual:@"phonesound"]){BOOL on=![NSUserDefaults.standardUserDefaults boolForKey:@"phoneSound"];[NSUserDefaults.standardUserDefaults setBool:on forKey:@"phoneSound"];[self append:on?@"PHONE SOUND switched ON: takes effect after Disconnect all and Start.":@"PHONE SOUND switched OFF: takes effect after Disconnect all and Start."];[self refreshHomeExtras];
+  UIAlertController *note=[UIAlertController alertControllerWithTitle:on?@"Phone sound: On":@"Phone sound: Off" message:@"To use the new setting, press the red power button (Disconnect all), then Start, then choose ScreenLink VPN Phone in YouTube again." preferredStyle:UIAlertControllerStyleAlert];[note addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleCancel handler:nil]];[self presentViewController:note animated:YES completion:nil];return;}
  if([key isEqual:@"keep"]){BOOL on=![NSUserDefaults.standardUserDefaults boolForKey:@"keepPlaying"];[NSUserDefaults.standardUserDefaults setBool:on forKey:@"keepPlaying"];[self append:on?@"KEEP PLAYING ON: a pause or stop from YouTube (for example when a Telegram voice message plays) no longer pauses the car video.":@"KEEP PLAYING OFF: YouTube can pause and stop the car video again."];[self refreshHomeExtras];return;}
  if([key isEqual:@"tiktok"]){Class launcher=NSClassFromString(@"SLTikTokLauncher");if(!launcher)return;
   [(id<SLTikTokLauncherAPI>)launcher setLog:^(NSString *line){dispatch_async(dispatch_get_main_queue(),^{[weakSelf append:line];});}];
@@ -256,6 +259,7 @@ static void SLActivityFinish(void) {
 // Build 116: the waiting screen line and the big picture on Home follow what the user chose.
 - (void)refreshHomeExtras {
  [self.dashboard setSubtitle:[NSUserDefaults.standardUserDefaults boolForKey:@"keepPlaying"]?@"On · other apps cannot pause the car video":@"Off · YouTube can pause the car video" forRow:@"keep"];
+ [self.dashboard setSubtitle:[NSUserDefaults.standardUserDefaults boolForKey:@"phoneSound"]?@"On · Messenger, Telegram … play on the phone":@"Off · other apps' sound goes to AirPlay (silent)" forRow:@"phonesound"];
  Class store=NSClassFromString(@"SLWaitingStore");if(!store||!self.dashboard)return;
  [self.dashboard setSubtitle:[(id<SLWaitingHomeAPI>)store summary] forRow:@"waiting"];
  NSInteger version=[(id<SLWaitingHomeAPI>)store versionNumber];if(version==self.homeWaitingVersion&&self.homeWaitingLoaded)return;self.homeWaitingVersion=version;self.homeWaitingLoaded=YES;

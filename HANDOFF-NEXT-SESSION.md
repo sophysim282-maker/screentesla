@@ -4,6 +4,8 @@ Read this first. It replaces reading the old 400k-token conversation.
 
 ## WHERE WE ARE NOW (read this part first)
 
+- **Build 124 (0.20.87), branch `release/build124-phone-sound`:** Phone sound switch (picture-only AirPlay announce). Experiment; see BUILD124.md.
+
 - **Build 123 (0.20.86), branch `release/build123-tiktok-scroll`:** TikTok auto scroll escalation + `TIKTOK PAGE` diagnostics. NEED the user's log to go further. See BUILD123.md.
 
 - **Build 122 (0.20.85), branch `release/build122-tiktok-next`:** TikTok auto scroll follows the car + whole-file cache/prefetch. Waiting for the user's TikTok log. See BUILD122.md.

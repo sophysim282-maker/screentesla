@@ -526,12 +526,20 @@ static NSArray *txtStrings(const char *bytes,int length) {
     if(dnssd_register_raop(_dns,port)<=0 || dnssd_register_airplay(_dns,port)<=0){[self stop];[self emit:@"Bonjour registration failed. Check Local Network permission."];return NO;}
     int txtLength=0;const char *txt=dnssd_get_airplay_txt(_dns,&txtLength);
     NSArray *airplayTXT=txtStrings(txt,txtLength);txt=sl_dnssd_get_raop_txt(_dns,&txtLength);
+    // Build 124 "Phone sound": in YouTube-only mode ScreenLink can announce itself as a picture-only device
+    // (no sound service, sound bit cleared). iOS then has nowhere to send the sound of other apps (Messenger,
+    // Telegram …), so they play on the phone speaker. The car video and its sound do not use that path.
+    BOOL noAudio=self.mediaOnly&&self.discoveryMode==SLDiscoveryPhoneVPN&&[NSUserDefaults.standardUserDefaults boolForKey:@"phoneSound"];
+    if(noAudio){NSMutableArray *changed=[NSMutableArray array];for(NSString *entry in airplayTXT){NSString *out=entry;
+        if([entry hasPrefix:@"features="]){NSArray<NSString *> *words=[[entry substringFromIndex:9] componentsSeparatedByString:@","];unsigned long long low=strtoull(words.firstObject.UTF8String,NULL,16);low&=~0x200ULL;NSMutableArray *again=[words mutableCopy];again[0]=[NSString stringWithFormat:@"0x%llX",low];out=[@"features=" stringByAppendingString:[again componentsJoinedByString:@","]];}
+        [changed addObject:out];}airplayTXT=changed;
+        [self emit:@"PHONE SOUND ON: ScreenLink is announced as a picture-only AirPlay device, so other apps keep their sound on the phone. If ScreenLink VPN Phone is missing in YouTube, switch Phone sound off on Home, then Disconnect all and Start."];}
     NSMutableString *hex=[NSMutableString string];const uint8_t *idBytes=identity.bytes;
     for(int i=0;i<6;i++)[hex appendFormat:@"%02X",idBytes[i]];
     NSMutableString *mediaID=[NSMutableString string];for(int i=0;i<6;i++)[mediaID appendFormat:i?@":%02X":@"%02X",idBytes[i]];_media.deviceID=mediaID;
     NSString *serviceName=self.discoveryMode==SLDiscoveryPhoneVPN?@"ScreenLink VPN Phone":@"ScreenLink VPN";
     NSString *host=self.discoveryMode==SLDiscoveryPhoneVPN?[NSString stringWithFormat:@"screenlink-%@-vpn.local.",hex.lowercaseString]:@"screenlink-vpn.local.";
-    self.discoveryProfile=@{@"name":serviceName,@"host":host,@"port":@(port),@"peer":@"10.7.0.1",@"raopName":[NSString stringWithFormat:@"%@@%@",hex,serviceName],@"airplayTXT":airplayTXT,@"raopTXT":txtStrings(txt,txtLength),@"externalDiscovery":@(self.externalDiscovery),@"discoveryMode":@(self.discoveryMode)};
+    self.discoveryProfile=@{@"name":serviceName,@"host":host,@"port":@(port),@"peer":@"10.7.0.1",@"raopName":[NSString stringWithFormat:@"%@@%@",hex,serviceName],@"airplayTXT":airplayTXT,@"raopTXT":txtStrings(txt,txtLength),@"externalDiscovery":@(self.externalDiscovery),@"discoveryMode":@(self.discoveryMode),@"noAudio":@(noAudio)};
     if(![self startWeb]){[self stop];return NO;}
     _running=YES;
     if(self.discoveryMode==SLDiscoveryPhoneVPN)[self refreshDiscovery];

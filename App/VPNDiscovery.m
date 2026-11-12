@@ -71,7 +71,8 @@ static NSData *encodedTXT(NSArray<NSString *> *strings) {
 - (void)report:(NSString *)message { if(self.status)self.status(message); }
 - (BOOL)startWithProfile:(NSDictionary *)profile {
     NSAssert(NSThread.isMainThread,@"Discovery must use the main queue");
-    if([_profile isEqual:profile]&&!_needsRecovery&&_addressConnection&&_airplay&&_raop)return YES;
+    BOOL noAudio=[profile[@"noAudio"] boolValue];// Build 124: picture-only device, no sound service announced.
+    if([_profile isEqual:profile]&&!_needsRecovery&&_addressConnection&&_airplay&&(_raop||noAudio))return YES;
     if(![_profile isEqual:profile])_retryCount=0;
     _profile=[profile copy];[self closeReferences];_needsRecovery=NO;_policyDenied=NO;
     _expectedName=profile[@"name"];_expectedPeer=profile[@"peer"];_resolvedPeer=NO;
@@ -88,9 +89,9 @@ static NSData *encodedTXT(NSArray<NSString *> *strings) {
     if(!error)error=DNSServiceRegister(&_airplay,kDNSServiceFlagsNoAutoRename,kDNSServiceInterfaceIndexLocalOnly,
         name.UTF8String,"_airplay._tcp","local.",host.UTF8String,port,(uint16_t)airplayTXT.length,airplayTXT.bytes,serviceReply,(__bridge void *)self);
     if(!error)error=DNSServiceSetDispatchQueue(_airplay,dispatch_get_main_queue());
-    if(!error)error=DNSServiceRegister(&_raop,kDNSServiceFlagsNoAutoRename,kDNSServiceInterfaceIndexLocalOnly,
+    if(!error&&!noAudio)error=DNSServiceRegister(&_raop,kDNSServiceFlagsNoAutoRename,kDNSServiceInterfaceIndexLocalOnly,
         [profile[@"raopName"] UTF8String],"_raop._tcp","local.",host.UTF8String,port,(uint16_t)raopTXT.length,raopTXT.bytes,serviceReply,(__bridge void *)self);
-    if(!error)error=DNSServiceSetDispatchQueue(_raop,dispatch_get_main_queue());
+    if(!error&&!noAudio)error=DNSServiceSetDispatchQueue(_raop,dispatch_get_main_queue());
     if(error){[self report:[NSString stringWithFormat:@"Could not publish VPN discovery: %d. Mac VPN mode remains available.",error]];[self closeReferences];_needsRecovery=YES;[self serviceFailed:NULL error:error];return NO;}
     error=DNSServiceBrowse(&_verifyBrowse,0,kDNSServiceInterfaceIndexLocalOnly,"_airplay._tcp","local.",browseReply,(__bridge void *)self);
     if(!error)error=DNSServiceSetDispatchQueue(_verifyBrowse,dispatch_get_main_queue());
@@ -150,7 +151,7 @@ static NSData *encodedTXT(NSArray<NSString *> *strings) {
 - (BOOL)recoverIfNeeded {
     NSAssert(NSThread.isMainThread,@"Discovery must use the main queue");
     if(!_profile)return NO;
-    if(!_needsRecovery&&_addressConnection&&_airplay&&_raop)return YES;
+    if(!_needsRecovery&&_addressConnection&&_airplay&&(_raop||[_profile[@"noAudio"] boolValue]))return YES;
     [self report:_policyDenied?@"DISCOVERY RECOVERY: retrying previously policy-denied Bonjour publication; video, AirPlay listener, VPN and website authorization are preserved. iOS may still deny access.":@"DISCOVERY RECOVERY: replacing defunct Bonjour handles; AirPlay listener and viewer authorization are preserved."];
     return [self startWithProfile:_profile];
 }

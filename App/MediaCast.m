@@ -14,6 +14,13 @@ static BOOL SLKeepPlaying(void){
     return NO;
 #endif
 }
+static BOOL SLPhoneSound(void){
+#if TARGET_OS_IPHONE && !SL_BROADCAST_EXTENSION
+    return [NSUserDefaults.standardUserDefaults boolForKey:@"phoneSound"];
+#else
+    return NO;
+#endif
+}
 static NSString *SLOtherSound(void){
 #if TARGET_OS_IPHONE && !SL_BROADCAST_EXTENSION
     AVAudioSession *session=AVAudioSession.sharedInstance;return [NSString stringWithFormat:@"other app sound playing: %@, asks others to be quiet: %@",session.isOtherAudioPlaying?@"yes":@"no",session.secondaryAudioShouldBeSilencedHint?@"yes":@"no"];
@@ -270,7 +277,8 @@ static NSData *SLWholeFile(NSString *location){@synchronized(MediaCast.class){re
     NSDictionary *query;NSMutableDictionary *q=[NSMutableDictionary dictionary];for(NSURLQueryItem *item in url.queryItems)if(item.value)q[item.name]=item.value;query=q;
     if([path isEqual:@"/server-info"]){
         [self log:@"MEDIA: 1080p-capable legacy HLS receiver profile requested (AppleTV3,2; media features 0x27B)."];
-        NSDictionary *info=@{@"features":@(0x27B),@"deviceid":self.deviceID?:@"",@"macAddress":self.deviceID?:@"",@"model":@"AppleTV3,2",@"srcvers":@"220.68",@"osBuildVersion":@"12B435",@"protovers":@"1.0",@"vv":@2};
+        // Build 124: with Phone sound on, the sound bit (0x200) is not offered.
+        NSDictionary *info=@{@"features":@(SLPhoneSound()?0x7B:0x27B),@"deviceid":self.deviceID?:@"",@"macAddress":self.deviceID?:@"",@"model":@"AppleTV3,2",@"srcvers":@"220.68",@"osBuildVersion":@"12B435",@"protovers":@"1.0",@"vv":@2};
         [self reply:response status:200 type:@"text/x-apple-plist+xml" data:plistData(info)];return YES;
     }
     if([path isEqual:@"/reverse"] && [method isEqual:@"POST"]){
