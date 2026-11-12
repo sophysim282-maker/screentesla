@@ -1,5 +1,5 @@
 name: Build124 phone sound
-# Build 124: picture-only AirPlay announce so other apps keep their sound on the phone. Run 1.
+# Build 124: picture-only AirPlay announce so other apps keep their sound on the phone. Run 2.
 on:
   push:
     branches: ['release/build124-phone-sound']
