@@ -1,5 +1,5 @@
 name: Build116 new Home
-# Build 116: new Home screen (dark, status under the name, big picture, quick buttons, list). Run 1.
+# Build 116: new Home screen (dark, status under the name, big picture, quick buttons, list). Run 2.
 on:
   push:
     branches: ['release/build116-new-home']
