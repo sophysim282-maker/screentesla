@@ -61,6 +61,9 @@ final class NavModel: NSObject, ObservableObject, CLLocationManagerDelegate {
     private var pendingStart = false
 
     @Published var guiding = false
+    // Build 127: filled by Google's navigation engine (GoogleNav.swift) while it is guiding.
+    @Published var googleActive = false
+    @Published var googleStep: GoogleStep?
     @Published var stepIndex = 0
     @Published var distanceToNext: Double = 0
     @Published var remainingMeters: Double = 0
@@ -121,18 +124,21 @@ final class NavModel: NSObject, ObservableObject, CLLocationManagerDelegate {
     // MARK: - Text for screens
 
     var nextInstruction: String {
+        if guiding, googleActive, let g = googleStep { return g.instruction }
         guard guiding, !steps.isEmpty else { return "" }
         if stepIndex + 1 < steps.count { return steps[stepIndex + 1].instruction }
         return "Arrive at \(selected?.name ?? "destination")"
     }
 
     var nextManeuver: String {
+        if guiding, googleActive, let g = googleStep { return g.maneuver }
         guard guiding, stepIndex + 1 < steps.count else { return "ARRIVE" }
         return steps[stepIndex + 1].maneuver
     }
 
     /// The turn after the next one, when it comes quickly (shown as "Then ↱").
     var thenManeuver: String? {
+        if guiding, googleActive, googleStep != nil { return googleStep?.then }
         guard guiding, stepIndex + 2 < steps.count, steps[stepIndex + 1].distance < 400 else { return nil }
         return steps[stepIndex + 2].maneuver
     }
@@ -514,6 +520,7 @@ final class NavModel: NSObject, ObservableObject, CLLocationManagerDelegate {
                 return
             }
             if self.guiding {
+                GoogleNav.shared.start(model: self)   // a stop was added or removed: tell Google's engine too
                 self.stepIndex = 0
                 self.saidFar = false
                 self.saidNear = false
@@ -537,6 +544,15 @@ final class NavModel: NSObject, ObservableObject, CLLocationManagerDelegate {
         lastReroute = Date()
         say(r.steps[0].instruction)
         if let l = location { progress(l) }
+        GoogleNav.shared.start(model: self)
+    }
+
+    /// Build 127: used by Google's engine: speak with ScreenLink's voice, and show Google's route line.
+    func speak(_ text: String) { say(text) }
+    func replaceRoute(_ r: RouteOption) {
+        routes = [r]
+        routeIndex = 0
+        routesVersion += 1
     }
 
     /// Car "Start" button: start now, or as soon as the route arrives.
@@ -547,6 +563,7 @@ final class NavModel: NSObject, ObservableObject, CLLocationManagerDelegate {
 
     func endGuidance() {
         guiding = false
+        GoogleNav.shared.stop()
         speech.stopSpeaking(at: .immediate)
     }
 
@@ -561,6 +578,7 @@ final class NavModel: NSObject, ObservableObject, CLLocationManagerDelegate {
     }
 
     private func progress(_ loc: CLLocation) {
+        if googleActive { return }   // Build 127: Google's engine places the car and decides the turn
         guard let r = route, stepIndex < r.steps.count else { return }
 
         // Keep the arrow on the route (free "snap to road").
@@ -571,6 +589,9 @@ final class NavModel: NSObject, ObservableObject, CLLocationManagerDelegate {
             carCoordinate = loc.coordinate
             if loc.course >= 0 { carBearing = loc.course }
         }
+
+        // Build 127: while Google's engine guides, it decides the turn, the distances, arrival and new routes.
+        if googleActive { return }
 
         func dist(_ i: Int) -> Double {
             loc.distance(from: CLLocation(latitude: r.steps[i].end.latitude, longitude: r.steps[i].end.longitude))

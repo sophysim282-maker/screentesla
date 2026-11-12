@@ -19,6 +19,8 @@ extension NavModel {
             "instruction": nextInstruction,
             "maneuver": nextManeuver,
             "then": thenManeuver ?? "",
+            "lanes": (googleActive ? (googleStep?.lanes ?? []) : []).map { ["shape": $0.main, "go": $0.recommended] as [String: Any] },
+            "engine": googleActive ? "google" : "screenlink",
             "distance": NavModel.distanceText(distanceToNext),
             "remaining": NavModel.distanceText(remainingMeters),
             "eta": NavModel.timeText(remainingSeconds),

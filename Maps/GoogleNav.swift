@@ -1,0 +1,228 @@
+import Foundation
+import CoreLocation
+import UIKit
+import GoogleMaps
+import GoogleNavigation
+
+/// Build 127: Google's own navigation engine (Navigation SDK), the same one the Google Maps app uses.
+/// It follows the car on the road, knows the next turn and the lanes, and makes a new route by itself
+/// when the driver leaves the route. ScreenLink's screens, the car and the cube keep reading NavModel;
+/// this class only fills NavModel with Google's answers. If Google cannot start (the key has no
+/// Navigation SDK, the terms were refused, no route), ScreenLink's own turn logic runs as before.
+struct GoogleLane {
+    let shapes: [String]     // one lane can allow several directions
+    let main: String         // the direction to show: the recommended one, else the first
+    let recommended: Bool
+}
+
+struct GoogleStep {
+    let instruction: String
+    let maneuver: String
+    let then: String?
+    let lanes: [GoogleLane]
+    let road: String
+}
+
+@objc(SLGoogleNav)
+final class GoogleNav: NSObject, GMSNavigatorListener, GMSRoadSnappedLocationProviderListener {
+    static let shared = GoogleNav()
+    private static var log: ((String) -> Void)?
+    @objc static func setLog(_ block: @escaping (String) -> Void) { log = block }
+    static func note(_ text: String) { log?("GOOGLE NAVIGATION: " + text) }
+
+    private var session: GMSNavigationSession?
+    private weak var model: NavModel?
+    private var key = ""
+    private var lastStepText = ""
+    private var saidNear = false
+    private var saidFar = false
+    private var loggedInfo = false
+
+    /// Starts (or restarts) Google guidance for the model's destination. Safe to call again when the route changes.
+    func start(model: NavModel) {
+        self.model = model
+        guard let place = model.selected else { return }
+        var points: [(CLLocationCoordinate2D, String)] = []
+        if let stop = model.stop { points.append((CLLocationCoordinate2D(latitude: stop.lat, longitude: stop.lng), stop.name)) }
+        points.append((CLLocationCoordinate2D(latitude: place.lat, longitude: place.lng), place.name))
+        let wanted = points.map { String(format: "%.5f,%.5f", $0.0.latitude, $0.0.longitude) }.joined(separator: ";") + "|" + model.mode
+        if wanted == key, model.googleActive { return }
+        key = wanted
+        guard model.mode == "DRIVE" || model.mode == "TWO_WHEELER" else {
+            model.googleActive = false
+            Self.note("only used for driving; this trip uses ScreenLink's own guidance.")
+            return
+        }
+        GMSNavigationServices.showTermsAndConditionsDialogIfNeeded(withCompanyName: "ScreenLink") { [weak self] accepted in
+            guard let self else { return }
+            guard accepted else {
+                self.model?.googleActive = false
+                Self.note("Google's navigation terms were not accepted, so ScreenLink's own guidance is used.")
+                return
+            }
+            self.begin(points, wanted: wanted)
+        }
+    }
+
+    private func begin(_ points: [(CLLocationCoordinate2D, String)], wanted: String) {
+        if session == nil {
+            session = GMSNavigationServices.createNavigationSession()
+            session?.navigator?.add(self)
+            session?.roadSnappedLocationProvider?.add(self)
+        }
+        guard let session, let navigator = session.navigator else {
+            model?.googleActive = false
+            Self.note("could not be created on this phone. ScreenLink's own guidance is used.")
+            return
+        }
+        session.isStarted = true
+        session.travelMode = model?.mode == "TWO_WHEELER" ? .twoWheeler : .driving
+        navigator.voiceGuidance = .silent          // ScreenLink speaks itself, so YouTube AirPlay and PiP are not interrupted
+        navigator.sendsBackgroundNotifications = false
+        let waypoints = points.compactMap { GMSNavigationWaypoint(location: $0.0, title: $0.1) }
+        guard !waypoints.isEmpty else { return }
+        Self.note("asking Google for the route (\(waypoints.count) stop(s)).")
+        navigator.setDestinations(waypoints) { [weak self] status in
+            guard let self, self.key == wanted, let model = self.model else { return }
+            guard status == .OK else {
+                model.googleActive = false
+                Self.note("Google did not give a route (answer \(status.rawValue)). If the Navigation SDK is not enabled for your key in Google Cloud, enable it. ScreenLink's own guidance is used now.")
+                return
+            }
+            navigator.isGuidanceActive = true
+            session.roadSnappedLocationProvider?.startUpdatingLocation()
+            model.googleActive = true
+            self.lastStepText = ""
+            self.loggedInfo = false
+            self.redraw()
+            Self.note("ON. Turns, lanes, distance, arrival time and new routes now come from Google's engine.")
+        }
+    }
+
+    func stop() {
+        key = ""
+        lastStepText = ""
+        guard let session else { return }
+        session.navigator?.isGuidanceActive = false
+        session.navigator?.clearDestinations()
+        session.roadSnappedLocationProvider?.stopUpdatingLocation()
+        session.isStarted = false
+        if model?.googleActive == true { Self.note("stopped.") }
+        model?.googleActive = false
+        model?.googleStep = nil
+    }
+
+    /// Draw Google's current route line on ScreenLink's maps.
+    private func redraw() {
+        guard let model, let legs = session?.navigator?.routeLegs, !legs.isEmpty else { return }
+        let line = GMSMutablePath()
+        for leg in legs { if let path = leg.path { for i in 0..<path.count() { line.add(path.coordinate(at: i)) } } }
+        guard line.count() > 1 else { return }
+        let old = model.route
+        model.replaceRoute(RouteOption(id: 0, path: line, steps: old?.steps ?? [], meters: old?.meters ?? 0, seconds: old?.seconds ?? 0, labels: old?.labels ?? []))
+    }
+
+    // MARK: - Google's answers
+
+    func navigator(_ navigator: GMSNavigator, didUpdate navInfo: GMSNavigationNavInfo) {
+        guard let model, model.googleActive, model.guiding else { return }
+        model.remainingMeters = Double(navInfo.distanceToFinalDestinationMeters)
+        model.remainingSeconds = Double(navInfo.timeToFinalDestinationSeconds)
+        guard let step = navInfo.currentStep else { return }
+        let distance = Double(navInfo.distanceToCurrentStepMeters)
+        model.distanceToNext = distance
+        var then: String?
+        if let after = navInfo.remainingSteps.first, after.distanceFromPrevStepMeters < 400 { then = Self.maneuver(after) }
+        let lanes: [GoogleLane] = (step.lanes ?? []).map { lane in
+            GoogleLane(shapes: lane.laneDirections.map { Self.shape($0.laneShape) },
+                       main: Self.shape((lane.laneDirections.first { $0.recommended } ?? lane.laneDirections.first)?.laneShape ?? .straight),
+                       recommended: lane.laneDirections.contains { $0.recommended })
+        }
+        let text = step.fullInstructionText
+        let made = GoogleStep(instruction: text, maneuver: Self.maneuver(step), then: then, lanes: lanes, road: step.fullRoadName)
+        model.googleStep = made
+        if !loggedInfo {
+            loggedInfo = true
+            Self.note("first turn from Google: \"\(text)\" in \(Int(distance)) m, arrow \(made.maneuver) (Google code \(step.maneuver.rawValue)), lanes \(lanes.count).")
+        }
+        // Voice, spoken by ScreenLink: when the turn changes, about 500 m before, and close to it.
+        if text != lastStepText {
+            lastStepText = text
+            saidFar = distance < 700
+            saidNear = false
+            if distance > 250 { model.speak(model.settings.language == "en" ? "In \(NavModel.distanceText(distance)), \(text)" : text) }
+        }
+        if !saidFar, distance < 550, distance > 300 { saidFar = true; model.speak(model.settings.language == "en" ? "In \(NavModel.distanceText(distance)), \(text)" : text) }
+        if !saidNear, distance < 140 { saidNear = true; saidFar = true; model.speak(text) }
+    }
+
+    func navigatorDidChangeRoute(_ navigator: GMSNavigator) {
+        guard model?.googleActive == true else { return }
+        redraw()
+        Self.note("Google made a new route (traffic, or the car left the old one).")
+    }
+
+    func navigator(_ navigator: GMSNavigator, didArriveAt waypoint: GMSNavigationWaypoint) {
+        guard let model, model.googleActive else { return }
+        if navigator.continueToNextDestination() != nil {
+            model.stop = nil
+            Self.note("arrived at the stop; continuing to the destination.")
+            return
+        }
+        Self.note("arrived.")
+        model.speak(model.settings.language == "en" ? "You have arrived" : "Arrive at \(waypoint.title)")
+        model.clear()
+        model.status = "Arrived ✅"
+    }
+
+    func locationProvider(_ locationProvider: GMSRoadSnappedLocationProvider, didUpdate location: CLLocation) {
+        guard let model, model.googleActive, model.guiding else { return }
+        model.carCoordinate = location.coordinate
+        if location.course >= 0 { model.carBearing = location.course }
+    }
+
+    // MARK: - Google's codes to the names ScreenLink already uses
+
+    static func maneuver(_ step: GMSNavigationStepInfo) -> String {
+        switch step.maneuver {
+        case .destination: return "ARRIVE"
+        case .depart: return "DEPART"
+        case .straight: return "STRAIGHT"
+        case .turnLeft: return "TURN_LEFT"
+        case .turnRight: return "TURN_RIGHT"
+        case .turnSlightLeft: return "TURN_SLIGHT_LEFT"
+        case .turnSlightRight: return "TURN_SLIGHT_RIGHT"
+        case .turnSharpLeft: return "TURN_SHARP_LEFT"
+        case .turnSharpRight: return "TURN_SHARP_RIGHT"
+        case .turnKeepLeft: return "FORK_LEFT"
+        case .turnKeepRight: return "FORK_RIGHT"
+        case .turnUTurnClockwise: return "UTURN_RIGHT"
+        case .turnUTurnCounterClockwise: return "UTURN_LEFT"
+        case .mergeLeft: return "MERGE"
+        case .mergeRight: return "MERGE"
+        case .forkLeft: return "FORK_LEFT"
+        case .forkRight: return "FORK_RIGHT"
+        default:
+            let text = step.fullInstructionText.lowercased()
+            if text.contains("roundabout") { return step.drivingSide == .left ? "ROUNDABOUT_LEFT" : "ROUNDABOUT_RIGHT" }
+            if text.contains("left") { return text.contains("exit") || text.contains("ramp") ? "RAMP_LEFT" : "TURN_LEFT" }
+            if text.contains("right") { return text.contains("exit") || text.contains("ramp") ? "RAMP_RIGHT" : "TURN_RIGHT" }
+            return "STRAIGHT"
+        }
+    }
+
+    static func shape(_ shape: GMSNavigationLaneShape) -> String {
+        switch shape {
+        case .straight: return "straight"
+        case .slightLeft: return "slight-left"
+        case .slightRight: return "slight-right"
+        case .normalLeft: return "left"
+        case .normalRight: return "right"
+        case .sharpLeft: return "sharp-left"
+        case .sharpRight: return "sharp-right"
+        case .uTurnLeft: return "uturn-left"
+        case .uTurnRight: return "uturn-right"
+        default: return "straight"
+        }
+    }
+}

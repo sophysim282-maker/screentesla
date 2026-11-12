@@ -578,6 +578,18 @@ struct DirectionsOverlay: View {
 
 // MARK: - Driving screen
 
+func laneIcon(_ shape: String) -> String {
+    switch shape {
+    case "slight-left": return "arrow.up.left"
+    case "slight-right": return "arrow.up.right"
+    case "left", "sharp-left": return "arrow.turn.up.left"
+    case "right", "sharp-right": return "arrow.turn.up.right"
+    case "uturn-left": return "arrow.uturn.left"
+    case "uturn-right": return "arrow.uturn.right"
+    default: return "arrow.up"
+    }
+}
+
 struct DriveOverlay: View {
     @ObservedObject var nav: NavModel
     @ObservedObject var settings: Settings
@@ -591,6 +603,19 @@ struct DriveOverlay: View {
         VStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 0) {
                 banner
+                // Build 127: lanes from Google's navigation engine. White = take this lane.
+                if nav.googleActive, let lanes = nav.googleStep?.lanes, !lanes.isEmpty {
+                    HStack(spacing: 12) {
+                        ForEach(lanes.indices, id: \.self) { i in
+                            Image(systemName: laneIcon(lanes[i].main))
+                                .font(.system(size: 26, weight: .bold))
+                                .foregroundColor(lanes[i].recommended ? .white : Color.white.opacity(0.3))
+                        }
+                    }
+                    .padding(.horizontal, 18).padding(.vertical, 9)
+                    .background(RoundedRectangle(cornerRadius: 16).fill(Theme.navBannerDark))
+                    .padding(.top, 4)
+                }
                 if let t = nav.thenManeuver {
                     HStack(spacing: 8) {
                         Text("Then")
