@@ -1,5 +1,5 @@
 name: Build122 TikTok next video
-# Build 122: TikTok auto scroll follows the car, next videos prepared. Run 1.
+# Build 122: TikTok auto scroll follows the car, next videos prepared. Run 2.
 on:
   push:
     branches: ['release/build122-tiktok-next']
