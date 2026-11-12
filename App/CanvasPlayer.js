@@ -509,7 +509,13 @@ class CanvasPlayer {
    const held=this.running&&this.audible()&&raw>this.videoEnd+.05;
    if(held&&!this.videoStarved){this.stats.videoHiccups++;this.recordPlayback('video-hold-audio-continues',now);}this.videoStarved=held;let frame=null;
    while(this.frames.length&&this.frames[0].timestamp/1e6<=now+0.015){if(frame){frame.close();this.stats.dropped++;}frame=this.frames.shift();}
-   if(frame){try{if(this.canvas.width!==frame.displayWidth||this.canvas.height!==frame.displayHeight){this.canvas.width=frame.displayWidth;this.canvas.height=frame.displayHeight;}const drawStart=performance.now();this.ctx.drawImage(frame,0,0,this.canvas.width,this.canvas.height);this.profileMetric('canvasDrawMs',performance.now()-drawStart);this.lastDrawnVideoTimestamp=frame.timestamp;this.stats.drawn++;this.lastVideoDrawAt=performance.now();}catch(error){this.fail(error);}finally{frame.close();}}
+   if(frame){try{
+    // Build 121: a picture larger than 1440p (4K) is painted at the size of the screen, not at its own size.
+    // The car screen cannot show more dots than it has, and painting 8 million dots 60 times a second made
+    // the picture freeze while the sound went on. 1440p and smaller are painted exactly as before.
+    let paintWidth=frame.displayWidth,paintHeight=frame.displayHeight;this.sourceWidth=paintWidth;this.sourceHeight=paintHeight;
+    if(paintHeight>1440||paintWidth>2560){const ratio=self.devicePixelRatio||1,boxWidth=Math.max(1920,Math.round((this.canvas.clientWidth||0)*ratio)),boxHeight=Math.max(1080,Math.round((this.canvas.clientHeight||0)*ratio)),scale=Math.min(1,Math.max(boxWidth/paintWidth,boxHeight/paintHeight));paintWidth=Math.round(paintWidth*scale/2)*2;paintHeight=Math.round(paintHeight*scale/2)*2;}
+    if(this.canvas.width!==paintWidth||this.canvas.height!==paintHeight){this.canvas.width=paintWidth;this.canvas.height=paintHeight;}const drawStart=performance.now();this.ctx.drawImage(frame,0,0,this.canvas.width,this.canvas.height);this.profileMetric('canvasDrawMs',performance.now()-drawStart);this.lastDrawnVideoTimestamp=frame.timestamp;this.stats.drawn++;this.lastVideoDrawAt=performance.now();}catch(error){this.fail(error);}finally{frame.close();}}
    this.scheduleAudio(now);
    if(this.finished&&now>=this.duration-0.02){this.pause();this.position=this.duration;this.ended=true;}
   }

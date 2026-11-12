@@ -4,6 +4,8 @@ Read this first. It replaces reading the old 400k-token conversation.
 
 ## WHERE WE ARE NOW (read this part first)
 
+- **Build 121 (0.20.84), branch `release/build121-lighter-4k`:** 4K painted at screen size + car speed in the summary line. Waiting for a 4K car log. See BUILD121.md.
+
 - **Build 120 (0.20.83), branch `release/build120-tiktok-stay`:** TikTok navigations use the allow-without-app-links policy. See BUILD120.md.
 
 - **Build 119 (0.20.82), branch `release/build119-keep-playing`:** Keep playing switch (ignore sender pause/stop) + `AIRPLAY SOUND ARRIVING` log. Telegram sound itself not fixed yet; waiting for the user's log. See BUILD119.md.
