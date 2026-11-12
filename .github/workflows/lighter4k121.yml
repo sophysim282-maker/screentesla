@@ -1,5 +1,5 @@
 name: Build121 lighter 4K
-# Build 121: paint 4K at screen size and log car speed. Run 1.
+# Build 121: paint 4K at screen size and log car speed. Run 2.
 on:
   push:
     branches: ['release/build121-lighter-4k']
