@@ -36,6 +36,29 @@ final class SLAirPlaySound: NSObject {
 
     private static var firstSeen = false
     private static var badInRow = 0
+    // Build 133: an unlocked Apple Lossless piece starts with 3 bits that say "stereo" (001) or "mono" (000).
+    // Count how many pieces look like that with the key in use; switch keys when most do not.
+    private static var looked = 0, headerGood = 0, keyRounds = 0
+    private static var cookieForm = 0, cookieTries = 0, readyLogged = -1
+    private static func checkKey(_ data: Data) {
+        looked += 1
+        let tag = data[data.startIndex] >> 5
+        if tag <= 1 { headerGood += 1 }
+        guard looked >= 100 else { return }
+        let keys = NSClassFromString("SLAudioKey") as? NSObject.Type
+        let raw = (keys?.perform(NSSelectorFromString("raw"))?.takeUnretainedValue() as? NSNumber)?.boolValue ?? false
+        let first = data.prefix(8).map { String(format: "%02x", $0) }.joined(separator: " ")
+        if keyRounds < 6 {
+            keyRounds += 1
+            log?("AIRPLAY SOUND: with the \(raw ? "plain" : "mixed") key, \(headerGood)% of pieces look like real sound (first bytes \(first), \(data.count) bytes).")
+        }
+        if headerGood < 70, let keys {
+            _ = keys.perform(NSSelectorFromString("setRaw:"), with: NSNumber(value: !raw))
+            keySwitches += 1
+            key = ""
+        }
+        looked = 0; headerGood = 0
+    }
     private static var keySwitches = 0
     private static var unlockedLogged = false
     private static func handle(_ data: Data, _ ct: Int, _ spf: Int) {
@@ -53,6 +76,7 @@ final class SLAirPlaySound: NSObject {
         let wanted = "\(ct)/\(spf)"
         if wanted != key { key = wanted; prepare(ct, spf) }
         guard let converter, let inFormat else { failed += 1; return }
+        if ct == 2 { checkKey(data) }
 
         let packet = AVAudioCompressedBuffer(format: inFormat, packetCapacity: 1, maximumPacketSize: max(data.count, 8192))
         data.withUnsafeBytes { raw in if let base = raw.baseAddress { memcpy(packet.data, base, data.count) } }
@@ -71,15 +95,14 @@ final class SLAirPlaySound: NSObject {
         guard result != .error, pcm.frameLength > 0, let channels = pcm.floatChannelData else {
             failed += 1
             if failed == 1 || failed % 500 == 0 { log?("AIRPLAY SOUND: a packet could not be unpacked (\(data.count) bytes, error \(problem?.code ?? 0)).") }
-            // Build 132: many bad packets in a row means the sound is unlocked with the wrong key. Try the other one.
+            // Build 133: the key is chosen by looking at the pieces (below). If the pieces look right but still
+            // cannot be unpacked, the settings block is the problem: try the next form of it.
             badInRow += 1
-            if badInRow >= 60, let keys = NSClassFromString("SLAudioKey") as? NSObject.Type {
+            if badInRow >= 60, ct == 2, headerGood >= 70 {
                 badInRow = 0
-                let raw = (keys.perform(NSSelectorFromString("raw"))?.takeUnretainedValue() as? NSNumber)?.boolValue ?? false
-                _ = keys.perform(NSSelectorFromString("setRaw:"), with: NSNumber(value: !raw))
-                keySwitches += 1
-                key = ""   // make a fresh unpacker for the next packet
-                if keySwitches <= 4 { log?("AIRPLAY SOUND: the sound could not be unlocked; trying the \(raw ? "mixed" : "plain") key now.") }
+                cookieForm = (cookieForm + 1) % 3
+                key = ""
+                if cookieTries < 6 { cookieTries += 1; log?("AIRPLAY SOUND: pieces look right but do not unpack; trying settings block form \(cookieForm) now.") }
             }
             return
         }
@@ -117,7 +140,11 @@ final class SLAirPlaySound: NSObject {
             func put32(_ v: UInt32) { withUnsafeBytes(of: v.bigEndian) { c.append(contentsOf: $0) } }
             func put16(_ v: UInt16) { withUnsafeBytes(of: v.bigEndian) { c.append(contentsOf: $0) } }
             put32(frames); c.append(contentsOf: [0, 16, 40, 10, 14, 2]); put16(255); put32(0); put32(0); put32(44100)
-            cookie = c
+            // Build 133: three forms of the same settings: bare, inside an 'alac' box, inside 'frma' + 'alac'.
+            var alacBox = Data(); func box32(_ v: UInt32) { withUnsafeBytes(of: v.bigEndian) { alacBox.append(contentsOf: $0) } }
+            box32(36); alacBox.append(contentsOf: Array("alac".utf8)); box32(0); alacBox.append(c)
+            var frma = Data([0, 0, 0, 12]); frma.append(contentsOf: Array("frma".utf8)); frma.append(contentsOf: Array("alac".utf8)); frma.append(alacBox)
+            cookie = cookieForm == 1 ? alacBox : cookieForm == 2 ? frma : c
         case 4:
             d.mFormatID = kAudioFormatMPEG4AAC
             d.mFramesPerPacket = UInt32(spf > 0 ? spf : 1024)
@@ -132,8 +159,7 @@ final class SLAirPlaySound: NSObject {
         inFormat = AVAudioFormat(streamDescription: &d)
         converter = inFormat.flatMap { AVAudioConverter(from: $0, to: outFormat) }
         if let cookie { converter?.magicCookie = cookie }
-        log?(converter == nil ? "AIRPLAY SOUND: this iPhone could not make an unpacker for kind \(ct) with \(spf) samples."
-                              : "AIRPLAY SOUND: unpacker ready for kind \(ct) with \(spf) samples.")
+        if converter == nil || readyLogged != cookieForm { readyLogged = cookieForm; log?(converter == nil ? "AIRPLAY SOUND: this iPhone could not make an unpacker for kind \(ct) with \(spf) samples." : "AIRPLAY SOUND: unpacker ready for kind \(ct) with \(spf) samples (settings form \(cookieForm)).") }
     }
 
     /// Makes ScreenLink's own sound come out of the phone speaker (not back into AirPlay) and starts the player.

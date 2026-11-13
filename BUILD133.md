@@ -8,3 +8,9 @@ A/B: GoogleNavigation package removed; `Maps/GoogleNav.swift` compiles a stub un
 `#if !canImport(GoogleNavigation)` (log functions kept, `start` sets googleActive=false).
 If the map shows in 133 -> the navigation kit (or its key/terms) causes it. If still grey -> key/account.
 Also: map top bar chips no longer wrap (lineLimit(1).fixedSize()).
+
+## Phone sound (added after the user's 132 log)
+132 log: Phone sound On, `unpacker ready` twice a second (the key flip recreated the converter every 60 failures),
+2508/2508 failed with '!dat'. Both keys rejected by AVAudioConverter. Now: key chosen by the ALAC element tag
+(first 3 bits 000/001) over 100 pieces, logged with the first 8 bytes; if pieces look valid but do not decode,
+cookie forms rotate: bare ALACSpecificConfig / 'alac' box / 'frma'+'alac'.
