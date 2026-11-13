@@ -37,7 +37,7 @@ final class SLMapTiles: NSObject {
 
         var body: [String: Any] = ["mapType": satellite ? "satellite" : "roadmap", "language": language,
                                    "region": Locale.current.regionCode ?? "US",
-                                   "scale": "scaleFactor2x", "highDpi": true]
+                                   "scale": "scaleFactor2x", "highDpi": false]   // Build 141: names and icons twice as big (like the phone), squares 4x lighter (tested on Phnom Penh)
         // Build 137: live traffic on the car map (green / orange / red roads), like Google Maps.
         body["layerTypes"] = satellite ? ["layerRoadmap", "layerTraffic"] : ["layerTraffic"]
         if night && !satellite {

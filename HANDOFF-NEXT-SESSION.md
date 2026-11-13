@@ -4,6 +4,8 @@ Read this first. It replaces reading the old 400k-token conversation.
 
 ## WHERE WE ARE NOW (read this part first)
 
+- **Build 141 (0.21.04), branch `release/build141-car-like-phone`:** car map same type as phone, 2x labels, lighter squares, thicker route, bigger arrow. See BUILD141.md.
+
 - **Build 140 (0.21.03), branch `release/build140-auto-zoom`:** car map auto zoom (turns, speed). See BUILD140.md.
 
 - **Build 139 (0.21.02), branch `release/build139-carplay-look`:** CarPlay-like dark car map + route traffic; clear Back/End on phone. See BUILD139.md.
