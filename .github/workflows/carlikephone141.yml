@@ -1,5 +1,5 @@
 name: Build141 car like phone
-# Build 141: car map looks like the phone map. Run 1.
+# Build 141: car map looks like the phone map. Run 2.
 on:
   push:
     branches: ['release/build141-car-like-phone']
