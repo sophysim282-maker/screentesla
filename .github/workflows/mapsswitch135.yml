@@ -1,5 +1,5 @@
 name: Build135 maps switch
-# Build 135: Maps on/off switch on Home, background navigation. Run 1.
+# Build 135: Maps on/off switch on Home, background navigation. Run 2.
 on:
   push:
     branches: ['release/build135-maps-switch']
