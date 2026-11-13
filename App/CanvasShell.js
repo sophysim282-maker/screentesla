@@ -246,7 +246,7 @@ window.addEventListener('pageshow',event=>{if(!event.persisted)return;setIdleArt
 function renderPerformance(){
  if(performanceFrozen||$('performancePanel').hidden)return;
  const profile=player?.performanceProfile?.()||previousPlaybackProfile;
- const lines=['Build: 0.20.99 / 136 · '+(activeEngine||requestedEngine)+' · '+(player?.videoAcceleration||requestedDecoder),'Playback: '+(player?.currentTime||0).toFixed(2)+' s','Page: '+(profile?.visibility||document.visibilityState||'unknown'),''];
+ const lines=['Build: 0.21.00 / 137 · '+(activeEngine||requestedEngine)+' · '+(player?.videoAcceleration||requestedDecoder),'Playback: '+(player?.currentTime||0).toFixed(2)+' s','Page: '+(profile?.visibility||document.visibilityState||'unknown'),''];
  const names=[['demuxMs','Demux ms'],['decoderWaitMs','Decoder feed wait ms'],['renderCallbackGapMs','Drawing callback gap ms'],['canvasDrawMs','Canvas draw call ms'],['videoQueueDepth','Pending decode requests']];
  for(const [key,label] of names){const m=profile?.metrics[key];lines.push(label+': '+(m?'mean '+m.mean.toFixed(2)+' | max '+m.max.toFixed(2)+' | n '+m.count:'no samples'));if(m)lines.push('  max at '+(m.maxAtMs/1000).toFixed(2)+'s, media '+m.mediaTime.toFixed(2)+'s');}
  lines.push('','Decode queue now: '+(profile?.videoQueueDepth||0),'Decoded frames queued: '+(profile?.framesQueued||0),'Video recoveries: '+(player?.stats.videoRecoveries||0),'Audio buffer underruns: '+(player?.stats.audioUnderruns||0));
@@ -267,7 +267,7 @@ async function retireOfflineUI(){
  }catch(error){lastConnectionError={message:'Rescue page setup: '+error.message,time:Date.now()};}
 }
 retireOfflineUI();
-self.ScreenLinkCanvasStatus=()=>({build:'0.20.99-136',engine:activeEngine||requestedEngine,videoDecoder:player?.videoAcceleration||null,connectionPhase,approvalPhase,phoneVolume,phoneEQ,phoneSettingsRevision,phonePlaybackRevision,volumeGain:player?.gain?.gain.value??null,eqLowGain:player?.low?.gain.value??null,minimalViewer:youtubeOnly&&!developerMode,lastRequestAt,lastSuccessAt,offlineUI:false,healthFailures,lastHealthyAt,reconnections,quality:$('quality').value,transportWaiting,decoderFaults,transportError:player?.lastTransportError||null,lastPlaybackError,lastConnectionError,recoveryAttempts:retryCount,mediaRunning:player?.running||false,mediaDuration:player?.duration||0,videoFramesQueued:player?.frames.length||0,audioPacketsQueued:player?.audio.length||0,secureContext:isSecureContext,connected,connectionPending:joining,viewerMode:youtubeOnly?'youtube':'split',screenFrames:screen.framesDrawn,screenHidden:screen.hold,screenQueue:screen.decoder?.decodeQueueSize||0,mediaEpoch,mediaPosition:player?.currentTime||0,mediaPaused:player?.paused??true,mediaWidth:$('mediaCanvas').width,mediaHeight:$('mediaCanvas').height,youtubeBufferSeconds:player?.bufferSeconds||0,encodedVideoLead:player?Math.max(0,player.preparedVideoEnd-player.currentTime):0,mediaStats:player?{...player.stats}:null,performance:player?.performanceProfile?.()||null,previousPlaybackProfile,playbackEvents:player?(player.playbackEvents||[]).map(e=>({...e})):[],segmentCache:player?.segmentCache?.size||0,audioSampleRate:player?.audioContext?.sampleRate||0,decodedAudioRate:player?.lastAudioSampleRate||player?.audio[0]?.sampleRate||0,segments:player?(player.segmentDiagnostics||[]).map(s=>({...s})):[],audioLead:player?.audioContext&&player.audioTail!==null?Math.max(0,player.audioTail-player.audioContext.currentTime):0,videoLead:player?Math.max(0,player.videoEnd-player.currentTime):0,audioState:audioContext?.state||'locked',audioNodes:player?.nodes.size||0,mediaError:player?.error?.message||'',socketOpen:ws?.readyState===WebSocket.OPEN});
+self.ScreenLinkCanvasStatus=()=>({build:'0.21.00-137',engine:activeEngine||requestedEngine,videoDecoder:player?.videoAcceleration||null,connectionPhase,approvalPhase,phoneVolume,phoneEQ,phoneSettingsRevision,phonePlaybackRevision,volumeGain:player?.gain?.gain.value??null,eqLowGain:player?.low?.gain.value??null,minimalViewer:youtubeOnly&&!developerMode,lastRequestAt,lastSuccessAt,offlineUI:false,healthFailures,lastHealthyAt,reconnections,quality:$('quality').value,transportWaiting,decoderFaults,transportError:player?.lastTransportError||null,lastPlaybackError,lastConnectionError,recoveryAttempts:retryCount,mediaRunning:player?.running||false,mediaDuration:player?.duration||0,videoFramesQueued:player?.frames.length||0,audioPacketsQueued:player?.audio.length||0,secureContext:isSecureContext,connected,connectionPending:joining,viewerMode:youtubeOnly?'youtube':'split',screenFrames:screen.framesDrawn,screenHidden:screen.hold,screenQueue:screen.decoder?.decodeQueueSize||0,mediaEpoch,mediaPosition:player?.currentTime||0,mediaPaused:player?.paused??true,mediaWidth:$('mediaCanvas').width,mediaHeight:$('mediaCanvas').height,youtubeBufferSeconds:player?.bufferSeconds||0,encodedVideoLead:player?Math.max(0,player.preparedVideoEnd-player.currentTime):0,mediaStats:player?{...player.stats}:null,performance:player?.performanceProfile?.()||null,previousPlaybackProfile,playbackEvents:player?(player.playbackEvents||[]).map(e=>({...e})):[],segmentCache:player?.segmentCache?.size||0,audioSampleRate:player?.audioContext?.sampleRate||0,decodedAudioRate:player?.lastAudioSampleRate||player?.audio[0]?.sampleRate||0,segments:player?(player.segmentDiagnostics||[]).map(s=>({...s})):[],audioLead:player?.audioContext&&player.audioTail!==null?Math.max(0,player.audioTail-player.audioContext.currentTime):0,videoLead:player?Math.max(0,player.videoEnd-player.currentTime):0,audioState:audioContext?.state||'locked',audioNodes:player?.nodes.size||0,mediaError:player?.error?.message||'',socketOpen:ws?.readyState===WebSocket.OPEN});
 for(const id of ['viewMode','quality','eq'])makeInline(id);
 function autoConnect(){if(!stopped&&!connected&&!joining)connect();if(!stopped)reconnectTimer=setTimeout(autoConnect,3000);}if(isSecureContext&&typeof VideoDecoder==='function')autoConnect();
 if(!isSecureContext||typeof VideoDecoder!=='function')status.textContent='This viewer needs HTTPS and WebCodecs support.';
@@ -529,12 +529,13 @@ const tileMap={
  reset(){for(const l of this.layers)l.el.remove();this.layers=[];this.queue=[];},
  layer(tz){
   const top=this.layers[this.layers.length-1],c=this.world(this.view.lat,this.view.lng,tz);
-  if(top&&top.tz===tz&&Math.abs(c[0]-top.ox)<40000&&Math.abs(c[1]-top.oy)<40000)return top;
+  if(top&&top.tz===tz&&!this.fresh&&Math.abs(c[0]-top.ox)<40000&&Math.abs(c[1]-top.oy)<40000)return top;
+  const keepOld=this.fresh?12000:1600;this.fresh=false;
   // A new zoom level: keep the old squares under the new ones for a moment so the map never goes blank.
   const el=document.createElement('div');el.className='tile-layer';el.innerHTML='<svg class="tile-route" width="1" height="1"><polyline class="edge"/><polyline class="line"/></svg>';
   $('tileLayers').appendChild(el);const made={el,tz,ox:Math.floor(c[0]/this.T)*this.T,oy:Math.floor(c[1]/this.T)*this.T,tiles:new Map(),born:Date.now(),scale:0};
   this.layers.push(made);this.drawRoute(made);
-  const old=this.layers.slice(0,-1);setTimeout(()=>{for(const l of old){l.el.remove();const i=this.layers.indexOf(l);if(i>=0)this.layers.splice(i,1);}},1600);
+  const old=this.layers.slice(0,-1);setTimeout(()=>{for(const l of old){l.el.remove();const i=this.layers.indexOf(l);if(i>=0)this.layers.splice(i,1);}},keepOld);
   return made;
  },
  drawRoute(l){const pts=this.path.map(p=>{const w=this.world(p.lat,p.lng,l.tz);return (w[0]-l.ox).toFixed(1)+','+(w[1]-l.oy).toFixed(1);}).join(' ');for(const line of l.el.querySelectorAll('polyline'))line.setAttribute('points',pts);l.scale=0;},
@@ -583,7 +584,9 @@ const tileMap={
  },
  update(s){
   if(!s.lat)return;const night=!!s.night;
-  if(s.tileV!==this.version||night!==this.night){this.version=s.tileV;this.night=night;this.loads=0;this.errors=0;this.reset();$('mapMini').classList.toggle('map-night',night);this.box().style.background=night?'#1d2430':'#e5e3df';}
+  if(night!==this.night||this.version===null){this.version=s.tileV;this.night=night;this.loads=0;this.errors=0;this.reset();$('mapMini').classList.toggle('map-night',night);this.box().style.background=night?'#1d2430':'#e5e3df';}
+  // Build 137: new traffic squares: build a fresh layer on top and keep the old one under it until they are in.
+  else if(s.tileV!==this.version){this.version=s.tileV;this.loads=0;this.errors=0;this.fresh=true;this.draw();}
   const id=String(s.routeId??'')+':'+String(s.routeLine||'').length,routeNew=id!==this.routeId,drive=s.screen==='drive'||!!s.navigating;
   // Build 136: while driving with the travel direction up, the car map looks down at an angle (3D), like the phone.
   this.box().classList.toggle('tilt',drive&&s.headingUp!==false&&this.follow);
@@ -597,7 +600,9 @@ const tileMap={
   this.goal=goal;cancelAnimationFrame(this.glide);this.glide=0;
   if(!from||moved>.003||document.hidden||(moved<1e-7&&Math.abs(goal.heading-from.heading)<.5)){this.pose=goal;this.camera();this.draw();return;}
   // Smooth movement between GPS points; only moving a finished picture, so it is light for the car.
-  const swing=((goal.heading-from.heading+540)%360)-180,start=performance.now(),step=now=>{const t=Math.min(1,(now-start)/600);
+  // Build 137: glide over the time until the next position arrives, so the car never stops between updates.
+  const gap=Math.max(250,Math.min(1200,performance.now()-(this.goalAt||0)));this.goalAt=performance.now();
+  const swing=((goal.heading-from.heading+540)%360)-180,start=performance.now(),step=now=>{const t=Math.min(1,(now-start)/gap);
    this.pose={lat:from.lat+(goal.lat-from.lat)*t,lng:from.lng+(goal.lng-from.lng)*t,heading:((from.heading+swing*t)%360+360)%360};this.camera();this.render();this.glide=t<1?requestAnimationFrame(step):0;};
   this.glide=requestAnimationFrame(step);
  },
@@ -659,7 +664,7 @@ async function mapStateLoop(){
     const arrow=String(s.maneuver||'')+'|'+String(s.then||'');if(arrow!==jsArrow){jsArrow=arrow;$('mapArrow').innerHTML=mapArrow(s.maneuver);$('mapThen').hidden=!s.then;$('mapThenArrow').innerHTML=s.then?mapArrow(s.then):'';}}
    renderMapUi(s,(useJs&&jsMapState==='ready')||useTiles||mapLive||bgMode);
    // Build 105: while driving ask the phone more often, so the turn and distance are fresh.
-   const busyVideo=videoBudget()<3;next=(useJs||useTiles||mapLive||bgMode)?(Date.now()<mapFast?(busyVideo?500:300):(drive?(busyVideo?900:450):(busyVideo?1500:800))):2500;
+   const busyVideo=videoBudget()<3;next=(useJs||useTiles||mapLive||bgMode)?(Date.now()<mapFast?(busyVideo?500:300):(drive?450:(busyVideo?1500:800))):2500;
   }else{mapLive=false;$('mapMini').hidden=true;}
  }catch(e){next=3000;}
  if(run!==mapLoopRun)return;
@@ -675,7 +680,16 @@ function mapFrameLoop(){
 }
 const mapReplace=()=>setTimeout(()=>{if(mapBgState&&!$('mapBg').hidden)placeMapBg(mapBgState);},560);
 // On the big Google map a tap belongs to the map (drag, place names). Tap the small video to go back.
-$('mapMini').addEventListener('click',()=>{if(document.body.classList.contains('map-big'))return;document.body.classList.toggle('map-big');mapReplace();renderMapUi(mapBgState,mapShown());setTimeout(()=>{if(jsPose)carMapFrame(jsPose);},560);});
+// Build 137: drag the small map to any of the 4 corners; it stays there next time.
+let miniDrag=null,miniDragged=false;
+(()=>{try{const mini=$('mapMini');if(!mini||!document.addEventListener)return;try{const c=localStorage.getItem('screenlink-map-corner');if(['tl','tr','bl','br'].includes(c))mini.classList.add('corner-'+c);}catch{}
+ mini.addEventListener('pointerdown',e=>{if(document.body.classList.contains('map-big'))return;miniDrag={x:e.clientX,y:e.clientY,moved:false};});
+ document.addEventListener('pointermove',e=>{const d=miniDrag;if(!d)return;const dx=e.clientX-d.x,dy=e.clientY-d.y;if(!d.moved&&Math.hypot(dx,dy)<14)return;d.moved=true;mini.style.transition='none';mini.style.transform='translate('+dx+'px,'+dy+'px)';});
+ document.addEventListener('pointerup',e=>{const d=miniDrag;miniDrag=null;if(!d||!d.moved)return;miniDragged=true;const r=mini.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2;
+  const c=(cy<innerHeight/2?'t':'b')+(cx<innerWidth/2?'l':'r');for(const k of ['tl','tr','bl','br'])mini.classList.toggle('corner-'+k,k===c);mini.style.transform='';mini.style.transition='';
+  try{localStorage.setItem('screenlink-map-corner',c);}catch{}setTimeout(()=>{miniDragged=false;},300);});
+ document.addEventListener('pointercancel',()=>{if(miniDrag){miniDrag=null;mini.style.transform='';mini.style.transition='';}});}catch{}})();
+$('mapMini').addEventListener('click',()=>{if(miniDragged)return;if(document.body.classList.contains('map-big'))return;document.body.classList.toggle('map-big');mapReplace();renderMapUi(mapBgState,mapShown());setTimeout(()=>{if(jsPose)carMapFrame(jsPose);},560);});
 $('mapMini').addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){if(document.body.classList.contains('map-big'))return;e.preventDefault();document.body.classList.toggle('map-big');renderMapUi(mapBgState,mapShown());}});
 $('mediaCanvas').addEventListener('click',e=>{if(document.body.classList.contains('map-big')){document.body.classList.remove('map-big');e.stopPropagation();renderMapUi(mapBgState,mapShown());}},true);
 // Build 115: "My waiting screen". The phone lists files the user chose (/waiting/list). They are shown

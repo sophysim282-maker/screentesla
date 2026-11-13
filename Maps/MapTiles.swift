@@ -38,7 +38,8 @@ final class SLMapTiles: NSObject {
         var body: [String: Any] = ["mapType": satellite ? "satellite" : "roadmap", "language": language,
                                    "region": Locale.current.regionCode ?? "US",
                                    "scale": "scaleFactor2x", "highDpi": true]
-        if satellite { body["layerTypes"] = ["layerRoadmap"] }
+        // Build 137: live traffic on the car map (green / orange / red roads), like Google Maps.
+        body["layerTypes"] = satellite ? ["layerRoadmap", "layerTraffic"] : ["layerTraffic"]
         if night && !satellite {
             body["styles"] = [
                 ["elementType": "geometry", "stylers": [["color": "#242f3e"]]],
@@ -93,7 +94,13 @@ final class SLMapTiles: NSObject {
 
     /// One square, asked for by the phone's web server on its own connection thread (never the main
     /// thread). `path` is "z/x/y". Empty data = not available.
+    // Build 137: traffic changes, so every 4 minutes the squares are fetched fresh (the car swaps them in
+    // without a blank map: see tileMap.update in CanvasShell.js).
+    private static var trafficAt = Date()
     @objc static func tile(_ path: String) -> Data {
+        lock.lock()
+        if Date().timeIntervalSince(trafficAt) > 240 { trafficAt = Date(); cache = [:]; order = []; version += 1 }
+        lock.unlock()
         let parts = path.split(separator: "/").compactMap { Int($0) }
         guard parts.count == 3, (0...22).contains(parts[0]), parts[1] >= 0, parts[2] >= 0 else { return Data() }
         let name = "\(parts[0])/\(parts[1])/\(parts[2])"
