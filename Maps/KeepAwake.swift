@@ -35,11 +35,11 @@ final class SLKeepAwake: NSObject, CLLocationManagerDelegate {
     private func left() {
         inBackground = true
         leftAt = Date(); pauses = 0; pausedSeconds = 0; slowed = 0
-        startSilentSound()
+        if Self.silentAllowed { startSilentSound() }
         let pipOff = UserDefaults.standard.bool(forKey: "pipOff")
         let status = manager.authorizationStatus
         let location = status == .authorizedWhenInUse || status == .authorizedAlways
-        Self.log?("BACKGROUND: ScreenLink left the screen. Small window (PiP) switch: \(pipOff ? "Off" : "On"). Silent sound playing: \(silent?.isPlaying == true ? "yes" : "NO"). Location keep-awake allowed: \(location ? "yes" : "NO").")
+        Self.log?("BACKGROUND: ScreenLink left the screen. Small window (PiP) switch: \(pipOff ? "Off" : "On"). Silent sound playing: \(silent?.isPlaying == true ? "yes" : (Self.silentAllowed ? "NO" : "no (PiP is on)")). Location keep-awake allowed: \(location ? "yes" : "NO").")
     }
 
     private func cameBack() {
@@ -107,14 +107,24 @@ final class SLKeepAwake: NSObject, CLLocationManagerDelegate {
         } else {
             Self.log?(String(format: "BACKGROUND WORK SLOWED by iOS for %.0f s (ScreenLink %@, thermal state %d).", seconds, place, heat))
         }
-        startSilentSound()
+        // Build 131: not while another app plays sound; with PiP On, PiP is the keep-awake.
+        if Self.silentAllowed && !AVAudioSession.sharedInstance().isOtherAudioPlaying { startSilentSound() }
     }
 
     private func keepSilentSound() {
         beatCount += 1
         guard wanted, beatCount % 5 == 0, silent?.isPlaying != true else { return }
+        guard Self.silentAllowed else { return }
+        // Build 131: never take the sound back while another app (Messenger, Telegram …) is playing.
+        let session = AVAudioSession.sharedInstance()
+        if session.isOtherAudioPlaying || session.secondaryAudioShouldBeSilencedHint { return }
         startSilentSound()
     }
+
+    /// Build 131: ScreenLink's own silent sound only plays when the small window (PiP) is switched Off.
+    /// With PiP On, PiP keeps the app awake and ScreenLink makes no sound of its own, so it never competes
+    /// with the sound of other apps.
+    static var silentAllowed: Bool { UserDefaults.standard.bool(forKey: "pipOff") }
 
     /// One second of silence, looped. Uses the same audio session settings as the rest of the app
     /// (playback, movie, mixed with other apps), so YouTube, AirPlay and PiP are not interrupted.
@@ -158,7 +168,7 @@ final class SLKeepAwake: NSObject, CLLocationManagerDelegate {
     private func begin() {
         wanted = true
         startHeartbeat()
-        startSilentSound()   // Build 126: from the first second, not only after iOS already paused the app.
+        if Self.silentAllowed { startSilentSound() }   // Build 126/131: from the start, only with PiP Off
         manager.delegate = self
         manager.desiredAccuracy = kCLLocationAccuracyThreeKilometers
         manager.distanceFilter = 500
