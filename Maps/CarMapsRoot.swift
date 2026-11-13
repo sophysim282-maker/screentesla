@@ -47,14 +47,24 @@ struct KeySetupView: View {
     }
 }
 
+/// Build 131: shared between the map screen and the drive screen (Google Maps style: while driving there
+/// is no top bar; the back button and the car-map switch become round buttons on the right).
+final class NavUI: ObservableObject {
+    static let shared = NavUI()
+    @Published var guiding = false
+    var close: () -> Void = {}
+}
+
 struct CarMapsRoot: View {
     @StateObject private var keyStore = KeyStore()
+    @ObservedObject private var ui = NavUI.shared
     let close: () -> Void
 
     var body: some View {
         // Build 130: the back button and the car-map switch sit in their own bar above the map, so they
         // never cover the turn banner any more.
         VStack(spacing: 0) {
+            if !ui.guiding {
             HStack(spacing: 8) {
                 Button(action: close) {
                     Label("ScreenLink", systemImage: "chevron.left")
@@ -69,7 +79,9 @@ struct CarMapsRoot: View {
             }
             .padding(.horizontal, 12).padding(.vertical, 6)
             .background(Color.black)
+            }
             if keyStore.ready {
+                let _ = { NavUI.shared.close = close }()
                 ContentView(apiKey: keyStore.key)
             } else {
                 KeySetupView(keyStore: keyStore)

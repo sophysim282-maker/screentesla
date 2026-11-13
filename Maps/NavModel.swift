@@ -60,7 +60,7 @@ final class NavModel: NSObject, ObservableObject, CLLocationManagerDelegate {
     @Published var driveResults: [Place] = []
     private var pendingStart = false
 
-    @Published var guiding = false
+    @Published var guiding = false { didSet { if NavUI.shared.guiding != guiding { NavUI.shared.guiding = guiding } } }
     // Build 127: filled by Google's navigation engine (GoogleNav.swift) while it is guiding.
     @Published var googleActive = false
     @Published var googleStep: GoogleStep?

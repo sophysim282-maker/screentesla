@@ -590,67 +590,66 @@ func laneIcon(_ shape: String) -> String {
     }
 }
 
+// Build 131: the drive screen in the style of Google Maps navigation: a green turn banner across the top
+// (lanes inside it, "Then" under it), small white round buttons on the right, "Re-centre" on the left,
+// and a bottom sheet with the time in green, distance and arrival, a round X to end and a route button.
+private let gGreen = Color(red: 0.06, green: 0.45, blue: 0.27)
+private let gGreenDark = Color(red: 0.03, green: 0.34, blue: 0.20)
+
 struct DriveOverlay: View {
     @ObservedObject var nav: NavModel
     @ObservedObject var settings: Settings
     @ObservedObject var maps: MapController
 
     @State private var showSearch = false
+    @State private var carMap = CarLink.carMapOn
 
     private var dark: Bool { settings.darkControls }
+    private var buttonFill: Color { dark ? Color(white: 0.16) : .white }
+    private var buttonInk: Color { dark ? .white : Color(white: 0.25) }
 
     var body: some View {
         VStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 0) {
                 banner
-                // Build 127: lanes from Google's navigation engine. White = take this lane.
-                if nav.googleActive, let lanes = nav.googleStep?.lanes, !lanes.isEmpty {
-                    HStack(spacing: 12) {
-                        ForEach(lanes.indices, id: \.self) { i in
-                            Image(systemName: laneIcon(lanes[i].main))
-                                .font(.system(size: 26, weight: .bold))
-                                .foregroundColor(lanes[i].recommended ? .white : Color.white.opacity(0.3))
-                        }
-                    }
-                    .padding(.horizontal, 18).padding(.vertical, 9)
-                    .background(RoundedRectangle(cornerRadius: 16).fill(Theme.navBannerDark))
-                    .padding(.top, 4)
-                }
                 if let t = nav.thenManeuver {
-                    HStack(spacing: 8) {
-                        Text("Then")
-                        Image(systemName: maneuverIcon(t))
+                    HStack(spacing: 6) {
+                        Text("Then").font(.subheadline.weight(.semibold))
+                        Image(systemName: maneuverIcon(t)).font(.system(size: 18, weight: .bold))
                     }
-                    .font(.title3.weight(.semibold))
                     .foregroundColor(.white)
-                    .padding(.horizontal, 18).padding(.vertical, 10)
-                    .background(RoundedRectangle(cornerRadius: 16).fill(Theme.navBannerDark))
-                    .padding(.top, 4)
+                    .padding(.horizontal, 14).padding(.vertical, 8)
+                    .background(RoundedRectangle(cornerRadius: 12).fill(gGreenDark))
+                    .padding(.leading, 12).padding(.top, 6)
                 }
             }
-            .padding(.horizontal, 10)
-            .padding(.top, 4)
 
-            HStack {
+            HStack(alignment: .top) {
                 if !nav.status.isEmpty {
                     Text(nav.status).font(.footnote)
                         .padding(.horizontal, 12).padding(.vertical, 7)
-                        .background(Capsule().fill(Color(.systemBackground)))
+                        .background(Capsule().fill(buttonFill).shadow(color: .black.opacity(0.2), radius: 3))
+                        .foregroundColor(buttonInk)
                 }
                 Spacer()
-                VStack(spacing: 14) {
+                VStack(spacing: 12) {
+                    round("chevron.left") { NavUI.shared.close() }
+                        .accessibilityLabel("Back to ScreenLink. Navigation keeps running.")
                     Button { maps.headingUp.toggle() } label: {
                         CompassNeedle(angle: maps.headingUp ? -nav.carBearing : 0, dark: dark)
-                            .frame(width: 58, height: 58)
-                            .background(Circle().fill(dark ? Color.black.opacity(0.85) : Color(.systemBackground)).shadow(radius: 4))
+                            .frame(width: 48, height: 48)
+                            .background(Circle().fill(buttonFill).shadow(color: .black.opacity(0.25), radius: 3, y: 1))
                     }
-                    navButton("magnifyingglass") { showSearch = true }
-                    navButton(settings.voiceOn ? "speaker.wave.2.fill" : "speaker.slash.fill") { settings.voiceOn.toggle() }
-                    navButton("arrow.triangle.branch") { maps.overview(nav) }
+                    round("magnifyingglass") { showSearch = true }
+                    round(settings.voiceOn ? "speaker.wave.2.fill" : "speaker.slash.fill") { settings.voiceOn.toggle() }
+                    round(carMap ? "car.fill" : "car", tint: carMap ? gGreen : nil) {
+                        carMap.toggle(); CarLink.carMapOn = carMap
+                    }
+                    .accessibilityLabel(carMap ? "Map on the car screen is on" : "Map on the car screen is off")
                 }
             }
-            .padding(.horizontal)
-            .padding(.top, 12)
+            .padding(.horizontal, 12)
+            .padding(.top, 10)
 
             Spacer()
 
@@ -658,15 +657,15 @@ struct DriveOverlay: View {
                 if !maps.follow {
                     Button { maps.recenter(nav) } label: {
                         Label("Re-centre", systemImage: "location.north.fill")
-                            .font(.title3.weight(.semibold))
-                            .padding(.horizontal, 22).padding(.vertical, 14)
-                            .background(Capsule().fill(dark ? Color.black.opacity(0.85) : Color(.systemBackground)).shadow(radius: 4))
-                            .foregroundColor(dark ? .white : Theme.teal)
+                            .font(.headline)
+                            .padding(.horizontal, 18).padding(.vertical, 12)
+                            .background(Capsule().fill(buttonFill).shadow(color: .black.opacity(0.25), radius: 3, y: 1))
+                            .foregroundColor(Color(red: 0.10, green: 0.45, blue: 0.91))
                     }
                 }
                 Spacer()
             }
-            .padding(.horizontal)
+            .padding(.horizontal, 12)
             .padding(.bottom, 10)
 
             if !nav.driveResults.isEmpty { driveResults }
@@ -719,46 +718,87 @@ struct DriveOverlay: View {
     }
 
     private var banner: some View {
-        HStack(spacing: 18) {
-            Image(systemName: maneuverIcon(nav.nextManeuver)).font(.system(size: 44, weight: .bold))
-            VStack(alignment: .leading, spacing: 2) {
-                Text(NavModel.distanceText(nav.distanceToNext)).font(.system(size: 30, weight: .bold))
-                Text(nav.nextInstruction).font(.system(size: 22, weight: .medium)).lineLimit(2)
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .center, spacing: 16) {
+                Image(systemName: maneuverIcon(nav.nextManeuver))
+                    .font(.system(size: 46, weight: .bold))
+                    .frame(width: 56)
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(NavModel.distanceText(nav.distanceToNext))
+                        .font(.system(size: 30, weight: .bold))
+                    Text(nav.nextInstruction)
+                        .font(.system(size: 20, weight: .semibold))
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.8)
+                }
+                Spacer(minLength: 0)
             }
-            Spacer()
+            .padding(.horizontal, 18).padding(.top, 12).padding(.bottom, 14)
+            // Lanes from Google's navigation engine, inside the banner like Google Maps. White = take this lane.
+            if nav.googleActive, let lanes = nav.googleStep?.lanes, !lanes.isEmpty {
+                HStack(spacing: 14) {
+                    Spacer(minLength: 0)
+                    ForEach(lanes.indices, id: \.self) { i in
+                        Image(systemName: laneIcon(lanes[i].main))
+                            .font(.system(size: 24, weight: .bold))
+                            .foregroundColor(lanes[i].recommended ? .white : Color.white.opacity(0.35))
+                    }
+                    Spacer(minLength: 0)
+                }
+                .padding(.vertical, 8)
+                .background(gGreenDark)
+            }
         }
         .foregroundColor(.white)
-        .padding(20)
-        .background(RoundedRectangle(cornerRadius: 22).fill(Theme.navBanner).shadow(radius: 6))
+        .background(gGreen)
+        .clipShape(RoundedRectangle(cornerRadius: 18))
+        .shadow(color: .black.opacity(0.3), radius: 6, y: 2)
+        .padding(.horizontal, 8)
+        .padding(.top, 4)
     }
 
-    private func navButton(_ icon: String, action: @escaping () -> Void) -> some View {
+    private func round(_ icon: String, tint: Color? = nil, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: icon)
-                .font(.system(size: 22, weight: .medium))
-                .foregroundColor(dark ? .white : .primary)
-                .frame(width: 58, height: 58)
-                .background(Circle().fill(dark ? Color.black.opacity(0.85) : Color(.systemBackground)).shadow(radius: 4))
+                .font(.system(size: 19, weight: .semibold))
+                .foregroundColor(tint ?? buttonInk)
+                .frame(width: 48, height: 48)
+                .background(Circle().fill(buttonFill).shadow(color: .black.opacity(0.25), radius: 3, y: 1))
         }
     }
 
     private var bottomBar: some View {
-        HStack(spacing: 14) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(NavModel.timeText(nav.remainingSeconds))
-                    .font(.system(size: 34, weight: .bold)).foregroundColor(Theme.eta)
-                Text("\(NavModel.distanceText(nav.remainingMeters)) · \(nav.arrivalText)")
-                    .font(.title3).foregroundColor(.secondary)
-            }
-            Spacer()
-            Button { nav.clear() } label: {
-                Text("Exit").font(.title3.weight(.semibold)).foregroundColor(.white)
-                    .padding(.horizontal, 30).padding(.vertical, 14)
-                    .background(Capsule().fill(Color.red))
+        VStack(spacing: 8) {
+            Grabber()
+            HStack(spacing: 14) {
+                Button { nav.clear() } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundColor(.primary)
+                        .frame(width: 52, height: 52)
+                        .background(Circle().fill(Color(.secondarySystemBackground)))
+                }
+                .accessibilityLabel("End navigation")
+                Spacer(minLength: 0)
+                VStack(spacing: 2) {
+                    Text(NavModel.timeText(nav.remainingSeconds))
+                        .font(.system(size: 30, weight: .bold)).foregroundColor(Theme.eta)
+                    Text("\(NavModel.distanceText(nav.remainingMeters)) · \(nav.arrivalText)")
+                        .font(.headline).foregroundColor(.secondary)
+                }
+                Spacer(minLength: 0)
+                Button { maps.overview(nav) } label: {
+                    Image(systemName: "arrow.triangle.branch")
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundColor(.primary)
+                        .frame(width: 52, height: 52)
+                        .background(Circle().fill(Color(.secondarySystemBackground)))
+                }
+                .accessibilityLabel("Show the whole route")
             }
         }
-        .padding(.horizontal, 24)
-        .padding(.top, 18)
+        .padding(.horizontal, 18)
+        .padding(.top, 8)
         .padding(.bottom, 10)
         .background(SheetBackground())
     }
