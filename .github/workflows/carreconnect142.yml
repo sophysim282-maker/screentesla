@@ -1,5 +1,5 @@
 name: Build142 car reconnect
-# Build 142: automatic car reconnect and stuck-page reload. Run 1.
+# Build 142: automatic car reconnect and stuck-page reload. Run 2.
 on:
   push:
     branches: ['release/build142-car-reconnect']
