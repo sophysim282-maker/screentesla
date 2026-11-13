@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ScreenLink</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#10141c;color:#fff;font:15px system-ui,sans-serif;text-align:center;overflow:hidden}
+header{height:64px;padding:6px;display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap}
+p{margin:0}button{background:#25354b;color:#fff;border:1px solid #547091;border-radius:8px;padding:9px 14px;font-size:15px;cursor:pointer}
+button:disabled{opacity:.4}[hidden]{display:none!important}
+img,video{display:block;width:100vw;height:calc(100vh - 64px);object-fit:contain;background:#000}
+body.full header{position:fixed;top:0;left:0;right:0;z-index:2;background:#10141ccc;opacity:0;transition:opacity .3s}
+body.full header:hover,body.full.show header{opacity:1}body.full img,body.full video{height:100vh}
+body.stale img,body.stale video{opacity:.35}
+</style>
+<header><p id="status">Connecting…</p><button id="mode">JPEG mode</button><button id="reconnect">Reconnect</button><button id="fullscreen">Full screen</button></header>
+<img id="picture" alt="Shared phone screen" hidden><video id="player" autoplay muted playsinline disableRemotePlayback></video>
+<script>
+const token=new URLSearchParams(location.search).get('token')||'';
+const picture=document.getElementById('picture'),player=document.getElementById('player'),statusText=document.getElementById('status'),modeButton=document.getElementById('mode');
+// Viewer modes: 'h264' (MediaSource video), 'stream' (MJPEG <img>), 'snapshots' (fetched JPEGs).
+let mode='h264',epoch=0,controller=null,mediaURL=null,objectURL=null,expired=false,retryTimer=null,switching=0;
+let lastSource=null,lastRendered=null,sourceFPS=0,displayFPS=0,displayFrames=0,displayStart=performance.now(),stalls=0;
+const delay=ms=>new Promise(r=>setTimeout(r,ms));
+const endpoint=path=>path+(path.includes('?')?'&':'?')+'token='+encodeURIComponent(token);
+const serverMode=m=>m==='h264'?'h264':'jpeg';
+async function request(path,cancellable=false,ms=5000){
+ const task=new AbortController();if(cancellable)controller=task;
+ const timer=setTimeout(()=>task.abort(),ms);
+ try{return await fetch(endpoint(path),{cache:'no-store',signal:task.signal});}finally{clearTimeout(timer);}
+}
+function save(){try{localStorage.setItem('screenlink-android-mode',mode);}catch(e){}}
+function startViewer(){
+ epoch++;const mine=epoch;clearTimeout(retryTimer);if(controller)controller.abort();
+ picture.removeAttribute('src');player.pause();player.removeAttribute('src');player.load();
+ if(mediaURL){URL.revokeObjectURL(mediaURL);mediaURL=null;}if(objectURL){URL.revokeObjectURL(objectURL);objectURL=null;}
+ if(mode==='h264'&&typeof MediaSource==='undefined')mode='stream';
+ picture.hidden=mode==='h264';player.hidden=mode!=='h264';
+ lastSource=null;lastRendered=null;displayFPS=0;displayFrames=0;displayStart=performance.now();stalls=0;
+ modeButton.textContent=mode==='h264'?'JPEG mode':(mode==='stream'?'Snapshot mode':'Video mode');
+ if(expired)return;
+ if(mode==='h264')h264(mine);else if(mode==='stream')picture.src=endpoint('/stream.mjpg')+'&v='+Date.now();else snapshots(mine);
+}
+picture.onerror=()=>{if(mode==='stream'&&!expired){document.body.classList.add('stale');clearTimeout(retryTimer);retryTimer=setTimeout(startViewer,1200);}};
+async function snapshots(mine){
+ let seq='0';
+ while(mode==='snapshots'&&mine===epoch&&!expired){
+  try{
+   const r=await request('/frame.jpg?after='+seq,true);if(mine!==epoch)return;
+   if(r.status===204)continue;if(!r.ok)throw Error();
+   const next=URL.createObjectURL(await r.blob());if(mine!==epoch){URL.revokeObjectURL(next);return;}
+   picture.src=next;try{await picture.decode();}catch(e){}
+   if(objectURL)URL.revokeObjectURL(objectURL);objectURL=next;seq=r.headers.get('X-Frame-ID')||seq;
+   displayFrames++;const now=performance.now();if(now-displayStart>=1000){displayFPS=Math.round(displayFrames*1000/(now-displayStart));displayFrames=0;displayStart=now;}
+  }catch(e){if(mine!==epoch)return;await delay(300);}
+ }
+}
+function append(buffer,data){return new Promise((resolve,reject)=>{
+ const timer=setTimeout(()=>finish(Error('append timeout')),5000);
+ function finish(err){clearTimeout(timer);buffer.removeEventListener('updateend',ok);buffer.removeEventListener('error',bad);err?reject(err):resolve();}
+ function ok(){finish();}function bad(){finish(Error('decoder rejected stream'));}
+ buffer.addEventListener('updateend',ok);buffer.addEventListener('error',bad);
+ try{buffer.appendBuffer(data);}catch(e){finish(e);}
+});}
+async function h264(mine){
+ while(mode==='h264'&&mine===epoch&&!expired){
+  try{
+   const metaR=await request('/h264/info',true);if(!metaR.ok)throw Error('unavailable');
+   const meta=await metaR.json();if(mine!==epoch)return;if(!meta.ready){await delay(400);continue;}
+   const mime='video/mp4; codecs="'+meta.codec+'"';
+   if(!MediaSource.isTypeSupported(mime)){statusText.textContent='This browser cannot play H.264 — using JPEG.';mode='stream';save();switchServer('jpeg');startViewer();return;}
+   const source=new MediaSource();mediaURL=URL.createObjectURL(source);player.src=mediaURL;
+   await new Promise((resolve,reject)=>{const t=setTimeout(()=>reject(Error('sourceopen timeout')),5000);source.addEventListener('sourceopen',()=>{clearTimeout(t);resolve();},{once:true});});
+   if(mine!==epoch)return;
+   const buffer=source.addSourceBuffer(mime);source.duration=Infinity;
+   const init=await request('/h264/init.mp4',true);
+   if(!init.ok||init.headers.get('X-Stream-Epoch')!==meta.epoch)throw Error('stream changed');
+   await append(buffer,await init.arrayBuffer());let seq='0';
+   while(mode==='h264'&&mine===epoch&&!expired){
+    const r=await request('/h264/segments?after='+seq+'&epoch='+encodeURIComponent(meta.epoch),true,6000);
+    if(mine!==epoch)return;if(r.status===204)continue;
+    if(!r.ok||r.headers.get('X-Stream-Epoch')!==meta.epoch)throw Error('stream restarted');
+    await append(buffer,await r.arrayBuffer());seq=r.headers.get('X-Last-ID')||seq;
+    if(player.buffered.length){
+     const n=player.buffered.length-1,end=player.buffered.end(n),start=player.buffered.start(n);
+     // Stay close to live: jump forward if we fall behind.
+     if(player.currentTime<start||end-player.currentTime>0.4)player.currentTime=Math.max(start,end-0.08);
+     if(end-player.buffered.start(0)>8&&!buffer.updating){await new Promise(res=>{buffer.addEventListener('updateend',res,{once:true});buffer.remove(0,end-4);});}
+    }
+    if(player.paused)player.play().catch(()=>{});
+   }
+  }catch(e){
+   if(mine!==epoch||expired)return;statusText.textContent='Reconnecting video…';await delay(700);
+   if(mediaURL){player.removeAttribute('src');player.load();URL.revokeObjectURL(mediaURL);mediaURL=null;}
+  }
+ }
+}
+async function switchServer(m){switching=Date.now();try{await request('/mode?set='+m);}catch(e){}}
+async function pollStatus(){
+ while(!expired){
+  try{
+   const r=await request('/status.json');
+   if(r.status===403){expired=true;startViewer();statusText.textContent='This link is old. Copy the current link from the ScreenLink app.';document.body.classList.add('stale');return;}
+   if(!r.ok)throw Error();const s=await r.json(),now=performance.now();
+   // Follow a mode change made on the phone (or by another viewer).
+   if(s.running&&serverMode(mode)!==s.mode&&Date.now()-switching>3000){mode=s.mode==='h264'?'h264':'stream';save();startViewer();}
+   const count=mode==='h264'?s.h264Frames:s.jpegFrames;
+   sourceFPS=lastSource&&count>=lastSource.frames?Math.round((count-lastSource.frames)*1000/(now-lastSource.time)):0;lastSource={frames:count,time:now};
+   if(mode==='h264'&&player.getVideoPlaybackQuality){const done=player.getVideoPlaybackQuality().totalVideoFrames;
+    displayFPS=lastRendered&&done>=lastRendered.frames?Math.round((done-lastRendered.frames)*1000/(now-lastRendered.time)):0;lastRendered={frames:done,time:now};
+    // Video arriving but nothing shown (e.g. browser blocks video while driving): suggest JPEG.
+    stalls=sourceFPS>0&&displayFPS===0&&!player.hidden?stalls+1:0;}
+   const age=mode==='h264'?s.compressedAgeMs:s.frameAgeMs;
+   const live=s.running&&count>0&&age<3000;
+   document.body.classList.toggle('stale',!live);
+   statusText.textContent=!s.running?'Sharing is stopped — tap Start sharing in the ScreenLink app.':
+    !live?'Waiting for the phone screen… keep the phone unlocked.':
+    (stalls>=3?'Video is paused by the browser — tap JPEG mode.':
+    (mode==='h264'?'Video':'JPEG')+' · '+s.width+'×'+s.height+' · '+sourceFPS+' fps'+(mode!=='stream'?' · shown '+displayFPS+' fps':''));
+  }catch(e){document.body.classList.add('stale');statusText.textContent='Cannot reach the phone. Check the hotspot connection.';}
+  await delay(1500);
+ }
+}
+modeButton.onclick=()=>{mode=mode==='h264'?'stream':(mode==='stream'?'snapshots':'h264');save();switchServer(serverMode(mode));startViewer();};
+document.getElementById('reconnect').onclick=startViewer;
+const full=document.getElementById('fullscreen'),requestFull=document.documentElement.requestFullscreen||document.documentElement.webkitRequestFullscreen;
+full.onclick=()=>{if(document.body.classList.toggle('full')&&requestFull){const r=requestFull.call(document.documentElement);if(r&&r.catch)r.catch(()=>{});}
+ else if(document.fullscreenElement&&document.exitFullscreen)document.exitFullscreen().catch(()=>{});};
+document.addEventListener('click',e=>{if(document.body.classList.contains('full')&&e.target.tagName!=='BUTTON'){document.body.classList.add('show');setTimeout(()=>document.body.classList.remove('show'),3000);}});
+try{const saved=localStorage.getItem('screenlink-android-mode');if(['h264','stream','snapshots'].includes(saved))mode=saved;}catch(e){}
+startViewer();pollStatus();
+</script></html>
