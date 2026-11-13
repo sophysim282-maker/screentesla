@@ -1,5 +1,5 @@
 name: Build134 Google navigation
-# Build 134: Google own navigation screen and key check. Run 1.
+# Build 134: Google own navigation screen and key check. Run 2.
 on:
   push:
     branches: ['release/build134-google-navigation']
