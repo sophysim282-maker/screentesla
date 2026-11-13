@@ -38,6 +38,7 @@ struct PlaceInfo {
 /// Search, place details, routes and turn-by-turn guidance.
 final class NavModel: NSObject, ObservableObject, CLLocationManagerDelegate {
     let api: GoogleAPI
+    var apiKeyForCheck: String { api.key }
     let settings = Settings.shared
 
     @Published var location: CLLocation?

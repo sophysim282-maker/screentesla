@@ -99,6 +99,7 @@ struct ContentView: View {
         }
         .animation(.easeInOut(duration: 0.2), value: searchOpen)
         .preferredColorScheme(settings.isNight ? .dark : .light)
+        .overlay(alignment: .top) { KeyCheckBanner(apiKey: nav.apiKeyForCheck).padding(.top, 70) }
         .onAppear(perform: startCar)
         .sheet(isPresented: $showYou) { YouSheet(nav: nav, settings: settings) }
         .sheet(isPresented: $showSettings) { SettingsView(settings: settings, car: car, vpn: vpn) }
@@ -282,3 +283,51 @@ struct ContentView: View {
         CubeLink.shared.resume(nav: nav)   // build 103: Orbit Cube turn display (Bluetooth), if its switch was left on
     }
 }
+
+/// Build 134: asks Google once, when the map opens, whether this key works, and shows Google's own answer.
+/// One tiny route question (2 points 300 m apart); it is far inside Google's free monthly amount.
+struct KeyCheckBanner: View {
+    let apiKey: String
+    @State private var text = ""
+    @State private var good = false
+    @State private var shown = false
+
+    var body: some View {
+        Group {
+            if shown {
+                Button { shown = false } label: {
+                    Text(text)
+                        .font(.footnote.weight(.semibold))
+                        .multilineTextAlignment(.leading)
+                        .padding(.horizontal, 12).padding(.vertical, 8)
+                        .background(RoundedRectangle(cornerRadius: 12).fill(good ? Color.green.opacity(0.9) : Color.red.opacity(0.92)))
+                        .foregroundColor(.white)
+                }
+                .padding(.horizontal, 12)
+            }
+        }
+        .onAppear(perform: check)
+    }
+
+    private func check() {
+        let body: [String: Any] = [
+            "origin": ["location": ["latLng": ["latitude": 11.5564, "longitude": 104.9282]]],
+            "destination": ["location": ["latLng": ["latitude": 11.5590, "longitude": 104.9282]]],
+            "travelMode": "DRIVE",
+        ]
+        GoogleAPI(key: apiKey).call("https://routes.googleapis.com/directions/v2:computeRoutes", body: body, fields: "routes.distanceMeters") { json, err in
+            if let err {
+                good = false
+                text = "Google: \(err.replacingOccurrences(of: "Google error: ", with: "")) (tap to hide)"
+                GoogleNav.line("MAP KEY CHECK: Google refused the key: \(err)")
+            } else {
+                good = true
+                text = "Google key OK ✓"
+                GoogleNav.line("MAP KEY CHECK: Google key OK ✓ (billing on, Routes API allowed). If the map is still empty, Maps SDK for iOS is not enabled for this key's project.")
+                DispatchQueue.main.asyncAfter(deadline: .now() + 5) { shown = false }
+            }
+            shown = true
+        }
+    }
+}
+

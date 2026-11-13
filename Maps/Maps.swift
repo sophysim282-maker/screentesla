@@ -163,9 +163,11 @@ final class MapController: NSObject, ObservableObject, GMSMapViewDelegate {
             }
         }
 
+        let googleDriving = nav.guiding && nav.googleActive && phoneMap.isNavigationEnabled
         if shownRoutes != nav.routesVersion {
             shownRoutes = nav.routesVersion
-            for l in layers { drawRoutes(l, nav) }
+            // Build 134: while Google's navigation screen runs, Google draws the route on the phone map.
+            for l in layers { if googleDriving && l.map === phoneMap { l.lines.forEach { $0.map = nil }; l.lines = [] } else { drawRoutes(l, nav) } }
             if !nav.guiding, !nav.routes.isEmpty { overview(nav) }
         }
 
@@ -178,6 +180,7 @@ final class MapController: NSObject, ObservableObject, GMSMapViewDelegate {
                 l.dest.map = nil
             }
             l.map.isMyLocationEnabled = !nav.guiding
+            if googleDriving && l.map === phoneMap { l.arrow.map = nil; continue }
             if nav.guiding, let c = nav.carCoordinate {
                 if l.arrow.map == nil {
                     l.arrow.position = c
@@ -189,7 +192,9 @@ final class MapController: NSObject, ObservableObject, GMSMapViewDelegate {
             }
         }
 
-        if nav.guiding {
+        if googleDriving {
+            phoneMap.padding = .zero
+        } else if nav.guiding {
             phoneMap.padding = UIEdgeInsets(top: 400, left: 0, bottom: 120, right: 0)
         } else if nav.showingDirections {
             phoneMap.padding = UIEdgeInsets(top: 130, left: 0, bottom: 360, right: 0)
@@ -226,7 +231,7 @@ final class MapController: NSObject, ObservableObject, GMSMapViewDelegate {
                 l.arrow.position = c
                 l.arrow.rotation = nav.carBearing
             }
-            if follow {
+            if follow && !googleDriving {
                 phoneMap.animate(to: GMSCameraPosition(target: c, zoom: 17, bearing: bearing, viewingAngle: headingUp ? 65 : 0))
             }
             if carFollow {

@@ -609,6 +609,38 @@ struct DriveOverlay: View {
     private var buttonInk: Color { dark ? .white : Color(white: 0.25) }
 
     var body: some View {
+        if nav.googleActive { googleButtons } else { ownScreen }
+    }
+
+    /// Build 134: Google draws its own banner, speed and arrival bar. ScreenLink only adds its round buttons.
+    private var googleButtons: some View {
+        VStack(spacing: 12) {
+            Spacer().frame(height: 170)
+            HStack {
+                Spacer()
+                VStack(spacing: 12) {
+                    round("chevron.left") { NavUI.shared.close() }
+                    round("magnifyingglass") { showSearch = true }
+                    round(settings.voiceOn ? "speaker.wave.2.fill" : "speaker.slash.fill") { settings.voiceOn.toggle() }
+                    round(carMap ? "car.fill" : "car", tint: carMap ? gGreen : nil) { carMap.toggle(); CarLink.carMapOn = carMap }
+                    round("xmark", tint: .red) { nav.clear() }
+                        .accessibilityLabel("End navigation")
+                }
+            }
+            .padding(.horizontal, 12)
+            Spacer()
+            if !nav.driveResults.isEmpty { driveResults.padding(.bottom, 90) }
+        }
+        .confirmationDialog("Search along the way", isPresented: $showSearch, titleVisibility: .visible) {
+            Button("Gas stations") { nav.searchWhileDriving("gas station") }
+            Button("Charging stations") { nav.searchWhileDriving("EV charging station") }
+            Button("Coffee") { nav.searchWhileDriving("coffee") }
+            Button("Restaurants") { nav.searchWhileDriving("restaurants") }
+            Button("Cancel", role: .cancel) {}
+        }
+    }
+
+    private var ownScreen: some View {
         VStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 0) {
                 banner

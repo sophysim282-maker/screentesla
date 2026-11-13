@@ -64,12 +64,9 @@ final class GoogleNav: NSObject, GMSNavigatorListener, GMSRoadSnappedLocationPro
         }
     }
 
-    private var session: GMSNavigationSession?
     private weak var model: NavModel?
     private var key = ""
     private var lastStepText = ""
-    private var saidNear = false
-    private var saidFar = false
     private var loggedInfo = false
 
     /// Starts (or restarts) Google guidance for the model's destination. Safe to call again when the route changes.
@@ -98,20 +95,28 @@ final class GoogleNav: NSObject, GMSNavigatorListener, GMSRoadSnappedLocationPro
         }
     }
 
+    // Build 134: Google's own navigation screen. The phone map itself becomes Google's navigation map:
+    // Google's turn banner, lanes, speed, voice, camera and re-centre button, exactly as in the Google Maps app.
+    private var listening = false
     private func begin(_ points: [(CLLocationCoordinate2D, String)], wanted: String) {
-        if session == nil {
-            session = GMSNavigationServices.createNavigationSession()
-            session?.navigator?.add(self)
-            session?.roadSnappedLocationProvider?.add(self)
-        }
-        guard let session, let navigator = session.navigator else {
+        let map = MapController.shared.phoneMap
+        map.isNavigationEnabled = true
+        guard let navigator = map.navigator else {
             model?.googleActive = false
-            Self.note("could not be created on this phone. ScreenLink's own guidance is used.")
+            Self.note("could not be started on this phone. ScreenLink's own guidance is used.")
             return
         }
-        session.isStarted = true
-        session.travelMode = model?.mode == "TWO_WHEELER" ? .twoWheeler : .driving
-        navigator.voiceGuidance = .silent          // ScreenLink speaks itself, so YouTube AirPlay and PiP are not interrupted
+        if !listening {
+            listening = true
+            navigator.add(self)
+            map.roadSnappedLocationProvider?.add(self)
+        }
+        map.travelMode = model?.mode == "TWO_WHEELER" ? .twoWheeler : .driving
+        map.settings.isNavigationHeaderEnabled = true
+        map.settings.isNavigationFooterEnabled = true
+        map.settings.isRecenterButtonEnabled = true
+        map.shouldDisplaySpeedometer = true
+        navigator.voiceGuidance = (model?.settings.voiceOn ?? true) ? .alertsAndGuidance : .silent
         navigator.sendsBackgroundNotifications = false
         let waypoints = points.compactMap { GMSNavigationWaypoint(location: $0.0, title: $0.1) }
         guard !waypoints.isEmpty else { return }
@@ -124,23 +129,26 @@ final class GoogleNav: NSObject, GMSNavigatorListener, GMSRoadSnappedLocationPro
                 return
             }
             navigator.isGuidanceActive = true
-            session.roadSnappedLocationProvider?.startUpdatingLocation()
+            map.cameraMode = .following
+            map.roadSnappedLocationProvider?.startUpdatingLocation()
             model.googleActive = true
             self.lastStepText = ""
             self.loggedInfo = false
             self.redraw()
-            Self.note("ON. Turns, lanes, distance, arrival time and new routes now come from Google's engine.")
+            Self.note("ON with Google's own navigation screen and voice. Turns, lanes, distance, arrival time and new routes come from Google.")
         }
     }
 
     func stop() {
         key = ""
         lastStepText = ""
-        guard let session else { return }
-        session.navigator?.isGuidanceActive = false
-        session.navigator?.clearDestinations()
-        session.roadSnappedLocationProvider?.stopUpdatingLocation()
-        session.isStarted = false
+        let map = MapController.shared.phoneMap
+        if let navigator = map.navigator {
+            navigator.isGuidanceActive = false
+            navigator.clearDestinations()
+        }
+        map.roadSnappedLocationProvider?.stopUpdatingLocation()
+        map.isNavigationEnabled = false
         if model?.googleActive == true { Self.note("stopped.") }
         model?.googleActive = false
         model?.googleStep = nil
@@ -179,15 +187,10 @@ final class GoogleNav: NSObject, GMSNavigatorListener, GMSRoadSnappedLocationPro
             loggedInfo = true
             Self.note("first turn from Google: \"\(text)\" in \(Int(distance)) m, arrow \(made.maneuver) (Google code \(step.maneuver.rawValue)), lanes \(lanes.count).")
         }
-        // Voice, spoken by ScreenLink: when the turn changes, about 500 m before, and close to it.
-        if text != lastStepText {
-            lastStepText = text
-            saidFar = distance < 700
-            saidNear = false
-            if distance > 250 { model.speak(model.settings.language == "en" ? "In \(NavModel.distanceText(distance)), \(text)" : text) }
-        }
-        if !saidFar, distance < 550, distance > 300 { saidFar = true; model.speak(model.settings.language == "en" ? "In \(NavModel.distanceText(distance)), \(text)" : text) }
-        if !saidNear, distance < 140 { saidNear = true; saidFar = true; model.speak(text) }
+        // Build 134: Google's own voice speaks the turns (as in Google Maps). The mute button switches it.
+        let wantVoice: GMSNavigationVoiceGuidance = model.settings.voiceOn ? .alertsAndGuidance : .silent
+        if navigator.voiceGuidance != wantVoice { navigator.voiceGuidance = wantVoice }
+        lastStepText = text
     }
 
     func navigatorDidChangeRoute(_ navigator: GMSNavigator) {
