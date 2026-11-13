@@ -23,6 +23,10 @@ struct RouteOption: Identifiable {
     let meters: Double
     let seconds: Double
     let labels: [String]
+    // Build 136: traffic like Google Maps.
+    var staticSeconds: Double = 0            // the same route without today's traffic
+    var token: String? = nil                 // lets Google's navigation drive exactly this route
+    var traffic: [(start: Int, end: Int, speed: String)] = []   // SLOW / TRAFFIC_JAM parts of the line
 }
 
 struct PlaceInfo {
@@ -65,6 +69,30 @@ final class NavModel: NSObject, ObservableObject, CLLocationManagerDelegate {
     // Build 127: filled by Google's navigation engine (GoogleNav.swift) while it is guiding.
     @Published var googleActive = false
     @Published var googleStep: GoogleStep?
+    // Build 136: traffic delay against a normal day (seconds, + = late), and a faster route Google found.
+    @Published var trafficDelay: Double = 0
+    @Published var fasterRoute: (minutes: Int, token: String)?
+    private var fasterCheckAt = Date.distantPast
+
+    /// Every 3 minutes while Google guides: ask for routes from here; offer one that saves 3 minutes or more.
+    func checkFasterRoute(remaining: Double) {
+        guard googleActive, stop == nil, Date().timeIntervalSince(fasterCheckAt) > 180,
+              let dest = selected, let here = location, mode == "DRIVE" else { return }
+        fasterCheckAt = Date()
+        api.call("https://routes.googleapis.com/directions/v2:computeRoutes",
+                 body: routeBody(mode, alternatives: true, from: here.coordinate, to: dest.coordinate),
+                 fields: "routes.duration,routes.routeToken") { [weak self] json, _ in
+            guard let self, self.guiding else { return }
+            let best = ((json?["routes"] as? [[String: Any]]) ?? []).compactMap { r -> (Double, String)? in
+                guard let token = r["routeToken"] as? String else { return nil }
+                return (Self.seconds(r["duration"]), token)
+            }.min { $0.0 < $1.0 }
+            if let best, remaining - best.0 >= 180 {
+                self.fasterRoute = (Int(((remaining - best.0) / 60).rounded()), best.1)
+                GoogleNav.line("GOOGLE NAVIGATION: a faster route was found, saves \(self.fasterRoute!.minutes) min.")
+            }
+        }
+    }
     @Published var stepIndex = 0
     @Published var distanceToNext: Double = 0
     @Published var remainingMeters: Double = 0
@@ -446,7 +474,8 @@ final class NavModel: NSObject, ObservableObject, CLLocationManagerDelegate {
         ]
         if let st = stop, m != "TRANSIT" { b["intermediates"] = [ll(st.coordinate)] }
         if m == "DRIVE" || m == "TWO_WHEELER" {
-            b["routingPreference"] = "TRAFFIC_AWARE"
+            b["routingPreference"] = "TRAFFIC_AWARE_OPTIMAL"
+            b["extraComputations"] = ["TRAFFIC_ON_POLYLINE"]
             b["routeModifiers"] = ["avoidTolls": settings.avoidTolls, "avoidHighways": settings.avoidHighways,
                                    "avoidFerries": settings.avoidFerries]
         }
@@ -477,6 +506,7 @@ final class NavModel: NSObject, ObservableObject, CLLocationManagerDelegate {
         lastReroute = Date()
         if guiding && offRoute > 0 { status = "Re-routing…" }
         let fields = "routes.distanceMeters,routes.duration,routes.polyline.encodedPolyline,routes.routeLabels," +
+            "routes.staticDuration,routes.routeToken,routes.travelAdvisory.speedReadingIntervals," +
             "routes.legs.steps.distanceMeters,routes.legs.steps.endLocation,routes.legs.steps.navigationInstruction"
         let wantMode = mode
         api.call("https://routes.googleapis.com/directions/v2:computeRoutes",
@@ -504,8 +534,17 @@ final class NavModel: NSObject, ObservableObject, CLLocationManagerDelegate {
                     }
                 }
                 guard !steps.isEmpty else { return nil }
-                return RouteOption(id: i, path: path, steps: steps, meters: Double(r["distanceMeters"] as? Int ?? 0),
+                var option = RouteOption(id: i, path: path, steps: steps, meters: Double(r["distanceMeters"] as? Int ?? 0),
                                    seconds: Self.seconds(r["duration"]), labels: r["routeLabels"] as? [String] ?? [])
+                option.staticSeconds = Self.seconds(r["staticDuration"])
+                option.token = r["routeToken"] as? String
+                let intervals = ((r["travelAdvisory"] as? [String: Any])?["speedReadingIntervals"] as? [[String: Any]]) ?? []
+                option.traffic = intervals.compactMap { iv in
+                    let speed = iv["speed"] as? String ?? "NORMAL"
+                    guard speed != "NORMAL" else { return nil }
+                    return (start: iv["startPolylinePointIndex"] as? Int ?? 0, end: iv["endPolylinePointIndex"] as? Int ?? 0, speed: speed)
+                }
+                return option
             }
             guard let first = parsed.first else { self.status = "No route found"; return }
             self.routes = parsed

@@ -4,6 +4,8 @@ Read this first. It replaces reading the old 400k-token conversation.
 
 ## WHERE WE ARE NOW (read this part first)
 
+- **Build 136 (0.20.99), branch `release/build136-traffic`:** route choice + traffic + delay + faster route; 3D car map. See BUILD136.md.
+
 - **Build 135 (0.20.98), branch `release/build135-maps-switch`:** Maps switch on Home + background Google navigation. See BUILD135.md.
 
 - **Build 134 (0.20.97), branch `release/build134-google-navigation`:** Google's own navigation UI on the phone map + key check banner. User's Google project is `carlink` (billing paid). See BUILD134.md.

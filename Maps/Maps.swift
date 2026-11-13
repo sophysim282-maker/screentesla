@@ -328,10 +328,29 @@ final class MapController: NSObject, ObservableObject, GMSMapViewDelegate {
                 line.map = l.map
                 l.lines.append(line)
             }
+            // Build 136: traffic on the chosen route, like Google Maps: orange = slow, red = jam.
+            if sel {
+                for part in r.traffic where part.end > part.start && part.end < Int(r.path.count()) {
+                    let piece = GMSMutablePath()
+                    for k in part.start...part.end { piece.add(r.path.coordinate(at: UInt(k))) }
+                    let jam = GMSPolyline(path: piece)
+                    jam.strokeWidth = 7.5
+                    jam.strokeColor = part.speed == "TRAFFIC_JAM" ? UIColor(red: 0.85, green: 0.19, blue: 0.15, alpha: 1)
+                                                                  : UIColor(red: 0.98, green: 0.58, blue: 0.0, alpha: 1)
+                    jam.zIndex = 14
+                    jam.map = l.map
+                    l.lines.append(jam)
+                }
+            }
             if !nav.guiding {
                 let mid = r.path.coordinate(at: r.path.count() / 2)
                 let b = GMSMarker(position: mid)
-                b.icon = Self.bubble(NavModel.timeText(r.seconds), selected: sel)
+                // Build 136: "18 min · fastest", and "+6 min traffic" when today's traffic adds time.
+                var label = NavModel.timeText(r.seconds)
+                if i == 0 && nav.routes.count > 1 { label += " · fastest" }
+                let late = r.staticSeconds > 0 ? r.seconds - r.staticSeconds : 0
+                if late >= 120 { label += " · +\(Int((late / 60).rounded())) min traffic" }
+                b.icon = Self.bubble(label, selected: sel)
                 b.groundAnchor = CGPoint(x: 0.5, y: 1)
                 b.userData = i
                 b.zIndex = sel ? 40 : 30

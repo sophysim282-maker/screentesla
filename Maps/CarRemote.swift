@@ -21,6 +21,7 @@ extension NavModel {
             "then": thenManeuver ?? "",
             "lanes": (googleActive ? (googleStep?.lanes ?? []) : []).map { ["shape": $0.main, "go": $0.recommended] as [String: Any] },
             "engine": googleActive ? "google" : "screenlink",
+            "delay": abs(trafficDelay) >= 60 ? (trafficDelay > 0 ? "+\(Int((trafficDelay / 60).rounded())) min traffic" : "\(Int((-trafficDelay / 60).rounded())) min faster than usual") : "",
             "distance": NavModel.distanceText(distanceToNext),
             "remaining": NavModel.distanceText(remainingMeters),
             "eta": NavModel.timeText(remainingSeconds),

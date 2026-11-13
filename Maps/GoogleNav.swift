@@ -124,7 +124,9 @@ final class GoogleNav: NSObject, GMSNavigatorListener, GMSRoadSnappedLocationPro
         let waypoints = points.compactMap { GMSNavigationWaypoint(location: $0.0, title: $0.1) }
         guard !waypoints.isEmpty else { return }
         Self.note("asking Google for the route (\(waypoints.count) stop(s)).")
-        navigator.setDestinations(waypoints) { [weak self] status in
+        // Build 136: drive exactly the route chosen on the map (Google's route token), when there is one.
+        let chosen = model?.route?.token
+        let done: (GMSRouteStatus) -> Void = { [weak self] status in
             guard let self, self.key == wanted, let model = self.model else { return }
             guard status == .OK else {
                 model.googleActive = false
@@ -139,6 +141,19 @@ final class GoogleNav: NSObject, GMSNavigatorListener, GMSRoadSnappedLocationPro
             self.loggedInfo = false
             self.redraw()
             Self.note("ON with Google's own navigation screen and voice. Turns, lanes, distance, arrival time and new routes come from Google.")
+        }
+        if let chosen, model?.stop == nil { navigator.setDestinations(waypoints, routeToken: chosen, callback: done) }
+        else { navigator.setDestinations(waypoints, callback: done) }
+    }
+
+    /// Build 136: switch to the faster route Google found.
+    func takeFaster(token: String) {
+        guard let model, let place = model.selected, let navigator = MapController.shared.phoneMap.navigator,
+              let point = GMSNavigationWaypoint(location: CLLocationCoordinate2D(latitude: place.lat, longitude: place.lng), title: place.name) else { return }
+        model.fasterRoute = nil
+        navigator.setDestinations([point], routeToken: token) { status in
+            if status == .OK { navigator.isGuidanceActive = true; Self.note("switched to the faster route.") }
+            else { Self.note("the faster route could not be used (answer \(status.rawValue)).") }
         }
     }
 
@@ -173,6 +188,11 @@ final class GoogleNav: NSObject, GMSNavigatorListener, GMSRoadSnappedLocationPro
         guard let model, model.googleActive, model.guiding else { return }
         model.remainingMeters = Double(navInfo.distanceToFinalDestinationMeters)
         model.remainingSeconds = Double(navInfo.timeToFinalDestinationSeconds)
+        // Build 136: traffic delay against a normal day, and a faster route check every 3 minutes.
+        if let r = model.route, r.staticSeconds > 0, r.meters > 0 {
+            model.trafficDelay = model.remainingSeconds - r.staticSeconds * model.remainingMeters / r.meters
+        }
+        model.checkFasterRoute(remaining: model.remainingSeconds)
         guard let step = navInfo.currentStep else { return }
         let distance = Double(navInfo.distanceToCurrentStepMeters)
         model.distanceToNext = distance

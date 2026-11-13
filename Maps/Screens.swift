@@ -616,7 +616,32 @@ struct DriveOverlay: View {
     private var googleButtons: some View {
         VStack(spacing: 12) {
             Spacer().frame(height: 170)
+            // Build 136: a faster route Google found, and today's traffic delay, like Google Maps.
+            if let faster = nav.fasterRoute {
+                HStack(spacing: 10) {
+                    Image(systemName: "arrow.triangle.branch").font(.title3.weight(.bold))
+                    Text("Faster route · saves \(faster.minutes) min").font(.headline)
+                    Spacer(minLength: 4)
+                    Button("Take") { GoogleNav.shared.takeFaster(token: faster.token) }
+                        .font(.headline).padding(.horizontal, 14).padding(.vertical, 8)
+                        .background(Capsule().fill(Color.white)).foregroundColor(gGreen)
+                    Button { nav.fasterRoute = nil } label: { Image(systemName: "xmark").font(.headline) }
+                }
+                .foregroundColor(.white)
+                .padding(.horizontal, 14).padding(.vertical, 10)
+                .background(RoundedRectangle(cornerRadius: 16).fill(gGreen).shadow(radius: 4))
+                .padding(.horizontal, 12)
+            }
             HStack {
+                if abs(nav.trafficDelay) >= 60 {
+                    let minutes = Int((abs(nav.trafficDelay) / 60).rounded())
+                    Text(nav.trafficDelay > 0 ? "+\(minutes) min traffic" : "\(minutes) min faster than usual")
+                        .font(.subheadline.weight(.bold))
+                        .padding(.horizontal, 12).padding(.vertical, 7)
+                        .background(Capsule().fill(nav.trafficDelay > 0 ? Color(red: 0.85, green: 0.19, blue: 0.15) : gGreen))
+                        .foregroundColor(.white)
+                        .padding(.leading, 12)
+                }
                 Spacer()
                 VStack(spacing: 12) {
                     round("chevron.left") { NavUI.shared.close() }
