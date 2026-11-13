@@ -109,6 +109,7 @@ struct CarMapSwitch: View {
             } label: {
                 Label(on ? "Car map ON" : "Car map OFF", systemImage: on ? "map.fill" : "map")
                     .font(.subheadline.weight(.semibold))
+                    .lineLimit(1).fixedSize()
                     .padding(.horizontal, 12).padding(.vertical, 8)
                     .background(on ? Color.green.opacity(0.85) : Color.gray.opacity(0.6), in: Capsule())
                     .foregroundColor(.white)
@@ -118,35 +119,35 @@ struct CarMapSwitch: View {
             // Say plainly when the picture for "app left / phone locked" cannot be fetched.
             if on && !google && !tiles.isEmpty {
                 Button { showTiles = true } label: {
-                    Text("Car map problem · Tap")
+                    Text("Car map ⚠︎").lineLimit(1).fixedSize()
                         .font(.caption.weight(.semibold))
                         .padding(.horizontal, 10).padding(.vertical, 6)
                         .background(Color.orange, in: Capsule())
                         .foregroundColor(.white)
                 }
             } else if on && !google && works {
-                Text("Car map ✓")
+                Text("Car map ✓").lineLimit(1).fixedSize()
                     .font(.caption.weight(.semibold))
                     .padding(.horizontal, 10).padding(.vertical, 5)
                     .background(Color.green.opacity(0.85), in: Capsule())
                     .foregroundColor(.white)
             } else if on && !google && !picture.isEmpty {
                 Button { showPicture = true } label: {
-                    Text("Car map problem · Tap")
+                    Text("Car map ⚠︎").lineLimit(1).fixedSize()
                         .font(.caption.weight(.semibold))
                         .padding(.horizontal, 10).padding(.vertical, 6)
                         .background(Color.orange, in: Capsule())
                         .foregroundColor(.white)
                 }
             } else if on && google && works {
-                Text("Car map ✓")
+                Text("Car map ✓").lineLimit(1).fixedSize()
                     .font(.caption.weight(.semibold))
                     .padding(.horizontal, 10).padding(.vertical, 5)
                     .background(Color.green.opacity(0.85), in: Capsule())
                     .foregroundColor(.white)
             } else if on && google && !problem.isEmpty {
                 Button { showFix = true } label: {
-                    Text("Car map problem · Tap")
+                    Text("Car map ⚠︎").lineLimit(1).fixedSize()
                         .font(.caption.weight(.semibold))
                         .padding(.horizontal, 10).padding(.vertical, 6)
                         .background(Color.orange, in: Capsule())

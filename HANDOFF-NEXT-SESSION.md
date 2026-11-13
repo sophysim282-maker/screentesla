@@ -4,6 +4,8 @@ Read this first. It replaces reading the old 400k-token conversation.
 
 ## WHERE WE ARE NOW (read this part first)
 
+- **Build 133 (0.20.96), branch `release/build133-map-test`:** A/B test without GoogleNavigation (grey map since 128). Restore the package after the answer. See BUILD133.md.
+
 - **Build 132 (0.20.95), branch `release/build132-sound-key`:** Phone sound tries both AES keys (log showed ALAC '!dat' on all packets). Includes 131. See BUILD132.md.
 
 - **Build 131 (0.20.94), branch `release/build131-google-style`:** Google Maps style driving screen + build 130 map proof. See BUILD131.md.
