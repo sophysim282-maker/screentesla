@@ -47,6 +47,8 @@ extension NavModel {
             // Build 137: speed and the age of the GPS point, so the car can draw the car where it is now.
             "speed": max(0, location?.speed ?? 0),
             "fixAge": location.map { max(0, Date().timeIntervalSince($0.timestamp)) } ?? 0,
+            // Build 140: metres to the next turn, for the auto zoom on the car map.
+            "distM": guiding ? max(0, distanceToNext) : -1,
             "lat": (carCoordinate ?? location?.coordinate)?.latitude ?? 0,
             "lng": (carCoordinate ?? location?.coordinate)?.longitude ?? 0,
             "bg": !CarLink.liveMapUsable,

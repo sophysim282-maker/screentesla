@@ -4,6 +4,8 @@ Read this first. It replaces reading the old 400k-token conversation.
 
 ## WHERE WE ARE NOW (read this part first)
 
+- **Build 140 (0.21.03), branch `release/build140-auto-zoom`:** car map auto zoom (turns, speed). See BUILD140.md.
+
 - **Build 139 (0.21.02), branch `release/build139-carplay-look`:** CarPlay-like dark car map + route traffic; clear Back/End on phone. See BUILD139.md.
 
 - **Build 138 (0.21.01), branch `release/build138-car-map-far`:** far layer + horizon fog for the tilted car map. See BUILD138.md.
