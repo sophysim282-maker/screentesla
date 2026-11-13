@@ -156,7 +156,7 @@ final class GoogleNav: NSObject, GMSNavigatorListener, GMSRoadSnappedLocationPro
 
     /// Draw Google's current route line on ScreenLink's maps.
     private func redraw() {
-        guard let model, let legs = session?.navigator?.routeLegs, !legs.isEmpty else { return }
+        guard let model, let legs = MapController.shared.phoneMap.navigator?.routeLegs, !legs.isEmpty else { return }
         let line = GMSMutablePath()
         for leg in legs { if let path = leg.path { for i in 0..<path.count() { line.add(path.coordinate(at: i)) } } }
         guard line.count() > 1 else { return }
