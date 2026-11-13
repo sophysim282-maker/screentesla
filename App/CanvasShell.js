@@ -246,7 +246,7 @@ window.addEventListener('pageshow',event=>{if(!event.persisted)return;setIdleArt
 function renderPerformance(){
  if(performanceFrozen||$('performancePanel').hidden)return;
  const profile=player?.performanceProfile?.()||previousPlaybackProfile;
- const lines=['Build: 0.21.00 / 137 · '+(activeEngine||requestedEngine)+' · '+(player?.videoAcceleration||requestedDecoder),'Playback: '+(player?.currentTime||0).toFixed(2)+' s','Page: '+(profile?.visibility||document.visibilityState||'unknown'),''];
+ const lines=['Build: 0.21.01 / 138 · '+(activeEngine||requestedEngine)+' · '+(player?.videoAcceleration||requestedDecoder),'Playback: '+(player?.currentTime||0).toFixed(2)+' s','Page: '+(profile?.visibility||document.visibilityState||'unknown'),''];
  const names=[['demuxMs','Demux ms'],['decoderWaitMs','Decoder feed wait ms'],['renderCallbackGapMs','Drawing callback gap ms'],['canvasDrawMs','Canvas draw call ms'],['videoQueueDepth','Pending decode requests']];
  for(const [key,label] of names){const m=profile?.metrics[key];lines.push(label+': '+(m?'mean '+m.mean.toFixed(2)+' | max '+m.max.toFixed(2)+' | n '+m.count:'no samples'));if(m)lines.push('  max at '+(m.maxAtMs/1000).toFixed(2)+'s, media '+m.mediaTime.toFixed(2)+'s');}
  lines.push('','Decode queue now: '+(profile?.videoQueueDepth||0),'Decoded frames queued: '+(profile?.framesQueued||0),'Video recoveries: '+(player?.stats.videoRecoveries||0),'Audio buffer underruns: '+(player?.stats.audioUnderruns||0));
@@ -267,7 +267,7 @@ async function retireOfflineUI(){
  }catch(error){lastConnectionError={message:'Rescue page setup: '+error.message,time:Date.now()};}
 }
 retireOfflineUI();
-self.ScreenLinkCanvasStatus=()=>({build:'0.21.00-137',engine:activeEngine||requestedEngine,videoDecoder:player?.videoAcceleration||null,connectionPhase,approvalPhase,phoneVolume,phoneEQ,phoneSettingsRevision,phonePlaybackRevision,volumeGain:player?.gain?.gain.value??null,eqLowGain:player?.low?.gain.value??null,minimalViewer:youtubeOnly&&!developerMode,lastRequestAt,lastSuccessAt,offlineUI:false,healthFailures,lastHealthyAt,reconnections,quality:$('quality').value,transportWaiting,decoderFaults,transportError:player?.lastTransportError||null,lastPlaybackError,lastConnectionError,recoveryAttempts:retryCount,mediaRunning:player?.running||false,mediaDuration:player?.duration||0,videoFramesQueued:player?.frames.length||0,audioPacketsQueued:player?.audio.length||0,secureContext:isSecureContext,connected,connectionPending:joining,viewerMode:youtubeOnly?'youtube':'split',screenFrames:screen.framesDrawn,screenHidden:screen.hold,screenQueue:screen.decoder?.decodeQueueSize||0,mediaEpoch,mediaPosition:player?.currentTime||0,mediaPaused:player?.paused??true,mediaWidth:$('mediaCanvas').width,mediaHeight:$('mediaCanvas').height,youtubeBufferSeconds:player?.bufferSeconds||0,encodedVideoLead:player?Math.max(0,player.preparedVideoEnd-player.currentTime):0,mediaStats:player?{...player.stats}:null,performance:player?.performanceProfile?.()||null,previousPlaybackProfile,playbackEvents:player?(player.playbackEvents||[]).map(e=>({...e})):[],segmentCache:player?.segmentCache?.size||0,audioSampleRate:player?.audioContext?.sampleRate||0,decodedAudioRate:player?.lastAudioSampleRate||player?.audio[0]?.sampleRate||0,segments:player?(player.segmentDiagnostics||[]).map(s=>({...s})):[],audioLead:player?.audioContext&&player.audioTail!==null?Math.max(0,player.audioTail-player.audioContext.currentTime):0,videoLead:player?Math.max(0,player.videoEnd-player.currentTime):0,audioState:audioContext?.state||'locked',audioNodes:player?.nodes.size||0,mediaError:player?.error?.message||'',socketOpen:ws?.readyState===WebSocket.OPEN});
+self.ScreenLinkCanvasStatus=()=>({build:'0.21.01-138',engine:activeEngine||requestedEngine,videoDecoder:player?.videoAcceleration||null,connectionPhase,approvalPhase,phoneVolume,phoneEQ,phoneSettingsRevision,phonePlaybackRevision,volumeGain:player?.gain?.gain.value??null,eqLowGain:player?.low?.gain.value??null,minimalViewer:youtubeOnly&&!developerMode,lastRequestAt,lastSuccessAt,offlineUI:false,healthFailures,lastHealthyAt,reconnections,quality:$('quality').value,transportWaiting,decoderFaults,transportError:player?.lastTransportError||null,lastPlaybackError,lastConnectionError,recoveryAttempts:retryCount,mediaRunning:player?.running||false,mediaDuration:player?.duration||0,videoFramesQueued:player?.frames.length||0,audioPacketsQueued:player?.audio.length||0,secureContext:isSecureContext,connected,connectionPending:joining,viewerMode:youtubeOnly?'youtube':'split',screenFrames:screen.framesDrawn,screenHidden:screen.hold,screenQueue:screen.decoder?.decodeQueueSize||0,mediaEpoch,mediaPosition:player?.currentTime||0,mediaPaused:player?.paused??true,mediaWidth:$('mediaCanvas').width,mediaHeight:$('mediaCanvas').height,youtubeBufferSeconds:player?.bufferSeconds||0,encodedVideoLead:player?Math.max(0,player.preparedVideoEnd-player.currentTime):0,mediaStats:player?{...player.stats}:null,performance:player?.performanceProfile?.()||null,previousPlaybackProfile,playbackEvents:player?(player.playbackEvents||[]).map(e=>({...e})):[],segmentCache:player?.segmentCache?.size||0,audioSampleRate:player?.audioContext?.sampleRate||0,decodedAudioRate:player?.lastAudioSampleRate||player?.audio[0]?.sampleRate||0,segments:player?(player.segmentDiagnostics||[]).map(s=>({...s})):[],audioLead:player?.audioContext&&player.audioTail!==null?Math.max(0,player.audioTail-player.audioContext.currentTime):0,videoLead:player?Math.max(0,player.videoEnd-player.currentTime):0,audioState:audioContext?.state||'locked',audioNodes:player?.nodes.size||0,mediaError:player?.error?.message||'',socketOpen:ws?.readyState===WebSocket.OPEN});
 for(const id of ['viewMode','quality','eq'])makeInline(id);
 function autoConnect(){if(!stopped&&!connected&&!joining)connect();if(!stopped)reconnectTimer=setTimeout(autoConnect,3000);}if(isSecureContext&&typeof VideoDecoder==='function')autoConnect();
 if(!isSecureContext||typeof VideoDecoder!=='function')status.textContent='This viewer needs HTTPS and WebCodecs support.';
@@ -526,7 +526,7 @@ const tileMap={
  unworld(x,y,z){const s=this.T*Math.pow(2,z);return {lng:x/s*360-180,lat:Math.atan(Math.sinh(Math.PI*(1-2*y/s)))*180/Math.PI};},
  box(){return $('mapTiles');},
  live(){return !this.box().hidden;},
- reset(){for(const l of this.layers)l.el.remove();this.layers=[];this.queue=[];},
+ reset(){for(const l of this.layers)l.el.remove();this.layers=[];this.queue=[];if(this.far){this.far.el.remove();this.far=null;}},
  layer(tz){
   const top=this.layers[this.layers.length-1],c=this.world(this.view.lat,this.view.lng,tz);
   if(top&&top.tz===tz&&!this.fresh&&Math.abs(c[0]-top.ox)<40000&&Math.abs(c[1]-top.oy)<40000)return top;
@@ -560,12 +560,33 @@ const tileMap={
   for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++){const key=x+'/'+y;if(top.tiles.has(key))continue;
    const img=document.createElement('img');img.alt='';img.draggable=false;img.style.left=(x*this.T-top.ox)+'px';img.style.top=(y*this.T-top.oy)+'px';top.el.insertBefore(img,top.el.firstChild);top.tiles.set(key,img);
    fresh.push({img,layer:top,key,x:((x%n)+n)%n,y,d:Math.hypot((x+.5)*this.T-c[0],(y+.5)*this.T-c[1])});}
-  if(fresh.length){this.queue=this.queue.filter(j=>j.layer===top).concat(fresh).sort((a,b)=>a.d-b.d);this.pump();}
+  if(fresh.length){this.queue=this.queue.filter(j=>j.layer===top||j.layer===this.far).concat(fresh).sort((a,b)=>a.d-b.d);this.pump();}
+  // Build 138: in the tilted 3D view the far part of the road needs squares from far away. A second layer of
+  // larger squares (2 zoom steps out) sits under the normal ones and fills the far part, like Google Maps does.
+  // It loads only after the near squares, so the near map is never slower.
+  this.renderFar(W,H,v,tz,box.classList.contains('tilt'));
   if(top.tiles.size>160)for(const [key,img] of top.tiles){const [x,y]=key.split('/').map(Number);if(x<x0-2||x>x1+2||y<y0-2||y>y1+2){img.remove();top.tiles.delete(key);}}
   // Car arrow and the chosen place stay upright and the same size on the screen.
   const put=(el,lat,lng)=>{const w=this.world(lat,lng,tz),dx=(w[0]-c[0])*s,dy=(w[1]-c[1])*s;el.style.transform='translate('+(W/2+dx*Math.cos(rad)-dy*Math.sin(rad))+'px,'+(H/2+dx*Math.sin(rad)+dy*Math.cos(rad))+'px)';};
   if(this.pose){put($('tileCar'),this.pose.lat,this.pose.lng);$('tileCarArrow').style.transform='rotate('+(this.pose.heading-v.bearing)+'deg)';}
   const dest=$('tileDest');if(this.dest){dest.hidden=false;put(dest,this.dest.lat,this.dest.lng);}else dest.hidden=true;
+ },
+ renderFar(W,H,v,tz,tilted){
+  if(!tilted){if(this.far){this.far.el.remove();this.far=null;}return;}
+  const fz=Math.max(3,tz-2),c=this.world(v.lat,v.lng,fz);
+  if(!this.far||this.far.tz!==fz||Math.abs(c[0]-this.far.ox)>40000||Math.abs(c[1]-this.far.oy)>40000){
+   if(this.far)this.far.el.remove();
+   const el=document.createElement('div');el.className='tile-layer tile-far';el.innerHTML='<svg class="tile-route" width="1" height="1"><polyline class="edge"/><polyline class="line"/></svg>';
+   $('tileLayers').insertBefore(el,$('tileLayers').firstChild);this.far={el,tz:fz,ox:Math.floor(c[0]/this.T)*this.T,oy:Math.floor(c[1]/this.T)*this.T,tiles:new Map(),scale:0};this.drawRoute(this.far);}
+  const f=this.far,s=Math.pow(2,v.zoom-fz);
+  f.el.style.transform='translate('+W/2+'px,'+H/2+'px) rotate('+(-v.bearing)+'deg) scale('+s+') translate('+(f.ox-c[0])+'px,'+(f.oy-c[1])+'px)';
+  if(Math.abs(s-f.scale)>f.scale*.03){f.scale=s;f.el.querySelector('.edge').style.strokeWidth=11/s;f.el.querySelector('.line').style.strokeWidth=7/s;}
+  const reach=Math.hypot(W,H)/2/s*4.5+this.T*.5,n=Math.pow(2,fz),x0=Math.floor((c[0]-reach)/this.T),x1=Math.floor((c[0]+reach)/this.T),y0=Math.max(0,Math.floor((c[1]-reach)/this.T)),y1=Math.min(n-1,Math.floor((c[1]+reach)/this.T)),more=[];
+  for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++){const key=x+'/'+y;if(f.tiles.has(key))continue;
+   const img=document.createElement('img');img.alt='';img.draggable=false;img.style.left=(x*this.T-f.ox)+'px';img.style.top=(y*this.T-f.oy)+'px';f.el.insertBefore(img,f.el.firstChild);f.tiles.set(key,img);
+   more.push({img,layer:f,key,x:((x%n)+n)%n,y,d:1e9+Math.hypot((x+.5)*this.T-c[0],(y+.5)*this.T-c[1])});}
+  if(more.length){this.queue=this.queue.concat(more).sort((a,b)=>a.d-b.d);this.pump();}
+  if(f.tiles.size>120)for(const [key,img] of f.tiles){const [x,y]=key.split('/').map(Number);if(x<x0-1||x>x1+1||y<y0-1||y>y1+1){img.remove();f.tiles.delete(key);}}
  },
  draw(){if(this.frame)return;this.frame=requestAnimationFrame(()=>{this.frame=0;this.render();});},
  camera(){
