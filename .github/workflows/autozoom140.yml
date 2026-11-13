@@ -1,5 +1,5 @@
 name: Build140 auto zoom
-# Build 140: car map auto zoom near turns and by speed. Run 1.
+# Build 140: car map auto zoom near turns and by speed. Run 2.
 on:
   push:
     branches: ['release/build140-auto-zoom']
