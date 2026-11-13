@@ -4,6 +4,8 @@ Read this first. It replaces reading the old 400k-token conversation.
 
 ## WHERE WE ARE NOW (read this part first)
 
+- **Build 135 (0.20.98), branch `release/build135-maps-switch`:** Maps switch on Home + background Google navigation. See BUILD135.md.
+
 - **Build 134 (0.20.97), branch `release/build134-google-navigation`:** Google's own navigation UI on the phone map + key check banner. User's Google project is `carlink` (billing paid). See BUILD134.md.
 
 - **Build 133 (0.20.96), branch `release/build133-map-test`:** A/B test without GoogleNavigation (grey map since 128). Restore the package after the answer. See BUILD133.md.

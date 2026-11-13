@@ -117,7 +117,10 @@ final class GoogleNav: NSObject, GMSNavigatorListener, GMSRoadSnappedLocationPro
         map.settings.isRecenterButtonEnabled = true
         map.shouldDisplaySpeedometer = true
         navigator.voiceGuidance = (model?.settings.voiceOn ?? true) ? .alertsAndGuidance : .silent
-        navigator.sendsBackgroundNotifications = false
+        // Build 135: navigation keeps going when the app is left or the phone is locked: background location
+        // for Google's engine, and Google's turn notifications on the lock screen.
+        map.roadSnappedLocationProvider?.allowsBackgroundLocationUpdates = true
+        navigator.sendsBackgroundNotifications = true
         let waypoints = points.compactMap { GMSNavigationWaypoint(location: $0.0, title: $0.1) }
         guard !waypoints.isEmpty else { return }
         Self.note("asking Google for the route (\(waypoints.count) stop(s)).")

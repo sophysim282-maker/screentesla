@@ -129,6 +129,7 @@ static CGFloat SLMix(CGFloat a,CGFloat b,CGFloat t){return a+(b-a)*MAX(0,MIN(1,t
 @property(nonatomic,strong) NSMutableDictionary<NSString *,UILabel *> *rowDetails;
 @property(nonatomic,strong) UIView *controlsCard,*helpCard;
 @property(nonatomic,strong) UIImageView *heroImage;
+@property(nonatomic,strong) UISwitch *mapsSwitch;
 @end
 static UIColor *SLHomeGrey(void){return [UIColor colorWithRed:.49 green:.51 blue:.55 alpha:1];}
 @implementation ScreenLinkHomeView
@@ -165,6 +166,8 @@ static UIColor *SLHomeGrey(void){return [UIColor colorWithRed:.49 green:.51 blue
 - (void)videoRowTapped {[UIView animateWithDuration:.25 animations:^{self.controlsCard.hidden=!self.controlsCard.hidden;self.controlsCard.alpha=self.controlsCard.hidden?0:1;}];}
 - (void)waitingQuickTapped {if(self.moreAction)self.moreAction(@"waiting");}
 - (void)setSubtitle:(NSString *)text forRow:(NSString *)key {UILabel *label=self.rowDetails[key];if(label&&text.length&&![label.text isEqual:text])label.text=text;}
+- (void)setMapsSwitch:(BOOL)on {if(self.mapsSwitch.on!=on)[self.mapsSwitch setOn:on animated:YES];}
+- (void)mapsSwitchChanged:(UISwitch *)toggle {[[[UIImpactFeedbackGenerator alloc]initWithStyle:UIImpactFeedbackStyleLight] impactOccurred];if(self.moreAction)self.moreAction(toggle.on?@"mapsOn":@"mapsOff");}
 - (void)showHeroImage:(UIImage *)image {if(self.heroDefault)image=self.heroDefault;self.heroImage.image=image;self.heroImage.hidden=image==nil;}
 - (UIButton *)button:(NSString *)title symbol:(NSString *)symbol action:(SEL)action filled:(BOOL)filled {
  UIButtonConfiguration *config=filled?UIButtonConfiguration.filledButtonConfiguration:UIButtonConfiguration.tintedButtonConfiguration;
@@ -234,6 +237,9 @@ static UIColor *SLHomeGrey(void){return [UIColor colorWithRed:.49 green:.51 blue
   [list addArrangedSubview:[self rowWithSymbol:@"music.note" title:@"TikTok" subtitle:@"Inside ScreenLink · no screen recording" key:@"tiktok"]];
   [list addArrangedSubview:[self rowWithSymbol:@"photo.on.rectangle" title:@"Waiting screen" subtitle:@"Your pictures, GIFs and videos" key:@"waiting"]];
   UIControl *maps=[self rowWithSymbol:@"map" title:@"Maps" subtitle:@"Closed" key:@"maps"];maps.accessibilityIdentifier=@"home.maps";[list addArrangedSubview:maps];
+  // Build 135: a real On/Off switch on the Maps line (open or close all map systems); tapping the line shows the map.
+  {UISwitch *toggle=[UISwitch new];toggle.onTintColor=[UIColor colorWithRed:.2 green:.78 blue:.35 alpha:1];toggle.accessibilityIdentifier=@"home.mapsSwitch";toggle.accessibilityLabel=@"Maps on or off";toggle.translatesAutoresizingMaskIntoConstraints=NO;[toggle addTarget:self action:@selector(mapsSwitchChanged:) forControlEvents:UIControlEventValueChanged];[maps addSubview:toggle];self.mapsSwitch=toggle;{UIStackView *rowLine=(UIStackView *)maps.subviews.firstObject;if([rowLine isKindOfClass:UIStackView.class])rowLine.arrangedSubviews.lastObject.hidden=YES;}
+   [NSLayoutConstraint activateConstraints:@[[toggle.centerYAnchor constraintEqualToAnchor:maps.centerYAnchor],[toggle.trailingAnchor constraintEqualToAnchor:maps.trailingAnchor constant:-26]]];}
   [list addArrangedSubview:[self rowWithSymbol:@"cube" title:@"Orbit Cube" subtitle:@"Needs Maps" key:@"cube"]];
   [list addArrangedSubview:[self rowWithSymbol:@"questionmark.circle" title:@"Help" subtitle:@"How to connect · no screen recording" key:@"help"]];
   UIStackView *steps=[UIStackView new];steps.axis=UILayoutConstraintAxisVertical;steps.spacing=7;[steps addArrangedSubview:[self label:@"Connect in three steps" style:UIFontTextStyleHeadline]];

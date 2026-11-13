@@ -10,6 +10,8 @@
 - (void)setSubtitle:(NSString *)text forRow:(NSString *)key;
 /// The user's waiting screen picture as the big picture, or nil for the car clip.
 - (void)showHeroImage:(UIImage *)image;
+/// Build 135: the switch on the Maps line.
+- (void)setMapsSwitch:(BOOL)on;
 - (void)showPlayerState:(NSDictionary *)state;
 - (void)showStatus:(NSString *)status detail:(NSString *)detail busy:(BOOL)busy sharing:(BOOL)sharing disconnecting:(BOOL)disconnecting attention:(BOOL)attention;
 @end
