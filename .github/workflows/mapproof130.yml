@@ -1,5 +1,5 @@
 name: Build130 map proof
-# Build 130: map error proof in the log, map buttons above the map. Run 1.
+# Build 130: map error proof in the log, map buttons above the map. Run 2.
 on:
   push:
     branches: ['release/build130-map-proof']
