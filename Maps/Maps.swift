@@ -73,6 +73,26 @@ final class MapController: NSObject, ObservableObject, GMSMapViewDelegate {
         phoneMap.delegate = self
     }
 
+    // MARK: - Build 130: is the map picture loading?
+    private var tilesStarted: Date?
+    private var tilesLoadedOnce = false
+    private var tilesWarned = false
+    func mapViewDidStartTileRendering(_ mapView: GMSMapView) {
+        guard mapView === phoneMap else { return }
+        if tilesStarted == nil { tilesStarted = Date() }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 15) { [weak self] in
+            guard let self, let started = self.tilesStarted, !self.tilesWarned, Date().timeIntervalSince(started) >= 14 else { return }
+            self.tilesWarned = true
+            let key = UserDefaults.standard.string(forKey: "googleKey") ?? ""
+            GoogleNav.line("MAP PICTURE NOT LOADED: the phone map has not drawn its map for 15 s. App ID \(Bundle.main.bundleIdentifier ?? "?"), key ends …\(String(key.suffix(4))). If GOOGLE SAYS lines are above, they give Google's reason.")
+        }
+    }
+    func mapViewDidFinishTileRendering(_ mapView: GMSMapView) {
+        guard mapView === phoneMap else { return }
+        tilesStarted = nil
+        if !tilesLoadedOnce { tilesLoadedOnce = true; GoogleNav.line("MAP PICTURE LOADED ✓ on the phone.") }
+    }
+
     // MARK: - Taps
 
     func mapView(_ mapView: GMSMapView, didTap overlay: GMSOverlay) {

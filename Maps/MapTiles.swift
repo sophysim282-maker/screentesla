@@ -70,6 +70,7 @@ final class SLMapTiles: NSObject {
                 session = ""
                 let message = (json?["error"] as? [String: Any])?["message"] as? String ?? ""
                 problem = code == 0 ? "no internet on the phone" : "Google answered \(code) \(message)"
+                GoogleNav.line("MAP SQUARES FOR THE CAR: " + problem)
             }
             lock.unlock()
         }.resume()
@@ -129,7 +130,7 @@ final class SLMapTiles: NSObject {
         } else if result.isEmpty, code == 400 || code == 401 || code == 403 {
             // The session is no longer accepted: make a new one on the next prepare().
             failures += 1
-            if failures >= 4 { session = ""; problem = "Google answered \(code) for the map squares" }
+            if failures >= 4 { session = ""; problem = "Google answered \(code) for the map squares"; GoogleNav.line("MAP SQUARES FOR THE CAR: " + problem) }
         }
         lock.unlock()
         return result

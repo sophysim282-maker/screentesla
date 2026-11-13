@@ -52,22 +52,28 @@ struct CarMapsRoot: View {
     let close: () -> Void
 
     var body: some View {
-        ZStack(alignment: .topLeading) {
+        // Build 130: the back button and the car-map switch sit in their own bar above the map, so they
+        // never cover the turn banner any more.
+        VStack(spacing: 0) {
+            HStack(spacing: 8) {
+                Button(action: close) {
+                    Label("ScreenLink", systemImage: "chevron.left")
+                        .font(.subheadline.weight(.semibold))
+                        .padding(.horizontal, 12).padding(.vertical, 8)
+                        .background(.ultraThinMaterial, in: Capsule())
+                }
+                .accessibilityLabel("Back to ScreenLink. Navigation keeps running.")
+                Spacer(minLength: 4)
+                // Build 98: one switch for the small map on the car screen.
+                CarMapSwitch()
+            }
+            .padding(.horizontal, 12).padding(.vertical, 6)
+            .background(Color.black)
             if keyStore.ready {
                 ContentView(apiKey: keyStore.key)
             } else {
                 KeySetupView(keyStore: keyStore)
             }
-            Button(action: close) {
-                Label("ScreenLink", systemImage: "chevron.left")
-                    .font(.subheadline.weight(.semibold))
-                    .padding(.horizontal, 12).padding(.vertical, 8)
-                    .background(.ultraThinMaterial, in: Capsule())
-            }
-            .padding(.leading, 12).padding(.top, 6)
-            .accessibilityLabel("Back to ScreenLink. Navigation keeps running.")
-            // Build 98: one switch for the small map on the car screen.
-            HStack { Spacer(); CarMapSwitch() }.padding(.trailing, 12).padding(.top, 6)
         }
     }
 }
@@ -85,7 +91,7 @@ struct CarMapSwitch: View {
     private let tick = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     var body: some View {
-        VStack(alignment: .trailing, spacing: 6) {
+        HStack(spacing: 6) {
             Button {
                 on.toggle(); CarLink.carMapOn = on
             } label: {
@@ -100,35 +106,35 @@ struct CarMapSwitch: View {
             // Say plainly when the picture for "app left / phone locked" cannot be fetched.
             if on && !google && !tiles.isEmpty {
                 Button { showTiles = true } label: {
-                    Text("Car map is slow · Tap to fix")
+                    Text("Car map problem · Tap")
                         .font(.caption.weight(.semibold))
                         .padding(.horizontal, 10).padding(.vertical, 6)
                         .background(Color.orange, in: Capsule())
                         .foregroundColor(.white)
                 }
             } else if on && !google && works {
-                Text("Car draws the map ✓ works when you leave the app")
+                Text("Car map ✓")
                     .font(.caption.weight(.semibold))
                     .padding(.horizontal, 10).padding(.vertical, 5)
                     .background(Color.green.opacity(0.85), in: Capsule())
                     .foregroundColor(.white)
             } else if on && !google && !picture.isEmpty {
                 Button { showPicture = true } label: {
-                    Text("Car map stops when you leave the app · Tap to fix")
+                    Text("Car map problem · Tap")
                         .font(.caption.weight(.semibold))
                         .padding(.horizontal, 10).padding(.vertical, 6)
                         .background(Color.orange, in: Capsule())
                         .foregroundColor(.white)
                 }
             } else if on && google && works {
-                Text("Car draws the map ✓ works when you leave the app")
+                Text("Car map ✓")
                     .font(.caption.weight(.semibold))
                     .padding(.horizontal, 10).padding(.vertical, 5)
                     .background(Color.green.opacity(0.85), in: Capsule())
                     .foregroundColor(.white)
             } else if on && google && !problem.isEmpty {
                 Button { showFix = true } label: {
-                    Text("Car cannot load Google · Tap to fix")
+                    Text("Car map problem · Tap")
                         .font(.caption.weight(.semibold))
                         .padding(.horizontal, 10).padding(.vertical, 6)
                         .background(Color.orange, in: Capsule())

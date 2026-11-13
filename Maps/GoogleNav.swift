@@ -27,8 +27,39 @@ struct GoogleStep {
 final class GoogleNav: NSObject, GMSNavigatorListener, GMSRoadSnappedLocationProviderListener {
     static let shared = GoogleNav()
     private static var log: ((String) -> Void)?
-    @objc static func setLog(_ block: @escaping (String) -> Void) { log = block }
+    @objc static func setLog(_ block: @escaping (String) -> Void) { log = block; captureGoogleMessages() }
     static func note(_ text: String) { log?("GOOGLE NAVIGATION: " + text) }
+    /// Build 130: any map line for the log (map picture, map squares, Google's own messages).
+    static func line(_ text: String) { DispatchQueue.main.async { log?(text) } }
+
+    /// Build 130: Google's map kit writes its reasons (for example "API key not authorized") only to the
+    /// developer console. This copies those lines into ScreenLink's log. Everything else is passed on unchanged.
+    private static var captured = false
+    private static var googleLines = 0
+    static func captureGoogleMessages() {
+        guard !captured else { return }
+        captured = true
+        var ends: [Int32] = [0, 0]
+        guard pipe(&ends) == 0 else { return }
+        let original = dup(STDERR_FILENO)
+        guard original >= 0, dup2(ends[1], STDERR_FILENO) >= 0 else { return }
+        let reader = FileHandle(fileDescriptor: ends[0], closeOnDealloc: false)
+        var pending = ""
+        reader.readabilityHandler = { handle in
+            let data = handle.availableData
+            guard !data.isEmpty else { return }
+            data.withUnsafeBytes { raw in if let base = raw.baseAddress { _ = write(original, base, data.count) } }
+            pending += String(decoding: data, as: UTF8.self)
+            while let cut = pending.firstIndex(of: "\n") {
+                let text = String(pending[..<cut]); pending = String(pending[pending.index(after: cut)...])
+                let low = text.lowercased()
+                guard low.contains("google") || low.contains("gms") || low.contains("api key") || low.contains("maps sdk") || low.contains("navigation sdk") else { continue }
+                googleLines += 1
+                guard googleLines <= 40 else { continue }
+                line("GOOGLE SAYS: " + String(text.suffix(300)))
+            }
+        }
+    }
 
     private var session: GMSNavigationSession?
     private weak var model: NavModel?
