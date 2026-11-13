@@ -644,17 +644,36 @@ struct DriveOverlay: View {
                 }
                 Spacer()
                 VStack(spacing: 12) {
-                    round("chevron.left") { NavUI.shared.close() }
                     round("magnifyingglass") { showSearch = true }
                     round(settings.voiceOn ? "speaker.wave.2.fill" : "speaker.slash.fill") { settings.voiceOn.toggle() }
                     round(carMap ? "car.fill" : "car", tint: carMap ? gGreen : nil) { carMap.toggle(); CarLink.carMapOn = carMap }
-                    round("xmark", tint: .red) { nav.clear() }
-                        .accessibilityLabel("End navigation")
                 }
             }
             .padding(.horizontal, 12)
             Spacer()
-            if !nav.driveResults.isEmpty { driveResults.padding(.bottom, 90) }
+            if !nav.driveResults.isEmpty { driveResults.padding(.bottom, 8) }
+            // Build 139: big clear buttons above Google's arrival bar: back to the ScreenLink Home, and end.
+            HStack(spacing: 12) {
+                Button { NavUI.shared.close() } label: {
+                    Label("ScreenLink", systemImage: "chevron.left")
+                        .font(.headline)
+                        .padding(.horizontal, 18).padding(.vertical, 13)
+                        .background(Capsule().fill(buttonFill).shadow(color: .black.opacity(0.3), radius: 4, y: 1))
+                        .foregroundColor(buttonInk)
+                }
+                .accessibilityLabel("Back to the ScreenLink Home. Navigation keeps running.")
+                Spacer()
+                Button { nav.clear() } label: {
+                    Label("End", systemImage: "xmark")
+                        .font(.headline)
+                        .padding(.horizontal, 22).padding(.vertical, 13)
+                        .background(Capsule().fill(Color(red: 0.85, green: 0.19, blue: 0.15)).shadow(color: .black.opacity(0.3), radius: 4, y: 1))
+                        .foregroundColor(.white)
+                }
+                .accessibilityLabel("End navigation")
+            }
+            .padding(.horizontal, 14)
+            .padding(.bottom, 100)
         }
         .confirmationDialog("Search along the way", isPresented: $showSearch, titleVisibility: .visible) {
             Button("Gas stations") { nav.searchWhileDriving("gas station") }

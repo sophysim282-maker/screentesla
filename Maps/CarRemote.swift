@@ -59,6 +59,8 @@ extension NavModel {
             "carGoogle": CarLink.carGoogle,
             "mapKey": CarLink.carGoogle ? CarLink.carMapKey : "",   // build 104: the key stays on the phone unless the switch is on
             "routeLine": carRouteLine(),
+            // Build 139: slow (1) and jammed (2) parts of the route line, as point numbers along the line.
+            "routeTraffic": (route?.traffic ?? []).map { [$0.start, $0.end, $0.speed == "TRAFFIC_JAM" ? 2 : 1] },
             "routeId": routesVersion * 100 + routeIndex,
             "headingUp": MapController.shared.headingUp,
             "driveResults": driveResults.map { ["name": $0.name, "address": $0.address] },

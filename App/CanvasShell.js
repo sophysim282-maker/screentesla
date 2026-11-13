@@ -246,7 +246,7 @@ window.addEventListener('pageshow',event=>{if(!event.persisted)return;setIdleArt
 function renderPerformance(){
  if(performanceFrozen||$('performancePanel').hidden)return;
  const profile=player?.performanceProfile?.()||previousPlaybackProfile;
- const lines=['Build: 0.21.01 / 138 · '+(activeEngine||requestedEngine)+' · '+(player?.videoAcceleration||requestedDecoder),'Playback: '+(player?.currentTime||0).toFixed(2)+' s','Page: '+(profile?.visibility||document.visibilityState||'unknown'),''];
+ const lines=['Build: 0.21.02 / 139 · '+(activeEngine||requestedEngine)+' · '+(player?.videoAcceleration||requestedDecoder),'Playback: '+(player?.currentTime||0).toFixed(2)+' s','Page: '+(profile?.visibility||document.visibilityState||'unknown'),''];
  const names=[['demuxMs','Demux ms'],['decoderWaitMs','Decoder feed wait ms'],['renderCallbackGapMs','Drawing callback gap ms'],['canvasDrawMs','Canvas draw call ms'],['videoQueueDepth','Pending decode requests']];
  for(const [key,label] of names){const m=profile?.metrics[key];lines.push(label+': '+(m?'mean '+m.mean.toFixed(2)+' | max '+m.max.toFixed(2)+' | n '+m.count:'no samples'));if(m)lines.push('  max at '+(m.maxAtMs/1000).toFixed(2)+'s, media '+m.mediaTime.toFixed(2)+'s');}
  lines.push('','Decode queue now: '+(profile?.videoQueueDepth||0),'Decoded frames queued: '+(profile?.framesQueued||0),'Video recoveries: '+(player?.stats.videoRecoveries||0),'Audio buffer underruns: '+(player?.stats.audioUnderruns||0));
@@ -267,7 +267,7 @@ async function retireOfflineUI(){
  }catch(error){lastConnectionError={message:'Rescue page setup: '+error.message,time:Date.now()};}
 }
 retireOfflineUI();
-self.ScreenLinkCanvasStatus=()=>({build:'0.21.01-138',engine:activeEngine||requestedEngine,videoDecoder:player?.videoAcceleration||null,connectionPhase,approvalPhase,phoneVolume,phoneEQ,phoneSettingsRevision,phonePlaybackRevision,volumeGain:player?.gain?.gain.value??null,eqLowGain:player?.low?.gain.value??null,minimalViewer:youtubeOnly&&!developerMode,lastRequestAt,lastSuccessAt,offlineUI:false,healthFailures,lastHealthyAt,reconnections,quality:$('quality').value,transportWaiting,decoderFaults,transportError:player?.lastTransportError||null,lastPlaybackError,lastConnectionError,recoveryAttempts:retryCount,mediaRunning:player?.running||false,mediaDuration:player?.duration||0,videoFramesQueued:player?.frames.length||0,audioPacketsQueued:player?.audio.length||0,secureContext:isSecureContext,connected,connectionPending:joining,viewerMode:youtubeOnly?'youtube':'split',screenFrames:screen.framesDrawn,screenHidden:screen.hold,screenQueue:screen.decoder?.decodeQueueSize||0,mediaEpoch,mediaPosition:player?.currentTime||0,mediaPaused:player?.paused??true,mediaWidth:$('mediaCanvas').width,mediaHeight:$('mediaCanvas').height,youtubeBufferSeconds:player?.bufferSeconds||0,encodedVideoLead:player?Math.max(0,player.preparedVideoEnd-player.currentTime):0,mediaStats:player?{...player.stats}:null,performance:player?.performanceProfile?.()||null,previousPlaybackProfile,playbackEvents:player?(player.playbackEvents||[]).map(e=>({...e})):[],segmentCache:player?.segmentCache?.size||0,audioSampleRate:player?.audioContext?.sampleRate||0,decodedAudioRate:player?.lastAudioSampleRate||player?.audio[0]?.sampleRate||0,segments:player?(player.segmentDiagnostics||[]).map(s=>({...s})):[],audioLead:player?.audioContext&&player.audioTail!==null?Math.max(0,player.audioTail-player.audioContext.currentTime):0,videoLead:player?Math.max(0,player.videoEnd-player.currentTime):0,audioState:audioContext?.state||'locked',audioNodes:player?.nodes.size||0,mediaError:player?.error?.message||'',socketOpen:ws?.readyState===WebSocket.OPEN});
+self.ScreenLinkCanvasStatus=()=>({build:'0.21.02-139',engine:activeEngine||requestedEngine,videoDecoder:player?.videoAcceleration||null,connectionPhase,approvalPhase,phoneVolume,phoneEQ,phoneSettingsRevision,phonePlaybackRevision,volumeGain:player?.gain?.gain.value??null,eqLowGain:player?.low?.gain.value??null,minimalViewer:youtubeOnly&&!developerMode,lastRequestAt,lastSuccessAt,offlineUI:false,healthFailures,lastHealthyAt,reconnections,quality:$('quality').value,transportWaiting,decoderFaults,transportError:player?.lastTransportError||null,lastPlaybackError,lastConnectionError,recoveryAttempts:retryCount,mediaRunning:player?.running||false,mediaDuration:player?.duration||0,videoFramesQueued:player?.frames.length||0,audioPacketsQueued:player?.audio.length||0,secureContext:isSecureContext,connected,connectionPending:joining,viewerMode:youtubeOnly?'youtube':'split',screenFrames:screen.framesDrawn,screenHidden:screen.hold,screenQueue:screen.decoder?.decodeQueueSize||0,mediaEpoch,mediaPosition:player?.currentTime||0,mediaPaused:player?.paused??true,mediaWidth:$('mediaCanvas').width,mediaHeight:$('mediaCanvas').height,youtubeBufferSeconds:player?.bufferSeconds||0,encodedVideoLead:player?Math.max(0,player.preparedVideoEnd-player.currentTime):0,mediaStats:player?{...player.stats}:null,performance:player?.performanceProfile?.()||null,previousPlaybackProfile,playbackEvents:player?(player.playbackEvents||[]).map(e=>({...e})):[],segmentCache:player?.segmentCache?.size||0,audioSampleRate:player?.audioContext?.sampleRate||0,decodedAudioRate:player?.lastAudioSampleRate||player?.audio[0]?.sampleRate||0,segments:player?(player.segmentDiagnostics||[]).map(s=>({...s})):[],audioLead:player?.audioContext&&player.audioTail!==null?Math.max(0,player.audioTail-player.audioContext.currentTime):0,videoLead:player?Math.max(0,player.videoEnd-player.currentTime):0,audioState:audioContext?.state||'locked',audioNodes:player?.nodes.size||0,mediaError:player?.error?.message||'',socketOpen:ws?.readyState===WebSocket.OPEN});
 for(const id of ['viewMode','quality','eq'])makeInline(id);
 function autoConnect(){if(!stopped&&!connected&&!joining)connect();if(!stopped)reconnectTimer=setTimeout(autoConnect,3000);}if(isSecureContext&&typeof VideoDecoder==='function')autoConnect();
 if(!isSecureContext||typeof VideoDecoder!=='function')status.textContent='This viewer needs HTTPS and WebCodecs support.';
@@ -538,7 +538,11 @@ const tileMap={
   const old=this.layers.slice(0,-1);setTimeout(()=>{for(const l of old){l.el.remove();const i=this.layers.indexOf(l);if(i>=0)this.layers.splice(i,1);}},keepOld);
   return made;
  },
- drawRoute(l){const pts=this.path.map(p=>{const w=this.world(p.lat,p.lng,l.tz);return (w[0]-l.ox).toFixed(1)+','+(w[1]-l.oy).toFixed(1);}).join(' ');for(const line of l.el.querySelectorAll('polyline'))line.setAttribute('points',pts);l.scale=0;},
+ drawRoute(l){const each=this.path.map(p=>{const w=this.world(p.lat,p.lng,l.tz);return (w[0]-l.ox).toFixed(1)+','+(w[1]-l.oy).toFixed(1);}),pts=each.join(' ');for(const line of l.el.querySelectorAll('polyline.edge,polyline.line'))line.setAttribute('points',pts);
+  // Build 139: traffic on the route like Google Maps on CarPlay: orange = slow, red = jam.
+  const svg=l.el.querySelector('svg');for(const old of svg.querySelectorAll('polyline.jam'))old.remove();
+  for(const t of this.traffic||[]){const a=Math.max(0,t[0]|0),b=Math.min(each.length-1,t[1]|0);if(b<=a)continue;const pl=document.createElementNS('http://www.w3.org/2000/svg','polyline');pl.setAttribute('class','jam '+(t[2]===2?'red':'slow'));pl.setAttribute('points',each.slice(a,b+1).join(' '));svg.appendChild(pl);}
+  l.scale=0;},
  pump(){
   // Build 107 "video first": a car browser has only 6 connections to the phone and the video needs them.
   // No video: 3 squares at a time. Video playing: 1. Video starting or short of picture: none (retry soon).
@@ -552,7 +556,7 @@ const tileMap={
   const v=this.view,tz=Math.max(3,Math.min(20,Math.floor(v.zoom))),top=this.layer(tz),rad=-v.bearing*Math.PI/180;
   for(const l of this.layers){const s=Math.pow(2,v.zoom-l.tz),c=this.world(v.lat,v.lng,l.tz);
    l.el.style.transform='translate('+W/2+'px,'+H/2+'px) rotate('+(-v.bearing)+'deg) scale('+s+') translate('+(l.ox-c[0])+'px,'+(l.oy-c[1])+'px)';
-   if(Math.abs(s-l.scale)>l.scale*.03){l.scale=s;l.el.querySelector('.edge').style.strokeWidth=11/s;l.el.querySelector('.line').style.strokeWidth=7/s;}}
+   if(Math.abs(s-l.scale)>l.scale*.03){l.scale=s;l.el.querySelector('.edge').style.strokeWidth=11/s;l.el.querySelector('.line').style.strokeWidth=7/s;for(const j of l.el.querySelectorAll('.jam'))j.style.strokeWidth=7/s;}}
   // Squares needed for the visible circle (the map can turn), nearest first.
   // Build 136: the tilted 3D view shows more road ahead, so load squares further out.
   const s=Math.pow(2,v.zoom-tz),c=this.world(v.lat,v.lng,tz),reach=Math.hypot(W,H)/2/s*(box.classList.contains('tilt')?1.9:1)+this.T*.5,n=Math.pow(2,tz);
@@ -581,7 +585,7 @@ const tileMap={
   const f=this.far,s=Math.pow(2,v.zoom-fz);
   f.el.style.transform='translate('+W/2+'px,'+H/2+'px) rotate('+(-v.bearing)+'deg) scale('+s+') translate('+(f.ox-c[0])+'px,'+(f.oy-c[1])+'px)';
   if(Math.abs(s-f.scale)>f.scale*.03){f.scale=s;f.el.querySelector('.edge').style.strokeWidth=11/s;f.el.querySelector('.line').style.strokeWidth=7/s;}
-  const reach=Math.hypot(W,H)/2/s*4.5+this.T*.5,n=Math.pow(2,fz),x0=Math.floor((c[0]-reach)/this.T),x1=Math.floor((c[0]+reach)/this.T),y0=Math.max(0,Math.floor((c[1]-reach)/this.T)),y1=Math.min(n-1,Math.floor((c[1]+reach)/this.T)),more=[];
+  const reach=Math.hypot(W,H)/2/s*6+this.T*.5,n=Math.pow(2,fz),x0=Math.floor((c[0]-reach)/this.T),x1=Math.floor((c[0]+reach)/this.T),y0=Math.max(0,Math.floor((c[1]-reach)/this.T)),y1=Math.min(n-1,Math.floor((c[1]+reach)/this.T)),more=[];
   for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++){const key=x+'/'+y;if(f.tiles.has(key))continue;
    const img=document.createElement('img');img.alt='';img.draggable=false;img.style.left=(x*this.T-f.ox)+'px';img.style.top=(y*this.T-f.oy)+'px';f.el.insertBefore(img,f.el.firstChild);f.tiles.set(key,img);
    more.push({img,layer:f,key,x:((x%n)+n)%n,y,d:1e9+Math.hypot((x+.5)*this.T-c[0],(y+.5)*this.T-c[1])});}
@@ -611,7 +615,8 @@ const tileMap={
   const id=String(s.routeId??'')+':'+String(s.routeLine||'').length,routeNew=id!==this.routeId,drive=s.screen==='drive'||!!s.navigating;
   // Build 136: while driving with the travel direction up, the car map looks down at an angle (3D), like the phone.
   this.box().classList.toggle('tilt',drive&&s.headingUp!==false&&this.follow);
-  if(routeNew){this.routeId=id;this.path=s.routeLine?decodePolyline(s.routeLine):[];for(const l of this.layers)this.drawRoute(l);}
+  const traffic=Array.isArray(s.routeTraffic)?s.routeTraffic:[],trafficKey=JSON.stringify(traffic);
+  if(routeNew||trafficKey!==this.trafficKey){this.trafficKey=trafficKey;this.traffic=traffic;if(routeNew){this.routeId=id;this.path=s.routeLine?decodePolyline(s.routeLine):[];}for(const l of this.layers)this.drawRoute(l);if(this.far)this.drawRoute(this.far);}
   const place=s.place&&Number(s.place.lat)?{lat:Number(s.place.lat),lng:Number(s.place.lng),name:String(s.place.name||'')}:null,placeKey=place?place.lat+','+place.lng+'|'+place.name:'';
   if(routeNew||placeKey!==this.placeKey){this.placeKey=placeKey;this.dest=place||(this.path.length>1?this.path[this.path.length-1]:null);$('tileDestName').textContent=place?place.name.slice(0,40):'';}
   if(!drive&&place){const fit=placeKey+'|'+id;if(fit!==this.fitKey){this.fitKey=fit;this.follow=false;$('mapRecentre').hidden=false;this.fit(place);}}

@@ -55,8 +55,10 @@ final class CarLink: ObservableObject {
             if connected != self.carConnected { self.carConnected = connected }
             // Build 105: keep a Google tile session ready so the car can draw the map itself.
             if Self.carMapOn, !Self.carGoogle, let nav = self.nav {
-                SLMapTiles.prepare(key: nav.api.key, night: Settings.shared.isNight,
-                                   satellite: Settings.shared.mapType == "satellite", language: Settings.shared.language)
+                // Build 139: while navigating, the car map uses the dark road map of Google Maps on CarPlay
+                // (clear roads, blue route, traffic colours), not the satellite picture.
+                SLMapTiles.prepare(key: nav.api.key, night: Settings.shared.isNight || nav.guiding,
+                                   satellite: Settings.shared.mapType == "satellite" && !nav.guiding, language: Settings.shared.language)
             }
             var st = state()
             st.merge(self.bgMeta) { a, _ in a }
