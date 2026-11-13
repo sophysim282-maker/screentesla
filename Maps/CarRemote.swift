@@ -44,6 +44,9 @@ extension NavModel {
             "mode": mode,
             "stop": stop?.name ?? "",
             "heading": carBearing,
+            // Build 137: speed and the age of the GPS point, so the car can draw the car where it is now.
+            "speed": max(0, location?.speed ?? 0),
+            "fixAge": location.map { max(0, Date().timeIntervalSince($0.timestamp)) } ?? 0,
             "lat": (carCoordinate ?? location?.coordinate)?.latitude ?? 0,
             "lng": (carCoordinate ?? location?.coordinate)?.longitude ?? 0,
             "bg": !CarLink.liveMapUsable,

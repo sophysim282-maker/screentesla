@@ -595,15 +595,22 @@ const tileMap={
   if(routeNew||placeKey!==this.placeKey){this.placeKey=placeKey;this.dest=place||(this.path.length>1?this.path[this.path.length-1]:null);$('tileDestName').textContent=place?place.name.slice(0,40):'';}
   if(!drive&&place){const fit=placeKey+'|'+id;if(fit!==this.fitKey){this.fitKey=fit;this.follow=false;$('mapRecentre').hidden=false;this.fit(place);}}
   else if(this.fitKey){this.fitKey='';this.follow=true;$('mapRecentre').hidden=true;}
-  const goal={lat:s.lat,lng:s.lng,heading:Number(s.heading)||0},from=this.pose,moved=from?Math.abs(goal.lat-from.lat)+Math.abs(goal.lng-from.lng):1;
-  if(this.glide&&this.goal&&this.goal.lat===goal.lat&&this.goal.lng===goal.lng&&this.goal.heading===goal.heading)return;
-  this.goal=goal;cancelAnimationFrame(this.glide);this.glide=0;
-  if(!from||moved>.003||document.hidden||(moved<1e-7&&Math.abs(goal.heading-from.heading)<.5)){this.pose=goal;this.camera();this.draw();return;}
-  // Smooth movement between GPS points; only moving a finished picture, so it is light for the car.
-  // Build 137: glide over the time until the next position arrives, so the car never stops between updates.
-  const gap=Math.max(250,Math.min(1200,performance.now()-(this.goalAt||0)));this.goalAt=performance.now();
-  const swing=((goal.heading-from.heading+540)%360)-180,start=performance.now(),step=now=>{const t=Math.min(1,(now-start)/gap);
-   this.pose={lat:from.lat+(goal.lat-from.lat)*t,lng:from.lng+(goal.lng-from.lng)*t,heading:((from.heading+swing*t)%360+360)%360};this.camera();this.render();this.glide=t<1?requestAnimationFrame(step):0;};
+  // Build 137: "on time". The phone sends the speed and how old its GPS point is. The car puts the arrow where
+  // the car is NOW (point + speed x age) and keeps moving it every frame until the next point arrives, so the
+  // map is not one update behind the real car.
+  const speed=Math.max(0,Number(s.speed)||0),age=Math.max(0,Math.min(3,Number(s.fixAge)||0))+.15;
+  const goal={lat:s.lat,lng:s.lng,heading:Number(s.heading)||0,speed,at:performance.now()-age*1000},from=this.pose;
+  const same=this.goal&&this.goal.lat===goal.lat&&this.goal.lng===goal.lng&&this.goal.heading===goal.heading;
+  if(same&&this.glide)return;if(!same)this.goal=goal;
+  const moved=from?Math.abs(goal.lat-from.lat)+Math.abs(goal.lng-from.lng):1;
+  if(!from||moved>.003||document.hidden||(speed<.5&&moved<1e-7&&Math.abs(goal.heading-from.heading)<.5)){cancelAnimationFrame(this.glide);this.glide=0;this.pose={lat:goal.lat,lng:goal.lng,heading:goal.heading};this.camera();this.draw();return;}
+  if(this.glide)return;
+  const step=now=>{const g=this.goal,p=this.pose,dt=Math.max(0,Math.min(2,(now-g.at)/1000)),a=g.heading*Math.PI/180,m=g.speed*dt,cos=Math.max(.01,Math.cos(g.lat*Math.PI/180));
+   const tLat=g.lat+m*Math.cos(a)/111320,tLng=g.lng+m*Math.sin(a)/(111320*cos),k=.22,swing=((g.heading-p.heading+540)%360)-180;
+   this.pose={lat:p.lat+(tLat-p.lat)*k,lng:p.lng+(tLng-p.lng)*k,heading:((p.heading+swing*k)%360+360)%360};this.camera();this.render();
+   const still=g.speed<.5&&Math.abs(tLat-this.pose.lat)+Math.abs(tLng-this.pose.lng)<2e-7&&Math.abs(swing)<.3;
+   if(still){this.pose={lat:tLat,lng:tLng,heading:g.heading};this.camera();this.render();}
+   this.glide=still?0:requestAnimationFrame(step);};
   this.glide=requestAnimationFrame(step);
  },
  // The finger position as a place on the map.

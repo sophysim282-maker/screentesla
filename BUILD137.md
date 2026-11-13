@@ -11,3 +11,5 @@ fast updates, and to move the small map to the 4 corners.
   saved in localStorage; the drag does not count as a tap.
 - Tests: car map, map mini, reconnect, recovery, browser video, pure canvas all pass locally.
 Uses more Map Tiles requests (traffic refresh); the daily limit 3000 can be reached on long drives.
+
+- On-time arrow: phone sends `speed` and `fixAge`; car extrapolates (point + speed x age + 0.15 s) every frame and eases toward it (k 0.22). Stops when speed < 0.5 m/s and converged.
