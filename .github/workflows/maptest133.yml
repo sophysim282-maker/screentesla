@@ -1,5 +1,5 @@
 name: Build133 map test
-# Build 133: map test without the navigation kit. Run 1.
+# Build 133: map test without the navigation kit. Run 2.
 on:
   push:
     branches: ['release/build133-map-test']
