@@ -1,5 +1,5 @@
 name: Build136 routes and traffic
-# Build 136: routes, traffic and faster route like Google Maps; 3D car map. Run 1.
+# Build 136: routes, traffic and faster route like Google Maps; 3D car map. Run 2.
 on:
   push:
     branches: ['release/build136-traffic']
