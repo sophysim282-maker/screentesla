@@ -1,5 +1,5 @@
 name: Build143 video first
-# Build 143: video first on the Wi-Fi, quick answer to wrong-address requests. Run 1.
+# Build 143: video first on the Wi-Fi, quick answer to wrong-address requests. Run 2.
 on:
   push:
     branches: ['release/build143-video-first']
