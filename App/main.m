@@ -97,6 +97,7 @@ static void SLActivityFinish(void) {
 @property(nonatomic) NSInteger homeWaitingVersion;
 @property(nonatomic) BOOL homeWaitingLoaded;
 @property(nonatomic) BOOL mapsChoiceShown;
+@property(nonatomic) NSTimeInterval carStuckSince,lastCarFix;
 // Build 106: status light, background self-repair and internet watch.
 @property(nonatomic,strong) NSTimer *healthTimer;
 @property(nonatomic) NSInteger vpnMissingChecks;
@@ -163,7 +164,8 @@ static void SLActivityFinish(void) {
         [owner append:@"BACKGROUND RUNTIME ENDED: receiver, viewer link and media session retained. iOS may suspend this app without PiP. Returning to ScreenLink resumes the existing receiver; Start is not required to rebuild it."];
         if(!owner.preview.active&&!owner.youtubePiP.active && UIApplication.sharedApplication.applicationState==UIApplicationStateBackground)[owner beginGrace];
     };
-    [self append:@"Version 0.21.04 / build 141: car map like the phone map. The car uses the same map type as the phone (satellite with names, or road map) with traffic, names and icons twice as big, a thicker blue route and a bigger blue arrow with a white glow; each map square is 4 times lighter, so the car map loads faster. Includes build 140."];
+    [self append:@"Version 0.21.05 / build 142: no more closing the app when the car gets stuck. If YouTube handed a video over but the car page says nothing for 20 s, ScreenLink reconnects the car by itself (log: CAR STUCK / CAR RECONNECT); Home then says Car is not answering, and the blue Start button does the same at once. If the car page got the video but shows no picture for 20 s, it reloads itself once. Includes build 141."];
+    [self append:@"Earlier build 141: car map like the phone map. The car uses the same map type as the phone (satellite with names, or road map) with traffic, names and icons twice as big, a thicker blue route and a bigger blue arrow with a white glow; each map square is 4 times lighter, so the car map loads faster. Includes build 140."];
     [self append:@"Earlier build 140: auto zoom on the car map like Google Maps. It zooms in smoothly as a turn comes closer (from 300 m), zooms out a little when you drive fast, and changes gently; the + and - buttons still move it from there. Includes build 139."];
     [self append:@"Earlier build 139: car map like Google Maps on CarPlay. While navigating, the car map is the dark road map (clear roads) with the route in blue and its slow parts in orange and jams in red; a lower 3D angle, more far squares and a softer horizon. On the phone, big clear buttons above Google\'s arrival bar: ScreenLink (back to Home, navigation keeps running) and End. Includes build 138."];
     [self append:@"Earlier build 138: car map far away. In the tilted 3D car map the far part of the road was empty. A second layer of larger map squares now fills the far part (it loads after the near squares, so the near map stays fast), and the horizon fades softly like Google Maps. Includes build 137."];
@@ -325,6 +327,7 @@ static void SLActivityFinish(void) {
   else if(![health[@"hotspot"] boolValue]){level=3;status=@"Hotspot is off or the car left it";detail=@"Turn on Personal Hotspot in iPhone Settings and check that the car’s Wi-Fi shows this iPhone.";}
   else if(self.internetLost){level=2;status=@"No internet on the phone";detail=@"Mobile data is gone. The video continues by itself when it comes back.";}
   else if(NSProcessInfo.processInfo.thermalState>=NSProcessInfoThermalStateSerious){level=2;status=@"Phone is hot";detail=@"Take it off the wireless charger and out of the sun, and close the floating video. Heat can drop the hotspot.";}
+  else if(car>12&&[[self.receiver nativeMediaState][@"active"] boolValue]){level=3;status=@"Car is not answering";detail=@"ScreenLink reconnects by itself. Faster: tap the blue Start button. If the car still shows nothing, reload the page in the car.";}
   else if(car<0||car>12){level=2;status=@"Waiting for the car";detail=@"Open car.tesla4khmer.com/video in the car browser.";}
   else{level=1;status=@"Car connected";detail=self.youtubePiP.active?@"Floating video is on. You can close it; ScreenLink stays awake without it.":@"Choose ScreenLink in YouTube’s AirPlay menu. You can leave this app; it stays awake.";}
  }
@@ -343,9 +346,20 @@ static void SLActivityFinish(void) {
   nw_path_monitor_start(monitor);}
 }
 - (void)stopHealthWatch {[self.healthTimer invalidate];self.healthTimer=nil;if(self.internetMonitor){nw_path_monitor_cancel(self.internetMonitor);self.internetMonitor=nil;}self.internetLost=NO;self.vpnMissingChecks=0;}
+// Build 142: reconnect the car without closing the app (what closing and opening ScreenLink used to do):
+// restart dead listeners, publish AirPlay again, and let the car page back in without asking for approval.
+- (void)fixCarLink:(NSString *)why {
+ if(!self.receiver.isRunning)return;self.lastCarFix=NSProcessInfo.processInfo.systemUptime;
+ BOOL ok=[self.receiver resumeListenersIfNeeded];[self.receiver refreshDiscovery];[self.receiver authorizeNextLocalViewer];
+ [self append:[NSString stringWithFormat:@"CAR RECONNECT (%@): listeners %@, AirPlay published again, the car page may come back in without approval. If the car still shows nothing, reload the page in the car.",why,ok?@"OK":@"could not all restart"]];
+}
 - (void)healthTick {
  if(!self.receiver.isRunning||self.userDisconnected||self.disconnectFlow.running||self.broadcastArmed){[self updateHome];return;}
  [self.receiver resumeListenersIfNeeded];
+ // Build 142: YouTube handed a video over but the car page has said nothing for 20 s: fix it by itself (at most once a minute).
+ {NSDictionary *health=[self.receiver linkHealth];double car=[health[@"carSeconds"] doubleValue];BOOL media=[[self.receiver nativeMediaState][@"active"] boolValue];NSTimeInterval now=NSProcessInfo.processInfo.systemUptime;
+  if(media&&[health[@"hotspot"] boolValue]&&car>12){if(!self.carStuckSince)self.carStuckSince=now;}else self.carStuckSince=0;
+  if(self.carStuckSince&&now-self.carStuckSince>=20&&now-self.lastCarFix>60){[self append:@"CAR STUCK: YouTube handed the video over, but the car page has not asked for anything for 20 s."];[self fixCarLink:@"automatic"];}}
  if(![[self.receiver linkHealth][@"vpn"] boolValue]){self.vpnMissingChecks++;NSTimeInterval now=NSProcessInfo.processInfo.systemUptime;
   if(self.vpnMissingChecks>=2&&now-self.lastVPNRepair>30&&!self.mediaOnlyRestarting){self.lastVPNRepair=now;[self append:@"SELF-REPAIR: the 3.3.3.3 link is missing. Reconnecting ScreenLink VPN; the receiver keeps running."];
    __weak typeof(self) weak=self;[self.vpn connectRouteProbe:^(BOOL ok){typeof(self) owner=weak;if(!owner)return;[owner append:ok?@"SELF-REPAIR: ScreenLink VPN is back.":@"SELF-REPAIR: ScreenLink VPN could not reconnect. Open ScreenLink and tap Start."];if(ok&&owner.receiver.isRunning)[owner.receiver refreshDiscovery];[owner updateHome];}];}
@@ -353,7 +367,7 @@ static void SLActivityFinish(void) {
  [self updateHome];
 }
 - (void)startHome {[SLStreamNotifier requestPermission];
- if(![self permitExplicitStart])return;[self startYouTubePiP];[self updateHome];
+ if(![self permitExplicitStart])return;if(self.receiver.isRunning&&self.receiver.mediaOnly)[self fixCarLink:@"Start button"];[self startYouTubePiP];[self updateHome];
 }
 - (void)stopOwnBroadcast:(NSUInteger)remaining completion:(void (^)(BOOL))completion {
  NSMutableURLRequest *request=[NSMutableURLRequest requestWithURL:[NSURL URLWithString:@"http://127.0.0.1:8080/local/owner"]];request.timeoutInterval=1;request.cachePolicy=NSURLRequestReloadIgnoringLocalCacheData;[request setValue:@"app" forHTTPHeaderField:@"X-ScreenLink-Control"];

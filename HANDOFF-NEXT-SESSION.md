@@ -4,6 +4,8 @@ Read this first. It replaces reading the old 400k-token conversation.
 
 ## WHERE WE ARE NOW (read this part first)
 
+- **Build 142 (0.21.05), branch `release/build142-car-reconnect`:** automatic car reconnect + stuck-page reload. NEED a log of a stuck case. See BUILD142.md.
+
 - **Build 141 (0.21.04), branch `release/build141-car-like-phone`:** car map same type as phone, 2x labels, lighter squares, thicker route, bigger arrow. See BUILD141.md.
 
 - **Build 140 (0.21.03), branch `release/build140-auto-zoom`:** car map auto zoom (turns, speed). See BUILD140.md.
