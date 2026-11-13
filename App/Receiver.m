@@ -292,10 +292,12 @@ static NSString *slNetworkSnapshot(void){
     pthread_mutex_lock(&webWatchLock);unsigned long total=++webWatch.tlsFailures;BOOL log=sl_web_watch_allow(&webTLSLogAt,now,5);pthread_mutex_unlock(&webWatchLock);
     if(log)[self emit:[NSString stringWithFormat:@"HTTPS HANDSHAKE FAILED from %s: %@ (%lu so far). A few from browser pre-connections are normal; many in a row mean the secure connection itself is failing.",address,reason,total]];
 }
-- (void)noteWrongHost:(NSString *)host {
+- (void)noteWrongHost:(NSString *)host line:(NSString *)first {
     double now=NSProcessInfo.processInfo.systemUptime;
     pthread_mutex_lock(&webWatchLock);unsigned long total=++webWatch.wrongHost;BOOL log=sl_web_watch_allow(&webHostLogAt,now,5);pthread_mutex_unlock(&webWatchLock);
-    if(log)[self emit:[NSString stringWithFormat:@"HTTPS REQUEST REFUSED: address '%@' is not car.tesla4khmer.com (%lu so far).",host?:@"(none)",total]];
+    // Build 143: say what the request was (method and path only, never the token), to find where it comes from.
+    NSString *what=[[first componentsSeparatedByString:@"?"].firstObject substringToIndex:MIN((NSUInteger)80,[first componentsSeparatedByString:@"?"].firstObject.length)];
+    if(log)[self emit:[NSString stringWithFormat:@"HTTPS REQUEST REFUSED: address '%@' is not car.tesla4khmer.com (%lu so far). Request: %@. Answered 'try again' so the car retries at once.",host?:@"(none)",total,what]];
 }
 - (void)noteSecureRequest {
     pthread_mutex_lock(&webWatchLock);double gap=sl_web_watch_secure(&webWatch,NSProcessInfo.processInfo.systemUptime);pthread_mutex_unlock(&webWatchLock);
@@ -707,7 +709,10 @@ static NSArray *txtStrings(const char *bytes,int length) {
         if([field.lowercaseString hasPrefix:@"range:"])byteRange=[[field substringFromIndex:6] stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceCharacterSet];
     }
     BOOL secureTransport=sl_tls_active(client);
-    if(secureTransport && ![@[@"car.tesla4khmer.com",@"car.tesla4khmer.com:443"] containsObject:host]){[self noteWrongHost:host];return;}
+    if(secureTransport && ![@[@"car.tesla4khmer.com",@"car.tesla4khmer.com:443"] containsObject:host]){
+        // Build 143: answer at once and close, instead of leaving the car waiting on a silent connection.
+        [self noteWrongHost:host line:[line componentsSeparatedByString:@"\r\n"].firstObject?:@""];
+        static const char *retry="HTTP/1.1 421 Misdirected Request\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";send_all(client,retry,strlen(retry));return;}
     if(secureTransport)[self noteSecureRequest];
     NSString *expectedOrigin=secureTransport?@"https://car.tesla4khmer.com":@"http://3.3.3.3:8080";
     if(bodyLength>8192)return;
