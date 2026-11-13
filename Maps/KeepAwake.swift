@@ -128,7 +128,10 @@ final class SLKeepAwake: NSObject, CLLocationManagerDelegate {
         put32(16); put16(1); put16(1); put32(UInt32(rate)); put32(UInt32(rate * 2)); put16(2); put16(16)
         wav.append(contentsOf: Array("data".utf8)); put32(UInt32(samples * 2)); wav.append(Data(count: samples * 2))
         let session = AVAudioSession.sharedInstance()
-        try? session.setCategory(.playback, mode: .moviePlayback, options: [.mixWithOthers])
+        // Build 129: while Phone sound plays another app's voice, keep its phone-speaker mode.
+        if !SLAirPlaySound.playing {
+            try? session.setCategory(.playback, mode: .moviePlayback, options: [.mixWithOthers])
+        }
         try? session.setActive(true)
         guard let player = try? AVAudioPlayer(data: wav) else {
             Self.log?("KEEP AWAKE 2 FAILED: the silent sound could not be prepared.")

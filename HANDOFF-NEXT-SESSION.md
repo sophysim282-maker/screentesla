@@ -4,6 +4,8 @@ Read this first. It replaces reading the old 400k-token conversation.
 
 ## WHERE WE ARE NOW (read this part first)
 
+- **Build 129 (0.20.92), branch `release/build129-sound-fix`:** AAC-ELD cookie for Phone sound; keep-awake no longer flips the category. See BUILD129.md. Map black on 128 = most likely key restrictions (user to check).
+
 - **Build 128 (0.20.91), branch `release/build128-phone-sound`:** RAOP audio decoded and played on the phone speaker (`soundToPhone`, default off). Contains 127 (Google Navigation SDK), which was never delivered alone. See BUILD128.md.
 
 - **Build 127 (0.20.90), branch `release/build127-google-navigation`:** Google Navigation SDK as guidance engine (headless), lanes on phone. Needs Navigation SDK enabled on the user's key. See BUILD127.md.

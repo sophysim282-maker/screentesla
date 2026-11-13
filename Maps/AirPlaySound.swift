@@ -24,6 +24,8 @@ final class SLAirPlaySound: NSObject {
     private static var lastReport = Date.distantPast
     private static var lastLoud = Date.distantPast
     private static var active = false
+    /// True while another app's sound is being played on the phone (KeepAwake must not change the sound mode).
+    @objc static var playing: Bool { active }
     private static var blockedNote = ""
     private static var idleTimer: DispatchSourceTimer?
 
@@ -32,8 +34,10 @@ final class SLAirPlaySound: NSObject {
         queue.async { handle(data, ct, spf) }
     }
 
+    private static var firstSeen = false
     private static func handle(_ data: Data, _ ct: Int, _ spf: Int) {
         packets += 1
+        if !firstSeen { firstSeen = true; lastReport = .distantPast }   // report the very first packet at once
         let on = UserDefaults.standard.bool(forKey: "soundToPhone")
         if Date().timeIntervalSince(lastReport) > 20 {
             lastReport = Date()
@@ -61,7 +65,11 @@ final class SLAirPlaySound: NSObject {
             status.pointee = .haveData
             return packet
         }
-        guard result != .error, pcm.frameLength > 0, let channels = pcm.floatChannelData else { failed += 1; return }
+        guard result != .error, pcm.frameLength > 0, let channels = pcm.floatChannelData else {
+            failed += 1
+            if failed == 1 || failed % 500 == 0 { log?("AIRPLAY SOUND: a packet could not be unpacked (\(data.count) bytes, error \(problem?.code ?? 0)).") }
+            return
+        }
         unpacked += 1
 
         // Is there anything to hear? (ScreenLink's own keep-awake sound is pure silence.)
@@ -96,9 +104,13 @@ final class SLAirPlaySound: NSObject {
         case 4:
             d.mFormatID = kAudioFormatMPEG4AAC
             d.mFramesPerPacket = UInt32(spf > 0 ? spf : 1024)
+            cookie = Data([0x12, 0x10])               // AAC-LC, 44.1 kHz, stereo
         default:
             d.mFormatID = kAudioFormatMPEG4AAC_ELD
             d.mFramesPerPacket = UInt32(spf > 0 ? spf : 480)
+            // Build 129: AAC-ELD cannot be unpacked without its settings block (44.1 kHz, stereo, 480 samples).
+            // Build 128 had none, so nothing could be unpacked.
+            cookie = Data([0xF8, 0xE8, 0x50, 0x00])
         }
         inFormat = AVAudioFormat(streamDescription: &d)
         converter = inFormat.flatMap { AVAudioConverter(from: $0, to: outFormat) }
