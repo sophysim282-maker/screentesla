@@ -1,5 +1,5 @@
 name: Build132 sound key
-# Build 132: try both sound keys for Phone sound. Run 1.
+# Build 132: try both sound keys for Phone sound. Run 2.
 on:
   push:
     branches: ['release/build132-sound-key']
