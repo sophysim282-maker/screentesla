@@ -240,3 +240,22 @@ if 'sl_audio_ct' not in s:
     s = 'int sl_audio_ct = 0;\nint sl_audio_spf = 0;\n' + s
     p.write_text(s)
 
+# Build 132: the sound key. The library always mixes the sound key with the pairing secret. User log (build 129):
+# every Apple Lossless packet failed with "bad data", so the key may be wrong for this kind of sound. Keep the
+# plain key too; ScreenLink tries the other key by itself when the sound cannot be unpacked.
+p = vendor / 'lib' / 'raop_buffer.c'
+s = p.read_text()
+if 'sl_rawkey' not in s:
+    marker = '    unsigned char aeskey[RAOP_AESKEY_LEN];\n    unsigned char aesiv[RAOP_AESIV_LEN];\n'
+    assert marker in s
+    s = s.replace(marker, marker + '    unsigned char sl_rawkey[RAOP_AESKEY_LEN];\n', 1)
+    marker = '    unsigned char eaeskey[64];\n    memcpy(eaeskey, aeskey, 16);\n'
+    assert marker in s
+    s = s.replace(marker, marker + '    memcpy(raop_buffer->sl_rawkey, aeskey, 16);\n', 1)
+    marker = 'aes_cbc_init(raop_buffer->aeskey, raop_buffer->aesiv, AES_DECRYPT)'
+    assert marker in s
+    s = s.replace(marker, 'aes_cbc_init(sl_audio_rawkey ? raop_buffer->sl_rawkey : raop_buffer->aeskey, raop_buffer->aesiv, AES_DECRYPT)', 1)
+    marker = 'struct raop_buffer_s {'
+    s = s.replace(marker, 'int sl_audio_rawkey = 0;\n\n' + marker, 1)
+    p.write_text(s)
+

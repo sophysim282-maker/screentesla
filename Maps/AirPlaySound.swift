@@ -35,6 +35,9 @@ final class SLAirPlaySound: NSObject {
     }
 
     private static var firstSeen = false
+    private static var badInRow = 0
+    private static var keySwitches = 0
+    private static var unlockedLogged = false
     private static func handle(_ data: Data, _ ct: Int, _ spf: Int) {
         packets += 1
         if !firstSeen { firstSeen = true; lastReport = .distantPast }   // report the very first packet at once
@@ -68,9 +71,23 @@ final class SLAirPlaySound: NSObject {
         guard result != .error, pcm.frameLength > 0, let channels = pcm.floatChannelData else {
             failed += 1
             if failed == 1 || failed % 500 == 0 { log?("AIRPLAY SOUND: a packet could not be unpacked (\(data.count) bytes, error \(problem?.code ?? 0)).") }
+            // Build 132: many bad packets in a row means the sound is unlocked with the wrong key. Try the other one.
+            badInRow += 1
+            if badInRow >= 60, let keys = NSClassFromString("SLAudioKey") as? NSObject.Type {
+                badInRow = 0
+                let raw = (keys.perform(NSSelectorFromString("raw"))?.takeUnretainedValue() as? NSNumber)?.boolValue ?? false
+                _ = keys.perform(NSSelectorFromString("setRaw:"), with: NSNumber(value: !raw))
+                keySwitches += 1
+                key = ""   // make a fresh unpacker for the next packet
+                if keySwitches <= 4 { log?("AIRPLAY SOUND: the sound could not be unlocked; trying the \(raw ? "mixed" : "plain") key now.") }
+            }
             return
         }
         unpacked += 1
+        if badInRow > 0 || !unlockedLogged {
+            if !unlockedLogged { unlockedLogged = true; log?("AIRPLAY SOUND: unlocked and unpacked ✓ (\(keySwitches) key switch(es)).") }
+            badInRow = 0
+        }
 
         // Is there anything to hear? (ScreenLink's own keep-awake sound is pure silence.)
         var peak: Float = 0
