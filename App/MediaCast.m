@@ -41,7 +41,7 @@ static NSString *SLOtherSound(void){
     NSString *_appleSession,*_epoch,*_primary,*_uuid;
     NSMutableDictionary *_resources,*_identifiers,*_cache,*_pending,*_late;
     // Build 114 warm-up: first pieces downloaded before the car asks (see warmSegments:).
-    NSMutableDictionary *_warm;NSMutableSet *_warming;NSMutableSet *_warmSecondOnly;NSMutableOrderedSet *_warmTargets;NSInteger _warmBytes;BOOL _warmLogged;
+    NSMutableDictionary *_warm;NSMutableSet *_warming;NSMutableOrderedSet *_warmTargets;NSInteger _warmBytes;BOOL _warmLogged;
     NSMutableDictionary *_playlistLinks,*_playlistTimes,*_inflight;
     NSMutableArray *_retiredLinks;
     NSMutableOrderedSet *_selectedPlaylists;
@@ -69,19 +69,7 @@ static BOOL virtualURL(NSURL *url){return [url.scheme.lowercaseString isEqual:@"
 // and 1920x1088 points; 720p: 1280x720; the 1440p / 4K tests: their own size), then the highest data rate.
 // Returns the picture list and its sound list, as full addresses. A wrong guess only wastes one download.
 static NSString *SLWarmAttribute(NSString *line,NSString *name){NSRange r=[line rangeOfString:[name stringByAppendingString:@"=\""]];if(r.location==NSNotFound)return nil;NSString *rest=[line substringFromIndex:NSMaxRange(r)];NSRange end=[rest rangeOfString:@"\""];return end.location==NSNotFound?nil:[rest substringToIndex:end.location];}
-static NSArray<NSString *> *SLWarmPickOne(NSString *text,NSURL *base,NSInteger wanted,NSInteger *pickedHeight);
-// Build 144 fast start: the car plays its first piece from the 720p list, then moves up. So warm the 720p
-// list first, then the sound, then the full-quality list (only its second piece: the first is played in 720p).
-static NSArray<NSString *> *SLWarmPick(NSString *text,NSURL *base,NSInteger wanted,NSString **upgrade){
-    NSInteger fullHeight=0,startHeight=0;NSArray<NSString *> *full=SLWarmPickOne(text,base,wanted,&fullHeight);
-    if(upgrade)*upgrade=nil;
-    if(fullHeight<=720||full.count<2)return full;
-    NSArray<NSString *> *start=SLWarmPickOne(text,base,720,&startHeight);
-    if(start.count<2||startHeight<=0||startHeight>=fullHeight||[start[0] isEqual:full[0]])return full;
-    if(upgrade)*upgrade=full[0];
-    NSMutableArray *picks=[start mutableCopy];if(![picks containsObject:full[0]])[picks addObject:full[0]];return picks;
-}
-static NSArray<NSString *> *SLWarmPickOne(NSString *text,NSURL *base,NSInteger wanted,NSInteger *pickedHeight){
+static NSArray<NSString *> *SLWarmPick(NSString *text,NSURL *base,NSInteger wanted){
     NSArray<NSString *> *lines=[text componentsSeparatedByCharactersInSet:NSCharacterSet.newlineCharacterSet];NSCharacterSet *space=NSCharacterSet.whitespaceCharacterSet;
     NSInteger limitHeight=wanted>=1440?wanted:(wanted>0?MIN(1080,wanted):1080);long long limitPoints=wanted>=2160?3840LL*2176:(wanted>=1440?2560LL*1440:(wanted==720?1280LL*720:1920LL*1088));
     NSString *best=nil,*group=nil;NSInteger bestHeight=-1;long long bestRate=-1;
@@ -99,8 +87,6 @@ static NSArray<NSString *> *SLWarmPickOne(NSString *text,NSURL *base,NSInteger w
         if(!sound||[line containsString:@"DEFAULT=YES"]){sound=uri;if([line containsString:@"DEFAULT=YES"])break;}}
     NSMutableArray<NSString *> *picks=[NSMutableArray array];
     for(NSString *uri in @[best?:@"",sound?:@""]){if(!uri.length)continue;NSString *full=[NSURL URLWithString:uri relativeToURL:base].absoluteURL.absoluteString;if(full.length&&![picks containsObject:full])[picks addObject:full];}
-    if(pickedHeight)*pickedHeight=best?bestHeight:0;
-    if(!best||!sound)return best?@[picks.firstObject]:picks;
     return picks;
 }
 static NSString *SLMediaKind(NSString *location){NSURL *url=location.length?[NSURL URLWithString:location]:nil;if(!url||virtualURL(url))return @"hls";return [url.path.lowercaseString containsString:@".m3u8"]?@"hls":@"file";}
@@ -132,7 +118,7 @@ static NSData *SLWholeFile(NSString *location){@synchronized(MediaCast.class){re
         [cast log:good?[NSString stringWithFormat:@"MEDIA FILE READY: a whole video is on the phone (%lu KB, %.1f s). The car gets its parts from memory.",(unsigned long)(data.length/1024),[download[@"ms"] doubleValue]/1000.0]:[NSString stringWithFormat:@"MEDIA FILE NOT PREPARED: HTTP %ld, %@.",(long)[download[@"code"] integerValue],download[@"why"]?:@"no data"]];
     });
 }
-- (instancetype)init{if((self=[super init])){_ready=[NSCondition new];_events=dispatch_queue_create("ScreenLink.media.events",DISPATCH_QUEUE_SERIAL);_reverse=-1;_resources=[NSMutableDictionary dictionary];_identifiers=[NSMutableDictionary dictionary];_cache=[NSMutableDictionary dictionary];_late=[NSMutableDictionary dictionary];_pending=[NSMutableDictionary dictionary];_prefetch=[NSMutableOrderedSet orderedSet];_playlistLinks=[NSMutableDictionary dictionary];_playlistTimes=[NSMutableDictionary dictionary];_inflight=[NSMutableDictionary dictionary];_retiredLinks=[NSMutableArray array];_selectedPlaylists=[NSMutableOrderedSet orderedSet];_warm=[NSMutableDictionary dictionary];_warming=[NSMutableSet set];_warmSecondOnly=[NSMutableSet set];_warmTargets=[NSMutableOrderedSet orderedSet];_epoch=NSUUID.UUID.UUIDString;}return self;}
+- (instancetype)init{if((self=[super init])){_ready=[NSCondition new];_events=dispatch_queue_create("ScreenLink.media.events",DISPATCH_QUEUE_SERIAL);_reverse=-1;_resources=[NSMutableDictionary dictionary];_identifiers=[NSMutableDictionary dictionary];_cache=[NSMutableDictionary dictionary];_late=[NSMutableDictionary dictionary];_pending=[NSMutableDictionary dictionary];_prefetch=[NSMutableOrderedSet orderedSet];_playlistLinks=[NSMutableDictionary dictionary];_playlistTimes=[NSMutableDictionary dictionary];_inflight=[NSMutableDictionary dictionary];_retiredLinks=[NSMutableArray array];_selectedPlaylists=[NSMutableOrderedSet orderedSet];_warm=[NSMutableDictionary dictionary];_warming=[NSMutableSet set];_warmTargets=[NSMutableOrderedSet orderedSet];_epoch=NSUUID.UUID.UUIDString;}return self;}
 - (void)log:(NSString *)text{if(self.status)self.status(text);}
 - (BOOL)active{[_ready lock];BOOL value=_active;[_ready unlock];return value;}
 - (BOOL)videoIsLive{[_ready lock];BOOL value=_active && _readyToPlay && NSProcessInfo.processInfo.systemUptime-_heartbeat<10;[_ready unlock];return value;}
@@ -208,21 +194,20 @@ static NSData *SLWholeFile(NSString *location){@synchronized(MediaCast.class){re
     SLRewritePlaylist(text,^NSString *(NSString *uri){NSURL *target=[NSURL URLWithString:uri relativeToURL:base].absoluteURL;if(virtualURL(target) && children.count<64)[children addObject:target.absoluteString];return uri;},NULL);
     // Build 114: YouTube offers about 20 lists and they are fetched one at a time. Fetch the two the car
     // will really use (its picture quality and the sound) first, and remember them for the piece warm-up.
-    NSString *upgrade=nil;NSArray<NSString *> *first=SLWarmPick(text,base,self.warmHeight,&upgrade);NSMutableOrderedSet *ordered=[NSMutableOrderedSet orderedSet];
+    NSArray<NSString *> *first=SLWarmPick(text,base,self.warmHeight);NSMutableOrderedSet *ordered=[NSMutableOrderedSet orderedSet];
     for(NSString *pick in first)if([children containsObject:pick])[ordered addObject:pick];[ordered unionOrderedSet:children];
-    [_ready lock];if(_active && [location isEqual:_primary]){for(NSString *pick in first)if([children containsObject:pick])[_warmTargets addObject:pick];[_warmSecondOnly removeAllObjects];if(upgrade)[_warmSecondOnly addObject:upgrade];NSMutableOrderedSet *queue=[NSMutableOrderedSet orderedSet];for(NSString *child in ordered)if(!_cache[child] && !_pending[child])[queue addObject:child];[queue unionOrderedSet:_prefetch];[_prefetch removeAllObjects];[_prefetch unionOrderedSet:queue];}[_ready unlock];
+    [_ready lock];if(_active && [location isEqual:_primary]){for(NSString *pick in first)if([children containsObject:pick])[_warmTargets addObject:pick];NSMutableOrderedSet *queue=[NSMutableOrderedSet orderedSet];for(NSString *child in ordered)if(!_cache[child] && !_pending[child])[queue addObject:child];[queue unionOrderedSet:_prefetch];[_prefetch removeAllObjects];[_prefetch unionOrderedSet:queue];}[_ready unlock];
     [self drivePrefetch];
 }
 // Build 114: when one of those two lists arrives, download its first pieces at once, in the background.
 // The car asks for them a moment later and gets them from memory instead of waiting for YouTube.
 - (void)warmSegments:(NSData *)data location:(NSString *)location {
-    [_ready lock];BOOL target=_active&&[_warmTargets containsObject:location];NSString *epoch=_epoch;if(target)[_warmTargets removeObject:location];BOOL secondOnly=[_warmSecondOnly containsObject:location];[_ready unlock];
+    [_ready lock];BOOL target=_active&&[_warmTargets containsObject:location];NSString *epoch=_epoch;if(target)[_warmTargets removeObject:location];[_ready unlock];
     if(!target)return;
     NSString *text=[[NSString alloc]initWithData:data encoding:NSUTF8StringEncoding];
     if(![text hasPrefix:@"#EXTM3U"]||[text containsString:@"#EXT-X-STREAM-INF:"]||[text containsString:@"#EXT-X-BYTERANGE"])return;
     NSURL *base=[NSURL URLWithString:location];NSMutableArray<NSString *> *urls=[NSMutableArray array];
     SLRewritePlaylist(text,^NSString *(NSString *uri){NSURL *piece=[NSURL URLWithString:uri relativeToURL:base].absoluteURL;if(webURL(piece)&&urls.count<2&&![urls containsObject:piece.absoluteString])[urls addObject:piece.absoluteString];return uri;},NULL);
-    if(secondOnly&&urls.count)[urls removeObjectAtIndex:0];
     for(NSString *url in urls){
         [_ready lock];BOOL go=[epoch isEqual:_epoch]&&!_warm[url]&&![_warming containsObject:url]&&_warmBytes<48*1024*1024;if(go)[_warming addObject:url];BOOL say=go&&!_warmLogged;if(say)_warmLogged=YES;[_ready unlock];
         if(!go)continue;

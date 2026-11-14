@@ -232,28 +232,13 @@ class CanvasPlayer {
    manifest=playlist(new TextDecoder().decode(await this.bytes(manifestURL)),manifestURL);
    if(!manifest.variants.length)break;
    this.offeredHeights=[...new Set(manifest.variants.map(v=>Number((v.RESOLUTION||'').split('x')[1])||0).filter(n=>n>0))].sort((a,b)=>b-a);
-   let choice=chooseVariant(manifest.variants,this.quality);
-   // Build 144 fast start: the first piece plays from the 720p list (small, quick to download), then the
-   // video moves up to the chosen quality at the next piece without stopping. Only when the sound is a
-   // separate list, so the switch never touches the sound.
-   this.upgradeChoice=null;this.upgradeList=null;this.upgradeFetching=false;
-   {const h=v=>Number((v.RESOLUTION||'').split('x')[1])||0;let first=null;try{if(h(choice)>720)first=chooseVariant(manifest.variants,'720');}catch(error){}
-    if(first&&h(first)>0&&h(first)<h(choice)&&first.url!==choice.url&&first.AUDIO&&manifest.audio.some(a=>a['GROUP-ID']===first.AUDIO)){this.upgradeChoice=choice;this.upgradeHeight=h(choice);choice=first;}}
-   this.selectedHeight=Number((choice.RESOLUTION||'').split('x')[1])||0;
+   const choice=chooseVariant(manifest.variants,this.quality);this.selectedHeight=Number((choice.RESOLUTION||'').split('x')[1])||0;
    const audio=manifest.audio.filter(a=>a['GROUP-ID']===choice.AUDIO);this.audioURL=(audio.find(a=>a.DEFAULT==='YES')||audio[0])?.url;manifestURL=choice.url;
   }
   if(manifest.variants.length||!manifest.segments.length||!manifest.end)throw Error('Live or nested HLS needs the compatibility player');
   this.videoList=manifest;this.duration=manifest.duration;
   if(this.audioURL){const list=playlist(new TextDecoder().decode(await this.bytes(this.audioURL)),this.audioURL);if(list.variants.length||!list.end)throw Error('Unsupported alternate audio playlist');this.audioList=list;}
-  if(!this.audioURL)this.upgradeChoice=null;
-  await this.seek(start);this.ensureUpgrade();return this;
- }
- // Build 144: fetch the full-quality list in the background for the fast-start switch.
- ensureUpgrade(){
-  const choice=this.upgradeChoice;if(!choice||this.upgradeList||this.upgradeFetching||this.closed)return;this.upgradeFetching=true;
-  this.bytes(choice.url).then(data=>{const list=playlist(new TextDecoder().decode(data),choice.url);
-   if(this.upgradeChoice===choice&&!list.variants.length&&list.end&&list.segments.length)this.upgradeList=list;else if(this.upgradeChoice===choice)this.upgradeChoice=null;
-  },()=>{}).finally(()=>{this.upgradeFetching=false;});
+  await this.seek(start);return this;
  }
  fail(error){if(this.closed||error?.name==='AbortError')return;this.error={code:3,message:error.message||String(error)};this.pause();this.onerror(error);}
  async configure(track,kind,serial){
@@ -336,8 +321,6 @@ class CanvasPlayer {
   // Preserve inter-track offsets; normalize each fragment onto its playlist timeline.
   const origin=Math.min(...extracted.map(s=>s.cts/s.timescale));
   let timeline=this.timelines.get(kind);
-  // Build 144: the full-quality list may count time differently; if its first piece does not line up, follow the list's own times.
-  if(timeline&&kind==='video'&&this.videoSwitchAt!==undefined&&Math.abs(segment.start-this.videoSwitchAt)<.05){this.videoSwitchAt=undefined;if(Math.abs(origin+timeline.offset-segment.start)>.5){this.timelines.delete(kind);timeline=null;this.stats.timestampResets++;}}
   const reset=timeline&&(origin<timeline.lastOrigin-.1||(segment.start>timeline.lastSegmentStart&&origin<=timeline.lastOrigin+.001));
   const packedFallback=extracted.packedAudio&&(extracted.packedTimestamp===null||reset);
   if(timeline&&packedFallback&&!segment.discontinuity){timeline.offset=timeline.end-origin;this.stats.timestampResets++;}
@@ -410,10 +393,8 @@ class CanvasPlayer {
   const run=async()=>{
    // Interleave muxed samples by decode time; independently pace alternate tracks.
    // Otherwise a bounded video queue can starve audio while waiting for drawing.
-   const consume=async(list,kind,owners,allowEmpty=false,lane={})=>{
-    const segments=lane.from!==undefined?list.segments.filter(s=>s.start>=lane.from-.05):list.segments.filter(s=>s.start+s.duration>this.position);
-    // Build 144: boundary is where this video lane hands over to the full-quality list.
-    let boundary=Infinity,nextLane=null,handOver=null;const handOverDone=new Promise(resolve=>{handOver=resolve;});
+   const consume=async(list,kind,owners,allowEmpty=false)=>{
+    const segments=list.segments.filter(s=>s.start+s.duration>this.position);
     const fetchAt=index=>this.preparedSegment(segments[index],serial,owners).then(value=>value,error=>({result:{error}}));
     // Build 76: download ahead like HLS.js on 240.3.3.3, so a few seconds of slow
     // network no longer empties the video. One download at a time per lane keeps
@@ -428,36 +409,20 @@ class CanvasPlayer {
      for(let next=0;next<segments.length;next++){
       while(serial===this.serial&&!this.closed&&(inFlight>=parallel||next>consumed&&(next-consumed>=READ_AHEAD_SEGMENTS||segments[next].start>this.currentTime+downloadAhead)))await sleep(next<=consumed?5:50);
       if(serial!==this.serial||this.closed)return;
-      if(kind==='video'&&lane.switchable&&next>=1&&this.upgradeChoice){this.ensureUpgrade();
-       // Wait a moment for the full-quality list, so only the first piece is 720p. If it is late, go on in 720p and try again at the next piece.
-       const waitUntil=performance.now()+4000;while(serial===this.serial&&!this.closed&&this.upgradeChoice&&!this.upgradeList&&performance.now()<waitUntil){if(!this.upgradeFetching)this.ensureUpgrade();await sleep(20);}
-       if(serial!==this.serial||this.closed)return;const up=this.upgradeList;
-       const at=segments[next].start,match=up?up.segments.find(s=>Math.abs(s.start-at)<.05):null;
-       if(match&&this.upgradeChoice){boundary=next;const from=this.upgradeHeight;this.videoList=up;this.selectedHeight=from;this.upgradeChoice=null;this.videoSwitchAt=at;
-        this.playbackEvents.push({type:'fast start: moved up from 720p to '+from+'p',position:at});
-        nextLane=consume(up,kind,owners,allowEmpty,{from:at,gate:handOverDone});return;}}
       inFlight++;const job=fetchAt(next);downloads.set(next,job);job.then(()=>{inFlight--;});
      }
     })();
-    if(lane.gate){await lane.gate;if(serial!==this.serial||this.closed)return;}
-    for(let index=0;index<segments.length&&index<boundary;index++){
+    for(let index=0;index<segments.length;index++){
      const segment=segments[index];consumed=index;
      while(serial===this.serial&&!this.closed&&segment.start>this.currentTime+(kind==='audio'?4:2))await sleep(30);
      if(serial!==this.serial||this.closed)return;
-     while(serial===this.serial&&!this.closed&&!downloads.has(index)&&index<boundary)await sleep(10);
-     if(serial!==this.serial||this.closed)return;if(index>=boundary)break;
+     while(serial===this.serial&&!this.closed&&!downloads.has(index))await sleep(10);
+     if(serial!==this.serial||this.closed)return;
      const {entry,result}=await downloads.get(index);downloads.delete(index);if(serial!==this.serial||this.closed)return;if(result.error)throw result.error;
      if(kind==='video')this.preparedVideoEnd=Math.max(this.preparedVideoEnd,segment.start+segment.duration);
      try{await this.decodeSegment(segment,kind,serial,result.data,allowEmpty);}finally{this.releaseSegment(segment,entry,kind);}
     }
     await downloader;
-    if(nextLane){
-     // Hand over: let the old decoder finish its last pictures, then the full-quality lane decodes on.
-     const decoder=this.decoders.get(kind);let timer;
-     if(serial===this.serial&&!this.closed&&decoder?.state==='configured'){try{await Promise.race([decoder.flush(),new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('switch flush deadline')),2000);})]);}catch(error){}finally{clearTimeout(timer);}}
-     if(serial===this.serial&&!this.closed&&this.decoders.get(kind)===decoder)this.videoNeedsKey=true;
-     handOver();await nextLane;return;
-    }
     // Drain only at end of rendition, including final reordered video frames.
     if(serial===this.serial&&!this.closed){
      const decoder=this.decoders.get(kind);
@@ -472,7 +437,7 @@ class CanvasPlayer {
      }
     }
    };
-   if(this.audioList)await Promise.all([consume(this.videoList,'video',['video'],false,{switchable:true}),consume(this.audioList,'audio',['audio'])]);
+   if(this.audioList)await Promise.all([consume(this.videoList,'video',['video']),consume(this.audioList,'audio',['audio'])]);
    else await Promise.all([consume(this.videoList,'video',['video','audio'],true),consume(this.videoList,'audio',['video','audio'],true)]);
    if(serial===this.serial)this.finished=true;
   };
