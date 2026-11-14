@@ -1,5 +1,5 @@
 name: Build144 fast start
-# Build 144: fast start (720p first piece, then up), sound-only and car-left warnings. Run 1.
+# Build 144: fast start (720p first piece, then up), sound-only and car-left warnings. Run 2.
 on:
   push:
     branches: ['release/build144-fast-start']
