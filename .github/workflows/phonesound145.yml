@@ -1,5 +1,5 @@
 name: Build145 phone sound
-# Build 145: phone sound of other apps (Apple ALAC decoder, newer sound lock). Run 1.
+# Build 145: phone sound of other apps (Apple ALAC decoder, newer sound lock). Run 2.
 on:
   push:
     branches: ['release/build145-phone-sound']
