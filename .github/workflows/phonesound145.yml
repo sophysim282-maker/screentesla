@@ -1,5 +1,5 @@
 name: Build145 phone sound
-# Build 145: phone sound of other apps (Apple ALAC decoder, newer sound lock). Run 2.
+# Build 145: phone sound of other apps (Apple ALAC decoder, newer sound lock). Run 3.
 on:
   push:
     branches: ['release/build145-phone-sound']
@@ -51,7 +51,7 @@ jobs:
           ffmpeg -v error -f lavfi -i testsrc2=size=640x360:rate=30 -f lavfi -i sine=frequency=440:sample_rate=48000 -t 20 -c:v libx264 -preset ultrafast -g 60 -c:a aac -hls_time 2 -hls_playlist_type vod -hls_segment_filename build/long/part%02d.ts build/long/master.m3u8
           node tools/test_browser_video.cjs App build/long
           node tools/test_map_mini.cjs App build/long
-          ffmpeg -v error -y -f lavfi -i testsrc2=size=640x360:rate=30 -f lavfi -i sine=frequency=440:sample_rate=44100 -t 8 -c:v libx264 -preset ultrafast -pix_fmt yuv420p -c:a aac -movflags +phonesound build/file.mp4
+          ffmpeg -v error -y -f lavfi -i testsrc2=size=640x360:rate=30 -f lavfi -i sine=frequency=440:sample_rate=44100 -t 8 -c:v libx264 -preset ultrafast -pix_fmt yuv420p -c:a aac -movflags +faststart build/file.mp4
           node tools/test_file_video.cjs App build/file.mp4
           node tools/test_waiting_screen.cjs App build/file.mp4
           mkdir -p build/sixty
