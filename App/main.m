@@ -3,6 +3,7 @@
 #import <ifaddrs.h>
 #import <arpa/inet.h>
 #import "Receiver.h"
+#import "BoundedDownload.h"
 #import "FloatingPreview.h"
 #import "YouTubePiP.h"
 #import "BackgroundSession.h"
@@ -111,6 +112,8 @@ static void SLActivityFinish(void) {
 @property(nonatomic,copy) NSString *homeFailure;
 @property(nonatomic) NSUInteger soundOnlyCheck;
 @property(nonatomic) BOOL carLeftWarned;
+@property(nonatomic) BOOL carAway;
+@property(nonatomic) NSTimeInterval carWarmAt;
 @property(nonatomic) BOOL discoveryPolicyDenied;
 @end
 @implementation Controller
@@ -166,7 +169,8 @@ static void SLActivityFinish(void) {
         [owner append:@"BACKGROUND RUNTIME ENDED: receiver, viewer link and media session retained. iOS may suspend this app without PiP. Returning to ScreenLink resumes the existing receiver; Start is not required to rebuild it."];
         if(!owner.preview.active&&!owner.youtubePiP.active && UIApplication.sharedApplication.applicationState==UIApplicationStateBackground)[owner beginGrace];
     };
-    [self append:@"Version 0.21.08 / build 145: phone sound of other apps (Messenger, Telegram). Apple Lossless sound is now unpacked by Apple's own open-source decoder instead of the iPhone unpacker that refused every packet, and sound locked with the newer AirPlay 2 key (shk) is opened too. Turn Phone sound On. The log line AIRPLAY SOUND now also says which lock the iPhone used."];
+    [self append:@"Version 0.21.09 / build 146: fast first start when you get into the car. When the car page comes back, the phone wakes everything by itself (CAR ARRIVED) and warms its mobile internet and YouTube connections (WARM-UP); Home shows Car ready. YouTube connections stay open between pieces. The car page reconnects every second when it wakes and warms its own connections and video decoder. Tip: when you get in, open iPhone Settings → Personal Hotspot until the car joins."];
+    [self append:@"Earlier build 145: phone sound of other apps (Messenger, Telegram). Apple Lossless sound is now unpacked by Apple's own open-source decoder instead of the iPhone unpacker that refused every packet, and sound locked with the newer AirPlay 2 key (shk) is opened too. Turn Phone sound On. The log line AIRPLAY SOUND now also says which lock the iPhone used."];
     [self append:@"Earlier build 144: the phone buzzes and shows a message when YouTube sends only sound (pick ScreenLink from the TV icon inside YouTube) or when the car leaves the Wi-Fi."];
     [self append:@"Earlier build 143: video first on the Wi-Fi. The car loads the far map squares only when there is no video or 8 s of picture is ready, so the map does not take the Wi-Fi the video needs. Car requests that arrive without the right address get an immediate try-again answer instead of waiting, and the log shows what they were. Includes build 142."];
     [self append:@"Earlier build 142: no more closing the app when the car gets stuck. If YouTube handed a video over but the car page says nothing for 20 s, ScreenLink reconnects the car by itself (log: CAR STUCK / CAR RECONNECT); Home then says Car is not answering, and the blue Start button does the same at once. If the car page got the video but shows no picture for 20 s, it reloads itself once. Includes build 141."];
@@ -334,6 +338,7 @@ static void SLActivityFinish(void) {
   else if(NSProcessInfo.processInfo.thermalState>=NSProcessInfoThermalStateSerious){level=2;status=@"Phone is hot";detail=@"Take it off the wireless charger and out of the sun, and close the floating video. Heat can drop the hotspot.";}
   else if(car>12&&[[self.receiver nativeMediaState][@"active"] boolValue]){level=3;status=@"Car is not answering";detail=@"ScreenLink reconnects by itself. Faster: tap the blue Start button. If the car still shows nothing, reload the page in the car.";}
   else if(car<0||car>12){level=2;status=@"Waiting for the car";detail=@"Open car.tesla4khmer.com/video in the car browser.";}
+  else if(self.carWarmAt>0&&NSProcessInfo.processInfo.systemUptime-self.carWarmAt<60&&![[self.receiver nativeMediaState][@"active"] boolValue]){level=1;status=@"Car ready";detail=@"Choose your video now: in YouTube tap the TV icon → ScreenLink VPN Phone. It starts fast.";}
   else{level=1;status=@"Car connected";detail=self.youtubePiP.active?@"Floating video is on. You can close it; ScreenLink stays awake without it.":@"Choose ScreenLink in YouTube’s AirPlay menu. You can leave this app; it stays awake.";}
  }
  self.dashboard.healthLevel=level;
@@ -364,7 +369,20 @@ static void SLActivityFinish(void) {
  // Build 142: YouTube handed a video over but the car page has said nothing for 20 s: fix it by itself (at most once a minute).
  {NSDictionary *health=[self.receiver linkHealth];double car=[health[@"carSeconds"] doubleValue];BOOL media=[[self.receiver nativeMediaState][@"active"] boolValue];NSTimeInterval now=NSProcessInfo.processInfo.systemUptime;
   if(media&&[health[@"hotspot"] boolValue]&&car>12){if(!self.carStuckSince)self.carStuckSince=now;}else self.carStuckSince=0;
-  if(self.carStuckSince&&now-self.carStuckSince>=20&&now-self.lastCarFix>60){[self append:@"CAR STUCK: YouTube handed the video over, but the car page has not asked for anything for 20 s."];[self fixCarLink:@"automatic"];}}
+  if(self.carStuckSince&&now-self.carStuckSince>=20&&now-self.lastCarFix>60){[self append:@"CAR STUCK: YouTube handed the video over, but the car page has not asked for anything for 20 s."];[self fixCarLink:@"automatic"];}
+  // Build 146: "car arrived" warm-up. When the car page comes back after being away (car asleep, Wi-Fi off), wake
+  // everything at once: listeners, AirPlay in YouTube's list, and the phone's mobile internet + YouTube connections.
+  // While the car waits with no video, keep the YouTube connections warm, so the first video starts like the second.
+  BOOL hotspot=[health[@"hotspot"] boolValue];
+  if(!hotspot||car<0||car>30)self.carAway=YES;
+  else if(car<=6){
+   if(self.carAway){self.carAway=NO;
+    if(!media){BOOL ok=[self.receiver resumeListenersIfNeeded];[self.receiver refreshDiscovery];[self append:[NSString stringWithFormat:@"CAR ARRIVED: the car page is back. Woke the phone side (listeners %@, AirPlay shown again) and started the warm-up.",ok?@"OK":@"could not all restart"]];}
+    self.carWarmAt=0;}
+   if(!media&&now-self.carWarmAt>=25){BOOL first=self.carWarmAt==0;self.carWarmAt=now;
+    SLWarmDownloads(@[[NSURL URLWithString:@"https://www.youtube.com/generate_204"],[NSURL URLWithString:@"https://manifest.googlevideo.com/generate_204"],[NSURL URLWithString:@"https://redirector.googlevideo.com/generate_204"]]);
+    if(first)[self append:@"WARM-UP: phone internet and YouTube connections are awake. Home shows Car ready."];}
+  }}
  if(![[self.receiver linkHealth][@"vpn"] boolValue]){self.vpnMissingChecks++;NSTimeInterval now=NSProcessInfo.processInfo.systemUptime;
   if(self.vpnMissingChecks>=2&&now-self.lastVPNRepair>30&&!self.mediaOnlyRestarting){self.lastVPNRepair=now;[self append:@"SELF-REPAIR: the 3.3.3.3 link is missing. Reconnecting ScreenLink VPN; the receiver keeps running."];
    __weak typeof(self) weak=self;[self.vpn connectRouteProbe:^(BOOL ok){typeof(self) owner=weak;if(!owner)return;[owner append:ok?@"SELF-REPAIR: ScreenLink VPN is back.":@"SELF-REPAIR: ScreenLink VPN could not reconnect. Open ScreenLink and tap Start."];if(ok&&owner.receiver.isRunning)[owner.receiver refreshDiscovery];[owner updateHome];}];}
