@@ -45,6 +45,10 @@ targets:
     - path: Maps
     - path: RTC
     - path: App
+    - path: ThirdParty/ALAC
+      excludes:
+      - LICENSE
+      - SOURCE-COMMIT
     - path: Vendor/RPiPlay/lib
       excludes:
       - '**/CMakeLists.txt'
@@ -97,8 +101,8 @@ targets:
       path: App/Info.plist
       properties:
         CFBundleDisplayName: ScreenLink
-        CFBundleShortVersionString: 0.21.07
-        CFBundleVersion: '144'
+        CFBundleShortVersionString: 0.21.08
+        CFBundleVersion: '145'
         UILaunchScreen: {}
         NSSupportsLiveActivities: true
         CFBundleURLTypes:
@@ -154,8 +158,8 @@ targets:
       path: Tunnel/Info.plist
       properties:
         CFBundleDisplayName: ScreenLink Local VPN
-        CFBundleShortVersionString: 0.21.07
-        CFBundleVersion: '144'
+        CFBundleShortVersionString: 0.21.08
+        CFBundleVersion: '145'
         NSExtension:
           NSExtensionPointIdentifier: com.apple.networkextension.packet-tunnel
           NSExtensionPrincipalClass: PacketTunnelProvider
@@ -226,8 +230,8 @@ targets:
       path: Broadcast/Info.plist
       properties:
         CFBundleDisplayName: ScreenLink Screen
-        CFBundleShortVersionString: 0.21.07
-        CFBundleVersion: '144'
+        CFBundleShortVersionString: 0.21.08
+        CFBundleVersion: '145'
         NSLocalNetworkUsageDescription: Share the live iPhone screen and AirPlay media with your hotspot viewer during a screen broadcast.
         NSBonjourServices:
         - _airplay._tcp
@@ -262,8 +266,8 @@ targets:
       path: Widgets/Info.plist
       properties:
         CFBundleDisplayName: ScreenLink
-        CFBundleShortVersionString: 0.21.07
-        CFBundleVersion: '144'
+        CFBundleShortVersionString: 0.21.08
+        CFBundleVersion: '145'
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
           NSExceptionDomains:

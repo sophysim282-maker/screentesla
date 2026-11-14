@@ -69,14 +69,25 @@ final class SLAirPlaySound: NSObject {
             lastReport = Date()
             let kind = ct == 2 ? "Apple Lossless" : ct == 4 ? "AAC" : ct == 8 ? "AAC-ELD" : "unknown (\(ct))"
             let route = AVAudioSession.sharedInstance().currentRoute.outputs.map { $0.portType.rawValue }.joined(separator: ",")
-            log?("AIRPLAY SOUND: \(packets) packets arrived (kind \(kind), \(spf) samples each); unpacked \(unpacked), failed \(failed), with real sound \(loud), played on the phone \(played). Phone sound switch: \(on ? "On" : "Off"). ScreenLink's sound exit now: \(route.isEmpty ? "none" : route).\(blockedNote)")
+            log?("AIRPLAY SOUND: \(packets) packets arrived (kind \(kind), \(spf) samples each); unpacked \(unpacked), failed \(failed), with real sound \(loud), played on the phone \(played). Phone sound switch: \(on ? "On" : "Off"). ScreenLink's sound exit now: \(route.isEmpty ? "none" : route).\(blockedNote)\(on && ct == 2 ? sl_lockNote() : "")")
             packets = 0; unpacked = 0; failed = 0; loud = 0; played = 0
         }
         guard on, data.count > 4 else { return }
+        // Build 145: Apple Lossless is unpacked by Apple's open-source decoder (ThirdParty/ALAC), not by the
+        // iPhone's own unpacker, which refused every AirPlay packet ("!dat").
+        if ct == 2 {
+            checkKey(data)
+            guard let pcm = decodeALAC(data, spf) else {
+                failed += 1
+                if failed == 1 || failed % 500 == 0 { log?("AIRPLAY SOUND: Apple Lossless packet could not be unpacked (\(data.count) bytes, first bytes \(data.prefix(6).map { String(format: "%02x", $0) }.joined(separator: " ")))\(sl_lockNote())).") }
+                return
+            }
+            play(pcm)
+            return
+        }
         let wanted = "\(ct)/\(spf)"
         if wanted != key { key = wanted; prepare(ct, spf) }
         guard let converter, let inFormat else { failed += 1; return }
-        if ct == 2 { checkKey(data) }
 
         let packet = AVAudioCompressedBuffer(format: inFormat, packetCapacity: 1, maximumPacketSize: max(data.count, 8192))
         data.withUnsafeBytes { raw in if let base = raw.baseAddress { memcpy(packet.data, base, data.count) } }
@@ -106,6 +117,36 @@ final class SLAirPlaySound: NSObject {
             }
             return
         }
+        play(pcm)
+    }
+
+    /// Build 145: one Apple Lossless packet → phone-speaker sound (16-bit stereo, 44.1 kHz).
+    private static func decodeALAC(_ data: Data, _ spf: Int) -> AVAudioPCMBuffer? {
+        guard let alac = NSClassFromString("SLALAC") as? NSObject.Type,
+              let out = alac.perform(NSSelectorFromString("decode:frames:"), with: data, with: NSNumber(value: spf > 0 ? spf : 352))?.takeUnretainedValue() as? Data,
+              out.count >= 4 else { return nil }
+        let frames = out.count / 4
+        guard let pcm = AVAudioPCMBuffer(pcmFormat: outFormat, frameCapacity: AVAudioFrameCount(frames)), let channels = pcm.floatChannelData else { return nil }
+        pcm.frameLength = AVAudioFrameCount(frames)
+        out.withUnsafeBytes { raw in
+            let samples = raw.bindMemory(to: Int16.self)
+            for i in 0..<frames {
+                channels[0][i] = Float(Int16(littleEndian: samples[2 * i])) / 32768
+                channels[1][i] = Float(Int16(littleEndian: samples[2 * i + 1])) / 32768
+            }
+        }
+        return pcm
+    }
+
+    /// Which lock the iPhone used for this sound (for the log).
+    private static func sl_lockNote() -> String {
+        guard let keys = NSClassFromString("SLAudioKey") as? NSObject.Type,
+              let note = keys.perform(NSSelectorFromString("lockNote"))?.takeUnretainedValue() as? String, !note.isEmpty else { return "" }
+        return "; " + note
+    }
+
+    private static func play(_ pcm: AVAudioPCMBuffer) {
+        guard let channels = pcm.floatChannelData else { return }
         unpacked += 1
         if badInRow > 0 || !unlockedLogged {
             if !unlockedLogged { unlockedLogged = true; log?("AIRPLAY SOUND: unlocked and unpacked ✓ (\(keySwitches) key switch(es)).") }

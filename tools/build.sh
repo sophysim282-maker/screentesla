@@ -82,6 +82,9 @@ build/test-video-inbox
 xcrun --sdk macosx clang -fobjc-arc -fblocks -IApp tools/test_vpn_discovery.m App/VPNDiscovery.m -framework Foundation -o build/test-vpn-discovery
 build/test-vpn-discovery | tee build/xcodebuild.log
 python3 tools/prepare_receiver.py
+cc -std=c11 -Wall -I"$openssl_root/include" -L"$openssl_root/lib" -Wl,-rpath,"$openssl_root/lib" -IVendor/RPiPlay/lib tools/test_audio_chacha.c Vendor/RPiPlay/lib/raop_buffer.c Vendor/RPiPlay/lib/crypto.c Vendor/RPiPlay/lib/logger.c -lcrypto -o build/test-audio-chacha
+build/test-audio-chacha
+c++ -std=c++11 -IThirdParty/ALAC -c ThirdParty/ALAC/sl_alac.cpp -o build/sl_alac.o
 python3 tools/fetch_hls.py
 python3 tools/fetch_canvas.py
 cc -IVendor/RPiPlay/lib tools/test_http_completion.c Vendor/RPiPlay/lib/http_request.c Vendor/RPiPlay/lib/http_response.c Vendor/RPiPlay/lib/llhttp/api.c Vendor/RPiPlay/lib/llhttp/http.c Vendor/RPiPlay/lib/llhttp/llhttp.c -o build/test-http-completion
@@ -165,7 +168,7 @@ assert w.get('CFBundlePackageType')=='XPC!'
 widget_binary=(widget/w['CFBundleExecutable']).read_bytes()
 for kind in [b'ScreenLink.Controls',b'ScreenLink.CarPlayer',b'CarPlayerIntent',b'start-youtube',b'disconnect-all']:
     assert kind in widget_binary, 'Widget control route/configuration missing: '+str(kind)
-assert parent['CFBundleVersion']=='144' and parent['CFBundleShortVersionString']=='0.21.07'
+assert parent['CFBundleVersion']=='145' and parent['CFBundleShortVersionString']=='0.21.08'
 assert parent.get('CFBundleIcons',{}).get('CFBundlePrimaryIcon',{}).get('CFBundleIconName')=='AppIcon'
 assert (app/'Assets.car').is_file() and (app/'ScreenLinkCover.png').is_file()
 assert parent['NSSupportsLiveActivities']

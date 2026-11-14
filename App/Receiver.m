@@ -163,14 +163,18 @@ void sl_media_closed(void *owner,void *connection){[(__bridge Receiver *)owner m
 // Build 128: each AirPlay sound packet goes to SLAirPlaySound (Maps/AirPlaySound.swift), which can play the
 // sound of other apps on the phone speaker. sl_audio_ct / sl_audio_spf come from the library patch.
 extern int sl_audio_ct,sl_audio_spf,sl_audio_rawkey;
+extern int sl_audio_shk_len,sl_audio_chacha_ok,sl_audio_chacha_fail;extern char sl_audio_keys[200];
 // Build 132: lets the sound player switch between the two sound keys (see tools/prepare_receiver.py).
 @interface SLAudioKey : NSObject
 + (void)setRaw:(NSNumber *)raw;
 + (NSNumber *)raw;
++ (NSString *)lockNote;
 @end
 @implementation SLAudioKey
 + (void)setRaw:(NSNumber *)raw {sl_audio_rawkey=raw.boolValue?1:0;}
 + (NSNumber *)raw {return @(sl_audio_rawkey!=0);}
+// Build 145: which lock the iPhone used for the sound, for the log.
++ (NSString *)lockNote {return [NSString stringWithFormat:@"sound setup fields: %s; newer lock key sent: %@; opened with it %d, not opened %d",sl_audio_keys[0]?sl_audio_keys:"(none seen)",sl_audio_shk_len==32?@"yes":@"no",sl_audio_chacha_ok,sl_audio_chacha_fail];}
 @end
 @protocol SLAirPlaySoundAPI
 + (void)packet:(NSData *)data ct:(NSInteger)ct spf:(NSInteger)spf;

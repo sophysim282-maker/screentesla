@@ -259,3 +259,66 @@ if 'sl_rawkey' not in s:
     s = s.replace(marker, 'int sl_audio_rawkey = 0;\n\n' + marker, 1)
     p.write_text(s)
 
+
+# Build 145: newer AirPlay 2 sound lock. When the iPhone sends a 32-byte "shk" key with the sound stream, its
+# sound packets are locked with ChaCha20-Poly1305 (nonce = last 8 bytes, tag = 16 bytes before it, extra data =
+# RTP header bytes 4..11), not with the old AES key. Open those here; fall back to the old way if it fails.
+# Also remember which fields the stream setup had, for the log.
+p = vendor / 'lib' / 'raop_handlers.h'
+s = p.read_text()
+if 'sl_audio_shk' not in s:
+    marker = 'plist_get_uint_val(sl_node, &sl_value); sl_audio_spf = (int) sl_value; }\n                    }\n'
+    assert marker in s
+    s = s.replace(marker, marker + """                    {
+                        plist_t sl_shk = plist_dict_get_item(req_stream_node, "shk");
+                        sl_audio_shk_len = 0;
+                        if (sl_shk && plist_get_node_type(sl_shk) == PLIST_DATA) {
+                            char *sl_v = NULL; uint64_t sl_n = 0; plist_get_data_val(sl_shk, &sl_v, &sl_n);
+                            if (sl_v && sl_n == 32) { memcpy(sl_audio_shk, sl_v, 32); sl_audio_shk_len = 32; }
+                            free(sl_v);
+                        }
+                        sl_audio_keys[0] = 0;
+                        plist_dict_iter sl_it = NULL; plist_dict_new_iter(req_stream_node, &sl_it);
+                        if (sl_it) {
+                            for (;;) {
+                                char *sl_key = NULL; plist_t sl_val = NULL;
+                                plist_dict_next_item(req_stream_node, sl_it, &sl_key, &sl_val);
+                                if (!sl_key) break;
+                                if (strlen(sl_audio_keys) + strlen(sl_key) + 2 < sizeof(sl_audio_keys)) { strcat(sl_audio_keys, sl_key); strcat(sl_audio_keys, " "); }
+                                free(sl_key);
+                            }
+                            free(sl_it);
+                        }
+                    }
+""", 1)
+    s = 'unsigned char sl_audio_shk[32];\nint sl_audio_shk_len = 0;\nchar sl_audio_keys[200] = {0};\n' + s
+    p.write_text(s)
+
+p = vendor / 'lib' / 'raop_buffer.c'
+s = p.read_text()
+if 'sl_audio_chacha_ok' not in s:
+    marker = '    encryptedlen = payload_size / 16*16;\n    memset(output, 0, payload_size);\n'
+    assert marker in s
+    s = s.replace(marker, """    if (sl_audio_shk_len == 32 && payload_size > 24) {
+        int sl_ok = 0, sl_len = 0, sl_fin = 0;
+        unsigned int sl_clen = payload_size - 24;
+        unsigned char sl_nonce[12] = {0};
+        memcpy(sl_nonce + 4, &data[12 + payload_size - 8], 8);
+        EVP_CIPHER_CTX *sl_ctx = EVP_CIPHER_CTX_new();
+        if (sl_ctx && EVP_DecryptInit_ex(sl_ctx, EVP_chacha20_poly1305(), NULL, NULL, NULL)
+            && EVP_CIPHER_CTX_ctrl(sl_ctx, EVP_CTRL_AEAD_SET_IVLEN, 12, NULL)
+            && EVP_DecryptInit_ex(sl_ctx, NULL, NULL, sl_audio_shk, sl_nonce)
+            && EVP_DecryptUpdate(sl_ctx, NULL, &sl_len, &data[4], 8)
+            && EVP_DecryptUpdate(sl_ctx, output, &sl_len, &data[12], (int) sl_clen)
+            && EVP_CIPHER_CTX_ctrl(sl_ctx, EVP_CTRL_AEAD_SET_TAG, 16, &data[12 + sl_clen])
+            && EVP_DecryptFinal_ex(sl_ctx, output + sl_len, &sl_fin) > 0) sl_ok = 1;
+        if (sl_ctx) EVP_CIPHER_CTX_free(sl_ctx);
+        if (sl_ok) { sl_audio_chacha_ok++; *outputlen = sl_clen; return 1; }
+        sl_audio_chacha_fail++;
+    }
+""" + marker, 1)
+    s = s.replace('int sl_audio_rawkey = 0;\n', 'int sl_audio_rawkey = 0;\nint sl_audio_chacha_ok = 0, sl_audio_chacha_fail = 0;\nextern unsigned char sl_audio_shk[32];\nextern int sl_audio_shk_len;\n', 1)
+    assert 'sl_audio_chacha_ok = 0' in s
+    if '#include <openssl/evp.h>' not in s:
+        s = '#include <openssl/evp.h>\n' + s
+    p.write_text(s)
