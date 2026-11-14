@@ -1,4 +1,5 @@
 #import <UIKit/UIKit.h>
+#import <AudioToolbox/AudioToolbox.h>
 #import <ifaddrs.h>
 #import <arpa/inet.h>
 #import "Receiver.h"
@@ -109,6 +110,7 @@ static void SLActivityFinish(void) {
 @property(nonatomic,strong) NSURLSession *disconnectSession;
 @property(nonatomic,copy) NSString *homeFailure;
 @property(nonatomic) NSUInteger soundOnlyCheck;
+@property(nonatomic) BOOL carLeftWarned;
 @property(nonatomic) BOOL discoveryPolicyDenied;
 @end
 @implementation Controller
@@ -164,7 +166,8 @@ static void SLActivityFinish(void) {
         [owner append:@"BACKGROUND RUNTIME ENDED: receiver, viewer link and media session retained. iOS may suspend this app without PiP. Returning to ScreenLink resumes the existing receiver; Start is not required to rebuild it."];
         if(!owner.preview.active&&!owner.youtubePiP.active && UIApplication.sharedApplication.applicationState==UIApplicationStateBackground)[owner beginGrace];
     };
-    [self append:@"Version 0.21.06 / build 143: video first on the Wi-Fi. The car loads the far map squares only when there is no video or 8 s of picture is ready, so the map does not take the Wi-Fi the video needs. Car requests that arrive without the right address get an immediate try-again answer instead of waiting, and the log shows what they were. Includes build 142."];
+    [self append:@"Version 0.21.07 / build 144: faster video start. The car plays the first piece of each video in 720p (small, quick), then moves up to your quality (1080p, 1440p or 4K) at the next piece without stopping. The phone warms that 720p piece first. The phone buzzes and shows a message when YouTube sends only sound (pick ScreenLink from the TV icon inside YouTube) or when the car leaves the Wi-Fi."];
+    [self append:@"Earlier build 143: video first on the Wi-Fi. The car loads the far map squares only when there is no video or 8 s of picture is ready, so the map does not take the Wi-Fi the video needs. Car requests that arrive without the right address get an immediate try-again answer instead of waiting, and the log shows what they were. Includes build 142."];
     [self append:@"Earlier build 142: no more closing the app when the car gets stuck. If YouTube handed a video over but the car page says nothing for 20 s, ScreenLink reconnects the car by itself (log: CAR STUCK / CAR RECONNECT); Home then says Car is not answering, and the blue Start button does the same at once. If the car page got the video but shows no picture for 20 s, it reloads itself once. Includes build 141."];
     [self append:@"Earlier build 141: car map like the phone map. The car uses the same map type as the phone (satellite with names, or road map) with traffic, names and icons twice as big, a thicker blue route and a bigger blue arrow with a white glow; each map square is 4 times lighter, so the car map loads faster. Includes build 140."];
     [self append:@"Earlier build 140: auto zoom on the car map like Google Maps. It zooms in smoothly as a turn comes closer (from 300 m), zooms out a little when you drive fast, and changes gently; the + and - buttons still move it from there. Includes build 139."];
@@ -420,11 +423,17 @@ static void SLActivityFinish(void) {
 - (void)append:(NSString *)s { if(!NSThread.isMainThread){dispatch_async(dispatch_get_main_queue(),^{[self append:s];});return;}[SLStreamNotifier handleLogMessage:s appActive:UIApplication.sharedApplication.applicationState==UIApplicationStateActive];
  // Build 90: YouTube sometimes treats ScreenLink as a speaker (AirPlay sound only, no MEDIA PLAY REQUEST).
  // Then the car gets no new video and PiP holds the old one. Tell the user how to fix it.
+ // Build 144: buzz the phone when something needs the user: YouTube sent only sound, or the car left the Wi-Fi.
+ if([s hasPrefix:@"YOUTUBE SENT SOUND ONLY"]||[s hasPrefix:@"CAR LEFT THE WI-FI"])AudioServicesPlaySystemSound(kSystemSoundID_Vibrate);
+ if([s hasPrefix:@"WEBSITE BACK"]){self.carLeftWarned=NO;if([self.homeFailure hasPrefix:@"Car left"]){self.homeFailure=nil;[self updateHome];}}
+ else if([s hasPrefix:@"WEBSITE STILL LOST"]&&!self.carLeftWarned){self.carLeftWarned=YES;BOOL off=[s containsString:@"Personal Hotspot: OFF"];
+  self.homeFailure=off?@"Car left the Wi-Fi. Check the car’s Wi-Fi icon and join this iPhone again. The video goes on when it is back.":@"Car left the Wi-Fi or its browser stopped. Check the car’s Wi-Fi icon. If it shows this iPhone, reload the page in the car.";
+  __weak Controller *weakSelf=self;dispatch_async(dispatch_get_main_queue(),^{[weakSelf append:off?@"CAR LEFT THE WI-FI: the car is not on the Personal Hotspot any more.":@"CAR LEFT THE WI-FI: the car stopped talking to the phone (the hotspot is still on)."];});}
  if([s hasPrefix:@"MEDIA PLAY REQUEST"]){self.soundOnlyCheck++;if([self.homeFailure hasPrefix:@"YouTube sent sound only"]){self.homeFailure=nil;[self updateHome];}}
  else if([s hasPrefix:@"raop_rtp starting audio"]&&self.receiver.mediaOnly){NSUInteger check=++self.soundOnlyCheck;__weak Controller *weakSelf=self;
   dispatch_after(dispatch_time(DISPATCH_TIME_NOW,(int64_t)(5*NSEC_PER_SEC)),dispatch_get_main_queue(),^{Controller *owner=weakSelf;
    if(!owner||check!=owner.soundOnlyCheck||!owner.receiver.isRunning||[[owner.receiver nativeMediaState][@"active"] boolValue])return;
-   owner.homeFailure=@"YouTube sent sound only, so the car gets no video. In YouTube, tap AirPlay and choose ScreenLink VPN Phone again, or play the video again.";[owner updateHome];
+   owner.homeFailure=@"YouTube sent sound only, so the car gets no video. Pick ScreenLink from the TV icon inside YouTube (at the top of the video), not from Control Center.";[owner updateHome];
    [owner append:@"YOUTUBE SENT SOUND ONLY: YouTube is using ScreenLink as a speaker (AirPlay audio), so the car gets no new video and PiP keeps the old one. In YouTube, tap AirPlay and choose ScreenLink VPN Phone again, or start the video again."];});}[self updateHome];self.text.text=[self.text.text stringByAppendingFormat:@"\n%@ %@\n",[NSDate date],s];if(self.text.text.length>24000)self.text.text=[self.text.text substringFromIndex:self.text.text.length-18000];[self.text scrollRangeToVisible:NSMakeRange(self.text.text.length,0)]; }
 - (void)widgetDiagnostics {
  Class cls=NSClassFromString(@"SLWidgetActivity");

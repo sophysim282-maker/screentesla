@@ -4,6 +4,8 @@ Read this first. It replaces reading the old 400k-token conversation.
 
 ## WHERE WE ARE NOW (read this part first)
 
+- **Build 144 (0.21.07), branch `release/build144-fast-start`:** first piece in 720p then up to the chosen quality without stopping (CanvasPlayer upgrade lane, phone warms 720p first); buzz + Home message for sound-only and car left the Wi-Fi. See BUILD144.md.
+
 - **Build 143 (0.21.06), branch `release/build143-video-first`:** far map squares only when video is safe; 421 for no-Host requests. See BUILD143.md.
 
 - **Build 142 (0.21.05), branch `release/build142-car-reconnect`:** automatic car reconnect + stuck-page reload. NEED a log of a stuck case. See BUILD142.md.
