@@ -52,6 +52,16 @@ static NSString *SLOtherSound(void){
     double _position,_duration,_start,_fraction,_heartbeat,_rate,_seekPosition;
     NSString *_commandKind;
     NSString *_error,*_eventState;
+    // Build 149: read-ahead store. While the internet is good the phone downloads the next pieces of the
+    // playing video (up to about 3 minutes) into phone storage, so a minute without internet does not stop
+    // the car. Deleted when the video changes or stops.
+    NSMutableDictionary<NSString *,NSArray *> *_pieceLists;      // playlist location -> @[@[url, seconds], ...]
+    NSMutableDictionary<NSString *,NSArray *> *_pieceAt;         // piece url -> @[playlist location, index]
+    NSMutableDictionary<NSString *,NSString *> *_ahead;          // piece url -> file path
+    NSMutableDictionary<NSString *,NSNumber *> *_aheadFront,*_aheadActive;
+    NSMutableSet<NSString *> *_aheadLoading;
+    NSString *_aheadEpoch;long long _aheadBytes;NSUInteger _aheadFiles;
+    NSMutableArray<NSNumber *> *_slowRatios;BOOL _slowWarned;
 }
 @end
 static NSData *plistData(id object){return [NSPropertyListSerialization dataWithPropertyList:object format:NSPropertyListXMLFormat_v1_0 options:0 error:NULL];}
@@ -95,6 +105,8 @@ static BOOL sendBytes(int fd,NSData *data){const char *p=data.bytes;NSUInteger n
 // Build 122 (TikTok): whole file videos kept on the phone for a short time (the playing one and the next
 // ones on the page). The car asks for a file video in byte ranges; with the whole file here every range is
 // answered at once from memory, so the next video starts without waiting for the internet.
+static NSString *SLAheadFolder(void){return [NSTemporaryDirectory() stringByAppendingPathComponent:@"ScreenLinkAhead"];}
+static const double SLAheadSeconds=180;static const long long SLAheadBudget=900LL*1024*1024;static const NSInteger SLAheadParallel=3;
 static __weak MediaCast *SLCurrentCast;
 static NSMutableDictionary<NSString *,NSData *> *SLFiles;static NSMutableArray<NSString *> *SLFileOrder;static NSMutableSet<NSString *> *SLFileLoading;
 static NSData *SLWholeFile(NSString *location){@synchronized(MediaCast.class){return location?SLFiles[location]:nil;}}
@@ -118,7 +130,7 @@ static NSData *SLWholeFile(NSString *location){@synchronized(MediaCast.class){re
         [cast log:good?[NSString stringWithFormat:@"MEDIA FILE READY: a whole video is on the phone (%lu KB, %.1f s). The car gets its parts from memory.",(unsigned long)(data.length/1024),[download[@"ms"] doubleValue]/1000.0]:[NSString stringWithFormat:@"MEDIA FILE NOT PREPARED: HTTP %ld, %@.",(long)[download[@"code"] integerValue],download[@"why"]?:@"no data"]];
     });
 }
-- (instancetype)init{if((self=[super init])){_ready=[NSCondition new];_events=dispatch_queue_create("ScreenLink.media.events",DISPATCH_QUEUE_SERIAL);_reverse=-1;_resources=[NSMutableDictionary dictionary];_identifiers=[NSMutableDictionary dictionary];_cache=[NSMutableDictionary dictionary];_late=[NSMutableDictionary dictionary];_pending=[NSMutableDictionary dictionary];_prefetch=[NSMutableOrderedSet orderedSet];_playlistLinks=[NSMutableDictionary dictionary];_playlistTimes=[NSMutableDictionary dictionary];_inflight=[NSMutableDictionary dictionary];_retiredLinks=[NSMutableArray array];_selectedPlaylists=[NSMutableOrderedSet orderedSet];_warm=[NSMutableDictionary dictionary];_warming=[NSMutableSet set];_warmTargets=[NSMutableOrderedSet orderedSet];_epoch=NSUUID.UUID.UUIDString;}return self;}
+- (instancetype)init{if((self=[super init])){_ready=[NSCondition new];_pieceLists=[NSMutableDictionary dictionary];_pieceAt=[NSMutableDictionary dictionary];_ahead=[NSMutableDictionary dictionary];_aheadFront=[NSMutableDictionary dictionary];_aheadActive=[NSMutableDictionary dictionary];_aheadLoading=[NSMutableSet set];_slowRatios=[NSMutableArray array];[NSFileManager.defaultManager removeItemAtPath:SLAheadFolder() error:nil];_events=dispatch_queue_create("ScreenLink.media.events",DISPATCH_QUEUE_SERIAL);_reverse=-1;_resources=[NSMutableDictionary dictionary];_identifiers=[NSMutableDictionary dictionary];_cache=[NSMutableDictionary dictionary];_late=[NSMutableDictionary dictionary];_pending=[NSMutableDictionary dictionary];_prefetch=[NSMutableOrderedSet orderedSet];_playlistLinks=[NSMutableDictionary dictionary];_playlistTimes=[NSMutableDictionary dictionary];_inflight=[NSMutableDictionary dictionary];_retiredLinks=[NSMutableArray array];_selectedPlaylists=[NSMutableOrderedSet orderedSet];_warm=[NSMutableDictionary dictionary];_warming=[NSMutableSet set];_warmTargets=[NSMutableOrderedSet orderedSet];_epoch=NSUUID.UUID.UUIDString;}return self;}
 - (void)log:(NSString *)text{if(self.status)self.status(text);}
 - (BOOL)active{[_ready lock];BOOL value=_active;[_ready unlock];return value;}
 - (BOOL)videoIsLive{[_ready lock];BOOL value=_active && _readyToPlay && NSProcessInfo.processInfo.systemUptime-_heartbeat<10;[_ready unlock];return value;}
@@ -239,7 +251,7 @@ static NSData *SLWholeFile(NSString *location){@synchronized(MediaCast.class){re
         if(expired){[self log:@"MEDIA: a playlist request timed out; retaining the current session for retry."];[self drivePrefetch];}
     });
 }
-- (NSDictionary *)state{[_ready lock];NSString *path=_primary?[self registerURL:_primary]:nil;NSDictionary *state=@{@"receiverProfile":@"AppleTV3,2",@"sourceHeights":_sourceHeights?:@[],@"active":@(_active),@"ready":@(_readyToPlay),@"epoch":_epoch,@"url":path?:@"",@"command":@(_command),@"commandKind":_commandKind?:@"rate",@"seek":@(_seekPosition),@"paused":@(_paused),@"position":@(_position),@"duration":@(_duration),@"start":@(_start),@"fraction":@(_fraction),@"error":_error?:@"",@"kind":SLMediaKind(_primary)};[_ready unlock];return state;}
+- (NSDictionary *)state{[_ready lock];NSString *path=_primary?[self registerURL:_primary]:nil;NSDictionary *state=@{@"receiverProfile":@"AppleTV3,2",@"sourceHeights":_sourceHeights?:@[],@"active":@(_active),@"ready":@(_readyToPlay),@"epoch":_epoch,@"url":path?:@"",@"command":@(_command),@"commandKind":_commandKind?:@"rate",@"seek":@(_seekPosition),@"paused":@(_paused),@"position":@(_position),@"duration":@(_duration),@"start":@(_start),@"fraction":@(_fraction),@"error":_error?:@"",@"kind":SLMediaKind(_primary),@"phoneAhead":@([_aheadEpoch isEqual:_epoch]?[self aheadSecondsLocked]:0)};[_ready unlock];return state;}
 - (void)report:(NSDictionary *)report{
     NSString *event=nil,*session=nil,*newError=nil;[_ready lock];
     if(![report[@"epoch"] isEqual:_epoch] || !_active){[_ready unlock];return;}
@@ -334,6 +346,90 @@ static NSData *SLWholeFile(NSString *location){@synchronized(MediaCast.class){re
     if([path isEqual:@"/stop"]){[_ready lock];_active=NO;_readyToPlay=NO;_command++;[_ready broadcast];[_ready unlock];[self reply:response status:200 type:nil data:nil];[self log:@"MEDIA: sender stopped native playback."];return YES;}
     [self reply:response status:200 type:@"text/x-apple-plist+xml" data:plistData(@{@"errorCode":@0})];return YES;
 }
+// ---------- Build 149: read-ahead store ----------
+// Called with _ready locked. A new video (new epoch) empties the store.
+- (void)aheadResetIfNeeded {
+    if([_aheadEpoch isEqual:_epoch])return;
+    NSString *old=_aheadEpoch;_aheadEpoch=_epoch;[_pieceLists removeAllObjects];[_pieceAt removeAllObjects];[_ahead removeAllObjects];[_aheadFront removeAllObjects];[_aheadActive removeAllObjects];[_aheadLoading removeAllObjects];_aheadBytes=0;[_slowRatios removeAllObjects];_slowWarned=NO;
+    if(old.length){NSString *folder=[SLAheadFolder() stringByAppendingPathComponent:old];dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY,0),^{[NSFileManager.defaultManager removeItemAtPath:folder error:nil];});}
+}
+// Remember the order and length of the pieces of a media playlist (not a master list, not byte ranges).
+- (void)notePieces:(NSString *)text base:(NSURL *)base location:(NSString *)location epoch:(NSString *)epoch {
+#if !SL_BROADCAST_EXTENSION
+    if([text containsString:@"#EXT-X-STREAM-INF"]||[text containsString:@"#EXT-X-BYTERANGE"]||![text containsString:@"#EXTINF"])return;
+    NSMutableArray *pieces=[NSMutableArray array];double seconds=-1;
+    for(NSString *raw in [text componentsSeparatedByCharactersInSet:NSCharacterSet.newlineCharacterSet]){NSString *line=[raw stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceCharacterSet];if(!line.length)continue;
+        if([line hasPrefix:@"#EXTINF:"]){seconds=[[line substringFromIndex:8] doubleValue];continue;}
+        if([line hasPrefix:@"#"])continue;
+        NSURL *piece=[NSURL URLWithString:line relativeToURL:base].absoluteURL;if(piece&&webURL(piece)&&seconds>0)[pieces addObject:@[piece.absoluteString,@(seconds)]];seconds=-1;}
+    if(pieces.count<2)return;
+    [_ready lock];
+    if([epoch isEqual:_epoch]){[self aheadResetIfNeeded];
+        if(!_pieceLists[location]){_pieceLists[location]=pieces;[pieces enumerateObjectsUsingBlock:^(NSArray *piece,NSUInteger i,BOOL *stop){self->_pieceAt[piece[0]]=@[location,@(i)];}];}}
+    [_ready unlock];
+#endif
+}
+- (NSMutableURLRequest *)pieceRequest:(NSURL *)url {
+    NSMutableURLRequest *request=[NSMutableURLRequest requestWithURL:url];[request setValue:@"AppleCoreMedia/1.0 ScreenLink" forHTTPHeaderField:@"User-Agent"];
+    {Class provider=NSClassFromString(@"SLMediaHeaders");NSDictionary *more=provider&&url.host.length?[(id<SLMediaHeadersAPI>)provider headersForHost:url.host]:nil;if([more isKindOfClass:NSDictionary.class])for(NSString *name in more)if([more[name] isKindOfClass:NSString.class])[request setValue:more[name] forHTTPHeaderField:name];}
+    return request;
+}
+// The car asked for `pieceURL`: keep downloading the pieces after it, up to about 3 minutes ahead.
+- (void)aheadAfter:(NSString *)pieceURL {
+#if !SL_BROADCAST_EXTENSION
+    NSMutableArray *start=[NSMutableArray array];NSString *epoch;
+    [_ready lock];
+    [self aheadResetIfNeeded];epoch=_epoch;
+    NSArray *pos=_pieceAt[pieceURL];
+    if(pos&&_active){
+        NSString *list=pos[0];NSInteger index=[pos[1] integerValue];NSArray *pieces=_pieceLists[list];
+        if(index>[_aheadFront[list] integerValue]||!_aheadFront[list])_aheadFront[list]=@(index);
+        NSInteger front=[_aheadFront[list] integerValue];
+        // Throw away pieces the car has already played (keep 3 behind for a quick reconnect).
+        for(NSInteger i=0;i<front-3&&i<(NSInteger)pieces.count;i++){NSString *url=pieces[i][0];NSString *path=_ahead[url];if(path){unsigned long long size=[[NSFileManager.defaultManager attributesOfItemAtPath:path error:nil] fileSize];_aheadBytes-=(long long)size;[_ahead removeObjectForKey:url];[NSFileManager.defaultManager removeItemAtPath:path error:nil];}}
+        double seconds=0;NSInteger active=[_aheadActive[list] integerValue];
+        for(NSInteger i=front+1;i<(NSInteger)pieces.count&&seconds<SLAheadSeconds&&active+(NSInteger)start.count<SLAheadParallel&&_aheadBytes<SLAheadBudget;i++){
+            NSString *url=pieces[i][0];seconds+=[pieces[i][1] doubleValue];
+            if(_ahead[url]||[_aheadLoading containsObject:url]||_warm[url]||[_warming containsObject:url])continue;
+            [_aheadLoading addObject:url];[start addObject:@[url,list]];}
+        _aheadActive[list]=@(active+(NSInteger)start.count);
+    }
+    [_ready unlock];
+    for(NSArray *job in start){NSString *url=job[0],*list=job[1];
+        dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY,0),^{
+            NSDictionary *download=SLBoundedDownload([self pieceRequest:[NSURL URLWithString:url]],32*1024*1024);NSData *body=download[@"data"];NSInteger code=[download[@"code"] integerValue];
+            NSString *path=nil;
+            [self noteDownload:url ms:[download[@"ms"] integerValue]/SLAheadParallel bytes:body.length];   // 3 run at once: count the shared speed
+            if(code==200&&body.length){NSString *folder=[SLAheadFolder() stringByAppendingPathComponent:epoch];[NSFileManager.defaultManager createDirectoryAtPath:folder withIntermediateDirectories:YES attributes:nil error:nil];
+                [self->_ready lock];NSUInteger n=++self->_aheadFiles;[self->_ready unlock];
+                path=[folder stringByAppendingPathComponent:[NSString stringWithFormat:@"piece-%lu",(unsigned long)n]];if(![body writeToFile:path atomically:NO])path=nil;}
+            [self->_ready lock];
+            [self->_aheadLoading removeObject:url];self->_aheadActive[list]=@(MAX(0,[self->_aheadActive[list] integerValue]-1));
+            BOOL current=[epoch isEqual:self->_epoch]&&[epoch isEqual:self->_aheadEpoch];
+            if(path&&current){self->_ahead[url]=path;self->_aheadBytes+=(long long)body.length;}else if(path)[NSFileManager.defaultManager removeItemAtPath:path error:nil];
+            NSArray *pieces=self->_pieceLists[list];NSInteger front=[self->_aheadFront[list] integerValue];NSString *frontURL=current&&front<(NSInteger)pieces.count?pieces[front][0]:nil;
+            [self->_ready broadcast];[self->_ready unlock];
+            if(frontURL&&path)[self aheadAfter:frontURL];
+        });}
+#endif
+}
+// Seconds of the playing video stored on the phone after the piece the car asked for last (the largest list).
+- (NSInteger)aheadSecondsLocked {
+    double best=0;
+    for(NSString *list in _aheadFront){NSArray *pieces=_pieceLists[list];double seconds=0;
+        for(NSInteger i=[_aheadFront[list] integerValue]+1;i<(NSInteger)pieces.count;i++){if(!_ahead[pieces[i][0]])break;seconds+=[pieces[i][1] doubleValue];}
+        best=MAX(best,seconds);}
+    return (NSInteger)best;
+}
+// Build 149: is the internet too slow for the chosen quality? (download time / playing time of the last pieces)
+- (void)noteDownload:(NSString *)url ms:(NSInteger)ms bytes:(NSUInteger)bytes {
+    [_ready lock];NSArray *pos=_pieceAt[url];double seconds=pos?[_pieceLists[pos[0]][[pos[1] integerValue]][1] doubleValue]:0;BOOL warn=NO;double ratio=0;
+    if(seconds>0&&bytes>512*1024){[_slowRatios addObject:@(ms/1000.0/seconds)];while(_slowRatios.count>3)[_slowRatios removeObjectAtIndex:0];
+        for(NSNumber *r in _slowRatios)ratio+=r.doubleValue;ratio/=_slowRatios.count;
+        warn=!_slowWarned&&_slowRatios.count==3&&ratio>1.3&&self.warmHeight>=1440;if(warn)_slowWarned=YES;}
+    [_ready unlock];
+    if(warn)[self log:[NSString stringWithFormat:@"INTERNET TOO SLOW FOR %@: each piece takes %.1fx longer to download than to play. Auto quality (or 1080p) is about 4 times lighter.",self.warmHeight>=2160?@"4K":@"1440p",ratio]];
+}
 - (NSDictionary *)resource:(NSString *)identifier range:(NSString *)range{
     [_ready lock];NSString *location=_resources[identifier],*epoch=_epoch;
     if(location){
@@ -354,6 +450,13 @@ static NSData *SLWholeFile(NSString *location){@synchronized(MediaCast.class){re
         // must not cancel another waiter or a new epoch request for the same URL.
         [_ready unlock];mime=@"application/vnd.apple.mpegurl";
     }else if(webURL(url)){
+        // Build 149: the read-ahead store. Start loading the pieces after this one, and answer from phone
+        // storage when this piece is already there (or is being loaded right now: wait for it, no double download).
+        NSData *stored=nil;
+        if(!range.length){[self aheadAfter:location];
+            [_ready lock];NSDate *limit=[NSDate dateWithTimeIntervalSinceNow:30];while([epoch isEqual:_epoch]&&[_aheadLoading containsObject:location])if(![_ready waitUntilDate:limit])break;
+            NSString *path=[epoch isEqual:_epoch]?_ahead[location]:nil;[_ready unlock];
+            if(path)stored=[NSData dataWithContentsOfFile:path options:NSDataReadingMappedIfSafe error:nil];}
         // Build 114: a piece the phone downloaded early (or is still downloading: wait for it rather than
         // downloading the same piece twice). Only whole-piece requests; ranges take the normal path.
         NSDictionary *warm=nil;
@@ -368,7 +471,7 @@ static NSData *SLWholeFile(NSString *location){@synchronized(MediaCast.class){re
                 if(first<0||first>last)return @{@"code":@416};
                 data=[whole subdataWithRange:NSMakeRange((NSUInteger)first,(NSUInteger)(last-first+1))];code=206;contentRange=[NSString stringWithFormat:@"bytes %lld-%lld/%lu",first,last,(unsigned long)whole.length];
             }else{data=whole;code=200;}
-        }else if(warm){data=warm[@"data"];code=200;mime=warm[@"mime"];}else{
+        }else if(stored.length){data=stored;code=200;mime=@"video/mp2t";}else if(warm){data=warm[@"data"];code=200;mime=warm[@"mime"];}else{
         NSMutableURLRequest *request=[NSMutableURLRequest requestWithURL:url];[request setValue:@"AppleCoreMedia/1.0 ScreenLink" forHTTPHeaderField:@"User-Agent"];
         // Build 111 (TikTok test): TikTok only answers downloads that carry its page's referer, browser name and login.
         // SLMediaHeaders returns nothing for every other host, so YouTube downloads are exactly as before.
@@ -379,7 +482,7 @@ static NSData *SLWholeFile(NSString *location){@synchronized(MediaCast.class){re
 #else
         NSUInteger budget=32*1024*1024;
 #endif
-        NSDictionary *download=SLBoundedDownload(request,budget);data=download[@"data"];code=[download[@"code"] integerValue];mime=download[@"mime"];contentRange=download[@"range"];
+        NSDictionary *download=SLBoundedDownload(request,budget);data=download[@"data"];code=[download[@"code"] integerValue];mime=download[@"mime"];contentRange=download[@"range"];if(!range.length&&code==200)[self noteDownload:location ms:[download[@"ms"] integerValue] bytes:data.length];
         // Build 118: say so when the internet side was slow, needed another try, or failed.
         {NSInteger ms=[download[@"ms"] integerValue],tries=[download[@"tries"] integerValue];BOOL good=code>=200&&code<300&&data.length;
          if(ms>=3000||tries>1||!good)[self log:[NSString stringWithFormat:@"MEDIA PIECE %@: internet to phone took %.1f s, %ld %@, %lu KB%@. This is the download from the video site, not the car link.",good?(tries>1?@"RECOVERED":@"SLOW"):@"FAILED",ms/1000.0,(long)tries,tries==1?@"try":@"tries",(unsigned long)(data.length/1024),download[@"why"]?[@", reason: " stringByAppendingString:download[@"why"]]:@""]];}}
@@ -388,6 +491,7 @@ static NSData *SLWholeFile(NSString *location){@synchronized(MediaCast.class){re
     NSString *text=[[NSString alloc]initWithData:data encoding:NSUTF8StringEncoding];
     if([text hasPrefix:@"#EXTM3U"]){
         [self recordSourceHeights:data location:location epoch:epoch];
+        [self notePieces:text base:url location:location epoch:epoch];
         NSInteger rewriteCode;NSString *rewritten=[self rewrite:text base:url owner:location epoch:epoch code:&rewriteCode];
         if(!rewritten)return @{@"code":@(rewriteCode)};
         data=[rewritten dataUsingEncoding:NSUTF8StringEncoding];mime=@"application/vnd.apple.mpegurl";

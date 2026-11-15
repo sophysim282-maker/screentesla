@@ -18,6 +18,8 @@
     @"body":@"The car gets no video. Tap the TV icon inside YouTube (top of the video) and choose ScreenLink VPN Phone. Not from Control Center.",@"cooldown":@60},
   @{@"prefix":@"CAR LEFT THE WI-FI",@"id":@"car-left",@"title":@"Car left the Wi-Fi",
     @"body":@"Check the car’s Wi-Fi icon and join this iPhone again. The video goes on when the car is back.",@"cooldown":@120},
+  @{@"prefix":@"INTERNET TOO SLOW FOR",@"id":@"slow-quality",@"title":@"Internet too slow for this quality",
+    @"body":@"The car has to wait for the video. Open ScreenLink and choose Auto quality (about 4 times lighter).",@"cooldown":@600},
   @{@"prefix":@"WEBSITE SILENT",@"id":@"car-silent",@"title":@"Car screen lost the connection",
     @"body":@"Keep the car on your iPhone hotspot Wi-Fi. If it does not come back, reload car.tesla4khmer.com/video on the car.",@"cooldown":@120},
   @{@"prefix":@"Built-in VPN disconnected",@"id":@"vpn",@"title":@"ScreenLink VPN is off",
