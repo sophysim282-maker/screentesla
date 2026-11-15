@@ -280,7 +280,7 @@ static UIColor *SLGlassFill(void){return [UIColor colorWithRed:.43 green:.45 blu
   self.bigTime=[self white:@"Ready" size:46 weight:UIFontWeightBold];self.bigTime.numberOfLines=1;self.bigTime.adjustsFontSizeToFitWidth=YES;self.bigTime.minimumScaleFactor=.5;
   self.bigTimeSub=[self white:@"Choose a video in YouTube" size:14 weight:UIFontWeightSemibold];
   UIStackView *time=[[UIStackView alloc]initWithArrangedSubviews:@[self.bigTime,self.bigTimeSub]];time.axis=UILayoutConstraintAxisVertical;time.spacing=0;time.layoutMargins=UIEdgeInsetsMake(0,8,0,8);time.layoutMarginsRelativeArrangement=YES;
-  UIView *gap=[UIView new];[gap.heightAnchor constraintGreaterThanOrEqualToConstant:150].active=YES;
+  UIView *gap=[UIView new];[gap.heightAnchor constraintGreaterThanOrEqualToConstant:24].active=YES;
   [stack setCustomSpacing:26 afterView:steps];[stack addArrangedSubview:time];[stack addArrangedSubview:gap];
   self.previewHost=[UIView new];self.previewHost.backgroundColor=UIColor.blackColor;self.previewHost.layer.cornerRadius=18;self.previewHost.clipsToBounds=YES;self.previewHost.hidden=YES;
   NSLayoutConstraint *previewHeight=[self.previewHost.heightAnchor constraintEqualToConstant:160];previewHeight.priority=750;previewHeight.active=YES;[stack addArrangedSubview:self.previewHost];
