@@ -176,6 +176,9 @@ extern int sl_audio_shk_len,sl_audio_chacha_ok,sl_audio_chacha_fail;extern char 
 // Build 145: which lock the iPhone used for the sound, for the log.
 + (NSString *)lockNote {return [NSString stringWithFormat:@"sound setup fields: %s; newer lock key sent: %@; opened with it %d, not opened %d",sl_audio_keys[0]?sl_audio_keys:"(none seen)",sl_audio_shk_len==32?@"yes":@"no",sl_audio_chacha_ok,sl_audio_chacha_fail];}
 @end
+@protocol SLWidgetMapAPI
++ (NSData *)widgetData:(NSDictionary *)media;
+@end
 @protocol SLAirPlaySoundAPI
 + (void)packet:(NSData *)data ct:(NSInteger)ct spf:(NSInteger)spf;
 @end
@@ -791,6 +794,11 @@ static NSArray *txtStrings(const char *bytes,int length) {
             NSString *message=[NSString stringWithFormat:@"LOCAL TCP PROBE REACHED\nBuild: %@ (%@)\nPhone endpoint: %s:%u\nObserved client: %s:%u\nThis proves only this TCP request reached ScreenLink. Video, HTTPS and UDP are not verified. No screen or media is returned.\n",NSBundle.mainBundle.infoDictionary[@"CFBundleShortVersionString"]?:@"unknown",NSBundle.mainBundle.infoDictionary[@"CFBundleVersion"]?:@"unknown",localText,ntohs(local.sin_port),peerText,ntohs(peer.sin_port)];
             body=[message dataUsingEncoding:NSUTF8StringEncoding];[self emit:message];
         }
+    }
+    else if(current && loopback && localControl && [parts.firstObject isEqual:@"GET"] && [url.path isEqual:@"/local/widget/map"]){
+        // Build 147: next turn, arrival and a map picture for the Home Screen map widget (loopback only).
+        Class map=NSClassFromString(@"SLWidgetMap");NSDictionary *m=[self nativeMediaState]?:@{};
+        mime=@"application/json";body=[map respondsToSelector:@selector(widgetData:)]?[(id<SLWidgetMapAPI>)map widgetData:m]:[NSData dataWithBytes:"{}" length:2];
     }
     else if(current && loopback && localControl && [parts.firstObject isEqual:@"GET"] && [url.path isEqual:@"/local/widget/state"]){
         // Build 84: compact live state for the Home Screen widget and Control Center (loopback only).

@@ -337,6 +337,7 @@ private struct ScreenLinkLiveActivity: Widget {
 struct ScreenLinkWidgetBundle: WidgetBundle {
     var body: some Widget {
         CarPlayerWidget()
+        MapWidget()
         ScreenLinkControlsWidget()
         ResumeWidget()
         DogLauncherWidget()

@@ -129,7 +129,10 @@ static CGFloat SLMix(CGFloat a,CGFloat b,CGFloat t){return a+(b-a)*MAX(0,MIN(1,t
 @property(nonatomic,strong) NSMutableDictionary<NSString *,UILabel *> *rowDetails;
 @property(nonatomic,strong) UIView *controlsCard,*helpCard;
 @property(nonatomic,strong) UIImageView *heroImage;
-@property(nonatomic,strong) UISwitch *mapsSwitch;
+@property(nonatomic,strong) UISwitch *mapsSwitch,*pipSwitch;
+@property(nonatomic,strong) NSMutableDictionary<NSString *,NSDictionary *> *tileParts;
+@property(nonatomic,strong) NSMutableDictionary<NSString *,NSNumber *> *tileOn;
+@property(nonatomic,strong) UIView *playerSection;
 @end
 static UIColor *SLHomeGrey(void){return [UIColor colorWithRed:.49 green:.51 blue:.55 alpha:1];}
 @implementation ScreenLinkHomeView
@@ -156,100 +159,199 @@ static UIColor *SLHomeGrey(void){return [UIColor colorWithRed:.49 green:.51 blue
  [row addTarget:self action:@selector(rowTapped:) forControlEvents:UIControlEventTouchUpInside];return row;
 }
 - (void)rowTapped:(UIControl *)row {
- NSString *key=[row.accessibilityIdentifier isEqual:@"home.maps"]?@"maps":[row.accessibilityIdentifier stringByReplacingOccurrencesOfString:@"home.row." withString:@""];
+ NSString *key=[row.accessibilityIdentifier isEqual:@"home.maps"]?@"openmap":[row.accessibilityIdentifier isEqual:@"home.developer"]?@"more":[row.accessibilityIdentifier stringByReplacingOccurrencesOfString:@"home.row." withString:@""];
  [[[UISelectionFeedbackGenerator alloc]init] selectionChanged];
  if([key isEqual:@"video"]){[self videoRowTapped];return;}
  if([key isEqual:@"help"]){[UIView animateWithDuration:.25 animations:^{self.helpCard.hidden=!self.helpCard.hidden;self.helpCard.alpha=self.helpCard.hidden?0:1;}];return;}
- if([key isEqual:@"maps"]){[self mapTapped];return;}
+ if([key isEqual:@"openmap"]||[key isEqual:@"maps"]){[self mapTapped];return;}
+ if([key isEqual:@"more"]){[self developerTapped];return;}
  if(self.moreAction)self.moreAction(key);
 }
 - (void)videoRowTapped {[UIView animateWithDuration:.25 animations:^{self.controlsCard.hidden=!self.controlsCard.hidden;self.controlsCard.alpha=self.controlsCard.hidden?0:1;}];}
 - (void)waitingQuickTapped {if(self.moreAction)self.moreAction(@"waiting");}
-- (void)setSubtitle:(NSString *)text forRow:(NSString *)key {UILabel *label=self.rowDetails[key];if(label&&text.length&&![label.text isEqual:text])label.text=text;}
-- (void)setMapsSwitch:(BOOL)on {if(self.mapsSwitch.on!=on)[self.mapsSwitch setOn:on animated:YES];}
+// Build 147: the old list lines are now tiles and switches; their text says On/Open or Off.
+- (void)setSubtitle:(NSString *)text forRow:(NSString *)key {
+ if(!text.length)return;BOOL on=[text hasPrefix:@"On"]||[text hasPrefix:@"Open"];
+ if([key isEqual:@"maps"]||[key isEqual:@"phonesound"]||[key isEqual:@"keep"]){[self setTile:key on:on text:on?@"On":@"Off"];return;}
+ if([key isEqual:@"pip"]){if(self.pipSwitch.on!=on)[self.pipSwitch setOn:on animated:YES];return;}
+}
+- (void)setMapsSwitch:(BOOL)on {[self setTile:@"maps" on:on text:on?@"On":@"Off"];}
 - (void)mapsSwitchChanged:(UISwitch *)toggle {[[[UIImpactFeedbackGenerator alloc]initWithStyle:UIImpactFeedbackStyleLight] impactOccurred];if(self.moreAction)self.moreAction(toggle.on?@"mapsOn":@"mapsOff");}
 - (void)showHeroImage:(UIImage *)image {if(self.heroDefault)image=self.heroDefault;self.heroImage.image=image;self.heroImage.hidden=image==nil;}
 - (UIButton *)button:(NSString *)title symbol:(NSString *)symbol action:(SEL)action filled:(BOOL)filled {
  UIButtonConfiguration *config=filled?UIButtonConfiguration.filledButtonConfiguration:UIButtonConfiguration.tintedButtonConfiguration;
  config.title=title;config.image=[UIImage systemImageNamed:symbol];config.imagePadding=10;config.cornerStyle=UIButtonConfigurationCornerStyleCapsule;config.contentInsets=NSDirectionalEdgeInsetsMake(16,18,16,18);
- config.baseBackgroundColor=filled?[UIColor colorWithRed:.08 green:.52 blue:.47 alpha:1]:UIColor.secondarySystemFillColor;config.baseForegroundColor=filled?UIColor.whiteColor:UIColor.labelColor;
+ config.baseBackgroundColor=filled?UIColor.systemBlueColor:UIColor.tertiarySystemFillColor;config.baseForegroundColor=filled?UIColor.whiteColor:UIColor.labelColor;
  UIButton *button=[UIButton buttonWithConfiguration:config primaryAction:nil];button.titleLabel.adjustsFontForContentSizeCategory=YES;[button addTarget:self action:action forControlEvents:UIControlEventTouchUpInside];return button;
+}
+// Build 147: Apple-style Home, like iPhone Settings and the Home app. Follows the iPhone's light or dark mode.
+// Large title, a car card with the status and an Open YouTube button, four big tiles you tap once for On/Off,
+// grouped lists with coloured square icons, and Start / Stop ScreenLink at the bottom. Every control keeps
+// its old action and its old test name (home.start, home.disconnect, home.developer, player.*).
+static UIColor *SLDyn(UIColor *light,UIColor *dark){return [UIColor colorWithDynamicProvider:^UIColor *(UITraitCollection *t){return t.userInterfaceStyle==UIUserInterfaceStyleDark?dark:light;}];}
+- (UIView *)squareIcon:(NSString *)symbol color:(UIColor *)color {
+ UIView *box=[UIView new];box.backgroundColor=color;box.layer.cornerRadius=7;box.layer.cornerCurve=kCACornerCurveContinuous;box.translatesAutoresizingMaskIntoConstraints=NO;[box.widthAnchor constraintEqualToConstant:30].active=YES;[box.heightAnchor constraintEqualToConstant:30].active=YES;
+ UIImageView *image=[[UIImageView alloc]initWithImage:[UIImage systemImageNamed:symbol withConfiguration:[UIImageSymbolConfiguration configurationWithPointSize:15 weight:UIImageSymbolWeightSemibold]]];image.tintColor=UIColor.whiteColor;image.translatesAutoresizingMaskIntoConstraints=NO;[box addSubview:image];
+ [NSLayoutConstraint activateConstraints:@[[image.centerXAnchor constraintEqualToAnchor:box.centerXAnchor],[image.centerYAnchor constraintEqualToAnchor:box.centerYAnchor]]];return box;
+}
+// One line of a grouped list: coloured square icon, name, optional value, optional switch or arrow.
+- (UIControl *)cell:(NSString *)title symbol:(NSString *)symbol color:(UIColor *)color key:(NSString *)key value:(NSString *)value accessory:(NSInteger)accessory {
+ UIControl *row=[UIControl new];row.accessibilityIdentifier=[@"home.row." stringByAppendingString:key];row.isAccessibilityElement=accessory!=2;row.accessibilityTraits=UIAccessibilityTraitButton;row.accessibilityLabel=title;
+ [row.heightAnchor constraintGreaterThanOrEqualToConstant:52].active=YES;
+ UILabel *name=[UILabel new];name.text=title;name.font=[UIFont preferredFontForTextStyle:UIFontTextStyleBody];name.adjustsFontForContentSizeCategory=YES;name.textColor=UIColor.labelColor;name.numberOfLines=0;
+ UILabel *detail=[UILabel new];detail.text=value;detail.font=[UIFont preferredFontForTextStyle:UIFontTextStyleBody];detail.adjustsFontForContentSizeCategory=YES;detail.textColor=UIColor.secondaryLabelColor;detail.textAlignment=NSTextAlignmentRight;[detail setContentHuggingPriority:UILayoutPriorityRequired forAxis:UILayoutConstraintAxisHorizontal];self.rowDetails[key]=detail;
+ NSMutableArray *parts=[NSMutableArray arrayWithObjects:[self squareIcon:symbol color:color],name,[UIView new],detail,nil];
+ if(accessory==1){UIImageView *arrow=[[UIImageView alloc]initWithImage:[UIImage systemImageNamed:@"chevron.right" withConfiguration:[UIImageSymbolConfiguration configurationWithPointSize:14 weight:UIImageSymbolWeightSemibold]]];arrow.tintColor=UIColor.tertiaryLabelColor;[arrow setContentHuggingPriority:UILayoutPriorityRequired forAxis:UILayoutConstraintAxisHorizontal];[parts addObject:arrow];}
+ UIStackView *line=[[UIStackView alloc]initWithArrangedSubviews:parts];line.spacing=13;line.alignment=UIStackViewAlignmentCenter;line.userInteractionEnabled=accessory==2;line.translatesAutoresizingMaskIntoConstraints=NO;[row addSubview:line];
+ [NSLayoutConstraint activateConstraints:@[[line.topAnchor constraintEqualToAnchor:row.topAnchor constant:10],[line.bottomAnchor constraintEqualToAnchor:row.bottomAnchor constant:-10],[line.leadingAnchor constraintEqualToAnchor:row.leadingAnchor constant:16],[line.trailingAnchor constraintEqualToAnchor:row.trailingAnchor constant:-16]]];
+ if(accessory!=2)[row addTarget:self action:@selector(rowTapped:) forControlEvents:UIControlEventTouchUpInside];
+ [row addTarget:self action:@selector(cellDown:) forControlEvents:UIControlEventTouchDown|UIControlEventTouchDragEnter];[row addTarget:self action:@selector(cellUp:) forControlEvents:UIControlEventTouchUpInside|UIControlEventTouchUpOutside|UIControlEventTouchCancel|UIControlEventTouchDragExit];
+ return row;
+}
+- (void)cellDown:(UIControl *)row {row.backgroundColor=UIColor.systemFillColor;}
+- (void)cellUp:(UIControl *)row {[UIView animateWithDuration:.25 animations:^{row.backgroundColor=UIColor.clearColor;}];}
+// A rounded group of cells with thin lines between them, like iPhone Settings.
+- (UIView *)group:(NSArray<UIView *> *)cells {
+ UIStackView *box=[UIStackView new];box.axis=UILayoutConstraintAxisVertical;box.backgroundColor=UIColor.secondarySystemGroupedBackgroundColor;box.layer.cornerRadius=12;box.layer.cornerCurve=kCACornerCurveContinuous;box.clipsToBounds=YES;
+ [cells enumerateObjectsUsingBlock:^(UIView *cell,NSUInteger i,BOOL *stop){[box addArrangedSubview:cell];if(i+1<cells.count){UIView *sep=[UIView new];sep.backgroundColor=UIColor.separatorColor;[sep.heightAnchor constraintEqualToConstant:1/UIScreen.mainScreen.scale].active=YES;UIView *inset=[UIView new];[inset addSubview:sep];sep.translatesAutoresizingMaskIntoConstraints=NO;[NSLayoutConstraint activateConstraints:@[[sep.topAnchor constraintEqualToAnchor:inset.topAnchor],[sep.bottomAnchor constraintEqualToAnchor:inset.bottomAnchor],[sep.leadingAnchor constraintEqualToAnchor:inset.leadingAnchor constant:59],[sep.trailingAnchor constraintEqualToAnchor:inset.trailingAnchor]]];[box addArrangedSubview:inset];}}];
+ return box;
+}
+- (UIView *)sectionHeader:(NSString *)text {UILabel *label=[UILabel new];label.text=text.uppercaseString;label.font=[UIFont preferredFontForTextStyle:UIFontTextStyleFootnote];label.adjustsFontForContentSizeCategory=YES;label.textColor=UIColor.secondaryLabelColor;label.numberOfLines=0;
+ UIStackView *pad=[[UIStackView alloc]initWithArrangedSubviews:@[label]];pad.layoutMargins=UIEdgeInsetsMake(0,16,0,16);pad.layoutMarginsRelativeArrangement=YES;return pad;}
+// A big tile like the Home app: round coloured icon, name, On/Off. Tap once to switch.
+- (UIControl *)tile:(NSString *)title symbol:(NSString *)symbol color:(UIColor *)color key:(NSString *)key {
+ UIControl *tile=[UIControl new];tile.accessibilityIdentifier=[@"home.tile." stringByAppendingString:key];tile.isAccessibilityElement=YES;tile.accessibilityTraits=UIAccessibilityTraitButton;tile.accessibilityLabel=title;tile.layer.cornerRadius=18;tile.layer.cornerCurve=kCACornerCurveContinuous;
+ [tile.heightAnchor constraintEqualToConstant:96].active=YES;
+ UIView *circle=[UIView new];circle.layer.cornerRadius=18;circle.translatesAutoresizingMaskIntoConstraints=NO;circle.userInteractionEnabled=NO;[circle.widthAnchor constraintEqualToConstant:36].active=YES;[circle.heightAnchor constraintEqualToConstant:36].active=YES;
+ UIImageView *image=[[UIImageView alloc]initWithImage:[UIImage systemImageNamed:symbol withConfiguration:[UIImageSymbolConfiguration configurationWithPointSize:16 weight:UIImageSymbolWeightSemibold]]];image.tintColor=UIColor.whiteColor;image.translatesAutoresizingMaskIntoConstraints=NO;[circle addSubview:image];[NSLayoutConstraint activateConstraints:@[[image.centerXAnchor constraintEqualToAnchor:circle.centerXAnchor],[image.centerYAnchor constraintEqualToAnchor:circle.centerYAnchor]]];
+ UILabel *name=[UILabel new];name.text=title;name.font=[UIFontMetrics.defaultMetrics scaledFontForFont:[UIFont systemFontOfSize:16 weight:UIFontWeightSemibold]];name.adjustsFontForContentSizeCategory=YES;name.adjustsFontSizeToFitWidth=YES;name.minimumScaleFactor=.7;
+ UILabel *state=[UILabel new];state.text=@"Off";state.font=[UIFontMetrics.defaultMetrics scaledFontForFont:[UIFont systemFontOfSize:14 weight:UIFontWeightRegular]];state.adjustsFontForContentSizeCategory=YES;
+ UIStackView *words=[[UIStackView alloc]initWithArrangedSubviews:@[circle,[UIView new],name,state]];words.axis=UILayoutConstraintAxisVertical;words.alignment=UIStackViewAlignmentLeading;words.userInteractionEnabled=NO;words.translatesAutoresizingMaskIntoConstraints=NO;[tile addSubview:words];
+ [NSLayoutConstraint activateConstraints:@[[words.topAnchor constraintEqualToAnchor:tile.topAnchor constant:12],[words.bottomAnchor constraintEqualToAnchor:tile.bottomAnchor constant:-10],[words.leadingAnchor constraintEqualToAnchor:tile.leadingAnchor constant:14],[words.trailingAnchor constraintEqualToAnchor:tile.trailingAnchor constant:-10]]];
+ self.tileParts[key]=@{@"tile":tile,@"circle":circle,@"name":name,@"state":state,@"color":color};
+ [tile addTarget:self action:@selector(tileTapped:) forControlEvents:UIControlEventTouchUpInside];
+ [tile addTarget:self action:@selector(tileDown:) forControlEvents:UIControlEventTouchDown|UIControlEventTouchDragEnter];[tile addTarget:self action:@selector(tileUp:) forControlEvents:UIControlEventTouchUpInside|UIControlEventTouchUpOutside|UIControlEventTouchCancel|UIControlEventTouchDragExit];
+ [self setTile:key on:NO text:@"Off"];return tile;
+}
+- (void)tileDown:(UIControl *)tile {[UIView animateWithDuration:.12 animations:^{tile.transform=CGAffineTransformMakeScale(.96,.96);}];}
+- (void)tileUp:(UIControl *)tile {[UIView animateWithDuration:.4 delay:0 usingSpringWithDamping:.6 initialSpringVelocity:.5 options:UIViewAnimationOptionAllowUserInteraction animations:^{tile.transform=CGAffineTransformIdentity;} completion:nil];}
+- (void)setTile:(NSString *)key on:(BOOL)on text:(NSString *)text {
+ NSDictionary *p=self.tileParts[key];if(!p)return;self.tileOn[key]=@(on);
+ UIControl *tile=p[@"tile"];UIView *circle=p[@"circle"];UILabel *name=p[@"name"],*state=p[@"state"];
+ tile.backgroundColor=on?SLDyn(UIColor.whiteColor,[UIColor colorWithWhite:.95 alpha:1]):SLDyn([UIColor colorWithWhite:.9 alpha:1],[UIColor colorWithWhite:.11 alpha:1]);
+ circle.backgroundColor=on?p[@"color"]:SLDyn([UIColor colorWithWhite:.78 alpha:1],[UIColor colorWithWhite:.23 alpha:1]);
+ name.textColor=on?UIColor.blackColor:UIColor.labelColor;state.textColor=on?[UIColor colorWithWhite:.42 alpha:1]:UIColor.secondaryLabelColor;state.text=text;
+ tile.accessibilityValue=text;
+}
+- (void)tileTapped:(UIControl *)tile {
+ NSString *key=[tile.accessibilityIdentifier stringByReplacingOccurrencesOfString:@"home.tile." withString:@""];
+ [[[UIImpactFeedbackGenerator alloc]initWithStyle:UIImpactFeedbackStyleLight] impactOccurred];
+ if([key isEqual:@"tiktok"]){if(self.moreAction)self.moreAction(@"tiktok");return;}
+ BOOL on=![self.tileOn[key] boolValue];[self setTile:key on:on text:on?@"On":@"Off"];
+ if([key isEqual:@"maps"]){if(self.moreAction)self.moreAction(on?@"mapsOn":@"mapsOff");return;}
+ if(self.moreAction)self.moreAction(key);
+}
+- (void)pipSwitchChanged:(UISwitch *)toggle {[[[UISelectionFeedbackGenerator alloc]init] selectionChanged];if(self.moreAction)self.moreAction(@"pip");}
+- (void)openYouTubeTapped {
+ [[[UIImpactFeedbackGenerator alloc]initWithStyle:UIImpactFeedbackStyleLight] impactOccurred];
+ NSURL *app=[NSURL URLWithString:@"youtube://"];
+ [UIApplication.sharedApplication openURL:app options:@{} completionHandler:^(BOOL ok){if(!ok)[UIApplication.sharedApplication openURL:[NSURL URLWithString:@"https://m.youtube.com"] options:@{} completionHandler:nil];}];
+}
+- (UIMenu *)qualityMenu {
+ NSMutableArray *items=[NSMutableArray array];NSArray *names=@[@"Auto",@"720p",@"1080p",@"1440p",@"4K"],*values=@[@"auto",@"720",@"1080",@"1440",@"2160"];
+ for(NSUInteger i=0;i<names.count;i++){UIAction *action=[UIAction actionWithTitle:names[i] image:nil identifier:nil handler:^(UIAction *a){self.playerQuality.selectedSegmentIndex=(NSInteger)i;[self playerQualityChanged];self.rowDetails[@"quality"].text=names[i];}];action.state=self.playerQuality.selectedSegmentIndex==(NSInteger)i?UIMenuElementStateOn:UIMenuElementStateOff;[items addObject:action];}
+ return [UIMenu menuWithTitle:@"Video Quality" children:items];
 }
 - (instancetype)initWithFrame:(CGRect)frame {
  if((self=[super initWithFrame:frame])){
-  self.overrideUserInterfaceStyle=UIUserInterfaceStyleDark;
-  self.backgroundColor=[UIColor colorWithRed:.086 green:.094 blue:.11 alpha:1];self.idleAllowed=YES;
-  self.cosmic=[SLCosmicView new];self.cosmic.translatesAutoresizingMaskIntoConstraints=NO;[self addSubview:self.cosmic];self.cosmic.alpha=.22;
-  [NSLayoutConstraint activateConstraints:@[[self.cosmic.topAnchor constraintEqualToAnchor:self.topAnchor],[self.cosmic.bottomAnchor constraintEqualToAnchor:self.bottomAnchor],[self.cosmic.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],[self.cosmic.trailingAnchor constraintEqualToAnchor:self.trailingAnchor]]];
+  self.backgroundColor=UIColor.systemGroupedBackgroundColor;self.idleAllowed=YES;self.rowDetails=[NSMutableDictionary dictionary];self.tileParts=[NSMutableDictionary dictionary];self.tileOn=[NSMutableDictionary dictionary];
+  {NSInteger saved=[NSUserDefaults.standardUserDefaults integerForKey:@"ScreenLinkAppearance"];if(saved==1)self.overrideUserInterfaceStyle=UIUserInterfaceStyleLight;else if(saved==2)self.overrideUserInterfaceStyle=UIUserInterfaceStyleDark;}
   UIScrollView *scroll=[UIScrollView new];scroll.translatesAutoresizingMaskIntoConstraints=NO;scroll.alwaysBounceVertical=YES;scroll.accessibilityIdentifier=@"home.scroll";scroll.backgroundColor=UIColor.clearColor;[self addSubview:scroll];
-  UIStackView *stack=[UIStackView new];self.mainStack=stack;stack.axis=UILayoutConstraintAxisVertical;stack.spacing=18;stack.translatesAutoresizingMaskIntoConstraints=NO;[scroll addSubview:stack];
-  NSLayoutConstraint *width=[stack.widthAnchor constraintEqualToAnchor:scroll.frameLayoutGuide.widthAnchor constant:-40];width.priority=999;
-  [NSLayoutConstraint activateConstraints:@[[scroll.topAnchor constraintEqualToAnchor:self.topAnchor],[scroll.bottomAnchor constraintEqualToAnchor:self.bottomAnchor],[scroll.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],[scroll.trailingAnchor constraintEqualToAnchor:self.trailingAnchor],[scroll.contentLayoutGuide.widthAnchor constraintEqualToAnchor:scroll.frameLayoutGuide.widthAnchor],[stack.topAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.topAnchor constant:16],[stack.bottomAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.bottomAnchor constant:-24],[stack.centerXAnchor constraintEqualToAnchor:scroll.centerXAnchor],width,[stack.widthAnchor constraintLessThanOrEqualToConstant:720],[stack.leadingAnchor constraintGreaterThanOrEqualToAnchor:scroll.contentLayoutGuide.leadingAnchor constant:20],[stack.trailingAnchor constraintLessThanOrEqualToAnchor:scroll.contentLayoutGuide.trailingAnchor constant:-20]]];
-  // Build 116: new Home. Dark and calm: big name, the status right under it, one big picture, a row of
-  // round quick buttons, then a plain list with a grey line under each name and an arrow. Every control
-  // keeps its old action and its old test name (home.start, home.disconnect, home.developer, …).
-  UIStackView *nav=[UIStackView new];nav.alignment=UIStackViewAlignmentCenter;nav.spacing=6;
-  UILabel *name=[self label:@"ScreenLink" style:UIFontTextStyleLargeTitle];name.font=[UIFontMetrics.defaultMetrics scaledFontForFont:[UIFont systemFontOfSize:36 weight:UIFontWeightBold]];name.textColor=UIColor.whiteColor;name.numberOfLines=1;name.adjustsFontSizeToFitWidth=YES;name.minimumScaleFactor=.6;[nav addArrangedSubview:name];[nav addArrangedSubview:[UIView new]];
-  UIButton *copy=[self roundButton:@"link" label:@"Copy the car website link" action:@selector(copyTapped)];copy.accessibilityIdentifier=@"home.copy";{UIButtonConfiguration *c=copy.configuration;c.baseForegroundColor=UIColor.whiteColor;copy.configuration=c;}[nav addArrangedSubview:copy];
-  UIButton *developer=[self roundButton:@"line.3.horizontal" label:@"Developer controls and test log" action:@selector(developerTapped)];developer.accessibilityIdentifier=@"home.developer";{UIButtonConfiguration *c=developer.configuration;c.baseForegroundColor=UIColor.whiteColor;developer.configuration=c;}[nav addArrangedSubview:developer];[stack addArrangedSubview:nav];
-  UIStackView *status=[UIStackView new];status.axis=UILayoutConstraintAxisVertical;status.spacing=4;
-  self.statusLabel=[self label:@"Ready to connect" style:UIFontTextStyleHeadline];self.statusLabel.font=[UIFontMetrics.defaultMetrics scaledFontForFont:[UIFont systemFontOfSize:19 weight:UIFontWeightSemibold]];self.statusLabel.accessibilityIdentifier=@"home.status";
-  UIStackView *statusRow=[UIStackView new];statusRow.spacing=10;statusRow.alignment=UIStackViewAlignmentCenter;self.statusDot=[UIView new];self.statusDot.layer.cornerRadius=6;self.statusDot.backgroundColor=UIColor.systemGrayColor;[self.statusDot.widthAnchor constraintEqualToConstant:12].active=YES;[self.statusDot.heightAnchor constraintEqualToConstant:12].active=YES;[statusRow addArrangedSubview:self.statusDot];[statusRow addArrangedSubview:self.statusLabel];[status addArrangedSubview:statusRow];
-  self.detailLabel=[self label:@"Turn on Personal Hotspot, then tap Start." style:UIFontTextStyleSubheadline];self.detailLabel.font=[UIFontMetrics.defaultMetrics scaledFontForFont:[UIFont systemFontOfSize:15 weight:UIFontWeightSemibold]];self.detailLabel.textColor=SLHomeGrey();self.detailLabel.accessibilityIdentifier=@"home.detail";[status addArrangedSubview:self.detailLabel];[stack addArrangedSubview:status];
-  self.car=[SLAmbientCarView new];[self.car.heightAnchor constraintEqualToAnchor:self.car.widthAnchor multiplier:.5625].active=YES;[stack addArrangedSubview:self.car];[self makeStage3D];
-  // The user's own waiting screen picture, when there is one, covers the car clip.
-  self.heroImage=[UIImageView new];self.heroImage.contentMode=UIViewContentModeScaleAspectFill;self.heroImage.clipsToBounds=YES;self.heroImage.layer.cornerRadius=28;self.heroImage.hidden=YES;self.heroImage.translatesAutoresizingMaskIntoConstraints=NO;[self.car insertSubview:self.heroImage belowSubview:self.liveBadge];
+  UIStackView *stack=[UIStackView new];self.mainStack=stack;stack.axis=UILayoutConstraintAxisVertical;stack.spacing=14;stack.translatesAutoresizingMaskIntoConstraints=NO;[scroll addSubview:stack];
+  NSLayoutConstraint *width=[stack.widthAnchor constraintEqualToAnchor:scroll.frameLayoutGuide.widthAnchor constant:-32];width.priority=999;
+  [NSLayoutConstraint activateConstraints:@[[scroll.topAnchor constraintEqualToAnchor:self.topAnchor],[scroll.bottomAnchor constraintEqualToAnchor:self.bottomAnchor],[scroll.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],[scroll.trailingAnchor constraintEqualToAnchor:self.trailingAnchor],[scroll.contentLayoutGuide.widthAnchor constraintEqualToAnchor:scroll.frameLayoutGuide.widthAnchor],[stack.topAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.topAnchor constant:8],[stack.bottomAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.bottomAnchor constant:-28],[stack.centerXAnchor constraintEqualToAnchor:scroll.centerXAnchor],width,[stack.widthAnchor constraintLessThanOrEqualToConstant:640]]];
+  // Large title with the link button (copy the car website link) on the right.
+  UIStackView *nav=[UIStackView new];nav.alignment=UIStackViewAlignmentCenter;nav.spacing=6;nav.layoutMargins=UIEdgeInsetsMake(0,4,0,0);nav.layoutMarginsRelativeArrangement=YES;
+  UILabel *name=[UILabel new];name.text=@"ScreenLink";name.font=[[UIFontMetrics metricsForTextStyle:UIFontTextStyleLargeTitle] scaledFontForFont:[UIFont systemFontOfSize:34 weight:UIFontWeightBold]];name.adjustsFontForContentSizeCategory=YES;name.textColor=UIColor.labelColor;name.numberOfLines=1;name.adjustsFontSizeToFitWidth=YES;name.minimumScaleFactor=.6;[nav addArrangedSubview:name];[nav addArrangedSubview:[UIView new]];
+  UIButton *copy=[self roundButton:@"link" label:@"Copy the car website link" action:@selector(copyTapped)];copy.accessibilityIdentifier=@"home.copy";{UIButtonConfiguration *c=copy.configuration;c.baseForegroundColor=UIColor.systemBlueColor;copy.configuration=c;}[nav addArrangedSubview:copy];[stack addArrangedSubview:nav];
+  // The car card: picture, status at the bottom, Open YouTube at the top right.
+  self.car=[SLAmbientCarView new];self.car.layer.cornerRadius=22;self.car.layer.cornerCurve=kCACornerCurveContinuous;self.car.layer.borderWidth=0;self.car.sheen.hidden=YES;[self.car.heightAnchor constraintEqualToAnchor:self.car.widthAnchor multiplier:.56].active=YES;[stack addArrangedSubview:self.car];
+  self.heroImage=[UIImageView new];self.heroImage.contentMode=UIViewContentModeScaleAspectFill;self.heroImage.clipsToBounds=YES;self.heroImage.hidden=YES;self.heroImage.translatesAutoresizingMaskIntoConstraints=NO;[self.car addSubview:self.heroImage];
   [NSLayoutConstraint activateConstraints:@[[self.heroImage.topAnchor constraintEqualToAnchor:self.car.topAnchor],[self.heroImage.bottomAnchor constraintEqualToAnchor:self.car.bottomAnchor],[self.heroImage.leadingAnchor constraintEqualToAnchor:self.car.leadingAnchor],[self.heroImage.trailingAnchor constraintEqualToAnchor:self.car.trailingAnchor]]];
-  // Build 117: the user's own car picture (added to the app when it is packaged) is the Home picture.
   {NSString *path=[NSBundle.mainBundle pathForResource:@"entrance-4" ofType:@"jpg"];self.heroDefault=path?[UIImage imageWithContentsOfFile:path]:nil;if(self.heroDefault)[self showHeroImage:nil];}
-  self.statusGlow=[SLGlowBorder new];self.statusGlow.userInteractionEnabled=NO;self.statusGlow.translatesAutoresizingMaskIntoConstraints=NO;[self.car addSubview:self.statusGlow];[NSLayoutConstraint activateConstraints:@[[self.statusGlow.topAnchor constraintEqualToAnchor:self.car.topAnchor],[self.statusGlow.bottomAnchor constraintEqualToAnchor:self.car.bottomAnchor],[self.statusGlow.leadingAnchor constraintEqualToAnchor:self.car.leadingAnchor],[self.statusGlow.trailingAnchor constraintEqualToAnchor:self.car.trailingAnchor]]];
-  self.previewHost=[UIView new];self.previewHost.backgroundColor=UIColor.blackColor;self.previewHost.layer.cornerRadius=20;self.previewHost.clipsToBounds=YES;self.previewHost.hidden=YES;
+  SLFadeView *shade=[SLFadeView new];shade.userInteractionEnabled=NO;shade.translatesAutoresizingMaskIntoConstraints=NO;((CAGradientLayer *)shade.layer).colors=@[(id)[UIColor colorWithWhite:0 alpha:0].CGColor,(id)[UIColor colorWithWhite:0 alpha:.82].CGColor];((CAGradientLayer *)shade.layer).locations=@[@.3,@1];[self.car addSubview:shade];
+  [NSLayoutConstraint activateConstraints:@[[shade.topAnchor constraintEqualToAnchor:self.car.topAnchor],[shade.bottomAnchor constraintEqualToAnchor:self.car.bottomAnchor],[shade.leadingAnchor constraintEqualToAnchor:self.car.leadingAnchor],[shade.trailingAnchor constraintEqualToAnchor:self.car.trailingAnchor]]];
+  self.statusLabel=[UILabel new];self.statusLabel.text=@"Ready to connect";self.statusLabel.font=[UIFontMetrics.defaultMetrics scaledFontForFont:[UIFont systemFontOfSize:22 weight:UIFontWeightBold]];self.statusLabel.adjustsFontForContentSizeCategory=YES;self.statusLabel.textColor=UIColor.whiteColor;self.statusLabel.numberOfLines=2;self.statusLabel.accessibilityIdentifier=@"home.status";
+  self.statusDot=[UIView new];self.statusDot.layer.cornerRadius=5;self.statusDot.backgroundColor=UIColor.systemGrayColor;[self.statusDot.widthAnchor constraintEqualToConstant:10].active=YES;[self.statusDot.heightAnchor constraintEqualToConstant:10].active=YES;
+  UIStackView *statusRow=[[UIStackView alloc]initWithArrangedSubviews:@[self.statusDot,self.statusLabel]];statusRow.spacing=8;statusRow.alignment=UIStackViewAlignmentCenter;
+  self.detailLabel=[UILabel new];self.detailLabel.text=@"Turn on Personal Hotspot, then tap Start.";self.detailLabel.font=[UIFont preferredFontForTextStyle:UIFontTextStyleSubheadline];self.detailLabel.adjustsFontForContentSizeCategory=YES;self.detailLabel.textColor=[UIColor colorWithWhite:1 alpha:.85];self.detailLabel.numberOfLines=3;self.detailLabel.accessibilityIdentifier=@"home.detail";
+  UIStackView *status=[[UIStackView alloc]initWithArrangedSubviews:@[statusRow,self.detailLabel]];status.axis=UILayoutConstraintAxisVertical;status.spacing=2;status.translatesAutoresizingMaskIntoConstraints=NO;[self.car addSubview:status];
+  [NSLayoutConstraint activateConstraints:@[[status.leadingAnchor constraintEqualToAnchor:self.car.leadingAnchor constant:16],[status.trailingAnchor constraintEqualToAnchor:self.car.trailingAnchor constant:-16],[status.bottomAnchor constraintEqualToAnchor:self.car.bottomAnchor constant:-14]]];
+  UIButtonConfiguration *yt=UIButtonConfiguration.filledButtonConfiguration;yt.title=@"YouTube";yt.image=[UIImage systemImageNamed:@"airplayvideo" withConfiguration:[UIImageSymbolConfiguration configurationWithPointSize:13 weight:UIImageSymbolWeightSemibold]];yt.imagePadding=6;yt.cornerStyle=UIButtonConfigurationCornerStyleCapsule;yt.baseBackgroundColor=[UIColor colorWithWhite:1 alpha:.24];yt.baseForegroundColor=UIColor.whiteColor;yt.contentInsets=NSDirectionalEdgeInsetsMake(8,13,8,13);
+  yt.titleTextAttributesTransformer=^NSDictionary *(NSDictionary *a){NSMutableDictionary *m=[a mutableCopy];m[NSFontAttributeName]=[UIFont systemFontOfSize:15 weight:UIFontWeightSemibold];return m;};
+  UIButton *youtube=[UIButton buttonWithConfiguration:yt primaryAction:nil];youtube.accessibilityIdentifier=@"home.youtube";youtube.accessibilityLabel=@"Open YouTube";youtube.translatesAutoresizingMaskIntoConstraints=NO;[youtube addTarget:self action:@selector(openYouTubeTapped) forControlEvents:UIControlEventTouchUpInside];[self.car addSubview:youtube];
+  [NSLayoutConstraint activateConstraints:@[[youtube.topAnchor constraintEqualToAnchor:self.car.topAnchor constant:12],[youtube.trailingAnchor constraintEqualToAnchor:self.car.trailingAnchor constant:-12]]];
+  [self makeLiveBadge];
+  self.previewHost=[UIView new];self.previewHost.backgroundColor=UIColor.blackColor;self.previewHost.layer.cornerRadius=16;self.previewHost.clipsToBounds=YES;self.previewHost.hidden=YES;
   NSLayoutConstraint *previewHeight=[self.previewHost.heightAnchor constraintEqualToConstant:160];previewHeight.priority=750;previewHeight.active=YES;[stack addArrangedSubview:self.previewHost];
-  // Quick buttons: Start, pause the car video, video settings, waiting screen, Disconnect all.
-  self.startButton=[self button:@"" symbol:@"play.fill" action:@selector(startTapped) filled:YES];self.startButton.accessibilityIdentifier=@"home.start";self.startButton.accessibilityLabel=@"Start";{UIButtonConfiguration *c=self.startButton.configuration;c.contentInsets=NSDirectionalEdgeInsetsMake(14,14,14,14);c.imagePadding=0;self.startButton.configuration=c;}[self.startButton.widthAnchor constraintEqualToConstant:58].active=YES;[self.startButton.heightAnchor constraintEqualToConstant:58].active=YES;[self makeStartButtonAlive];
-  UIButton *quickPause=[self roundButton:@"playpause.fill" label:@"Pause or play the car video" action:@selector(playerPauseTapped)];
-  UIButton *quickVideo=[self roundButton:@"slider.horizontal.3" label:@"Video quality and sound" action:@selector(videoRowTapped)];
-  UIButton *quickWaiting=[self roundButton:@"photo.on.rectangle" label:@"Waiting screen" action:@selector(waitingQuickTapped)];
-  self.disconnectButton=[self roundButton:@"power" label:@"Disconnect all" action:@selector(disconnectTapped)];self.disconnectButton.accessibilityIdentifier=@"home.disconnect";{UIButtonConfiguration *c=self.disconnectButton.configuration;c.baseForegroundColor=[UIColor colorWithRed:1 green:.42 blue:.4 alpha:1];self.disconnectButton.configuration=c;}
-  UIStackView *quick=[[UIStackView alloc]initWithArrangedSubviews:@[self.startButton,quickPause,quickVideo,quickWaiting,self.disconnectButton]];quick.distribution=UIStackViewDistributionEqualSpacing;quick.alignment=UIStackViewAlignmentCenter;[stack addArrangedSubview:quick];
-  // The list.
-  self.rowDetails=[NSMutableDictionary dictionary];UIStackView *list=[UIStackView new];list.axis=UILayoutConstraintAxisVertical;list.spacing=0;
-  [list addArrangedSubview:[self rowWithSymbol:@"video.fill" title:@"Video" subtitle:@"YouTube · quality, sound and position" key:@"video"]];
-  UIStackView *controls=[UIStackView new];controls.axis=UILayoutConstraintAxisVertical;controls.spacing=12;controls.layoutMargins=UIEdgeInsetsMake(18,18,18,18);controls.layoutMarginsRelativeArrangement=YES;controls.backgroundColor=[UIColor colorWithRed:.12 green:.13 blue:.16 alpha:1];controls.layer.cornerRadius=26;controls.layer.borderWidth=.5;controls.layer.borderColor=[UIColor colorWithWhite:1 alpha:.14].CGColor;self.playerQuality.selectedSegmentTintColor=nil;
-  [controls addArrangedSubview:[self label:@"Car player controls" style:UIFontTextStyleHeadline]];
-  self.playerHint=[self label:@"Choose videos in YouTube. These controls change the car player, not your phone’s YouTube quality. Quality depends on the source; tap the car once if sound needs permission." style:UIFontTextStyleFootnote];self.playerHint.textColor=UIColor.secondaryLabelColor;[controls addArrangedSubview:self.playerHint];
-  [controls addArrangedSubview:[self label:@"Video quality" style:UIFontTextStyleSubheadline]];
-  self.playerQuality=[[UISegmentedControl alloc]initWithItems:@[@"Auto",@"720p",@"1080p",@"1440p",@"4K"]];self.playerQuality.selectedSegmentIndex=0;self.playerQuality.accessibilityIdentifier=@"player.quality";[self.playerQuality addTarget:self action:@selector(playerQualityChanged) forControlEvents:UIControlEventValueChanged];[self.playerQuality.heightAnchor constraintGreaterThanOrEqualToConstant:44].active=YES;[controls addArrangedSubview:self.playerQuality];
-  UIStackView *playback=[UIStackView new];playback.spacing=8;playback.distribution=UIStackViewDistributionFillEqually;
-  self.playerBack=[self button:@"10s" symbol:@"gobackward.10" action:@selector(playerBackTapped) filled:NO];self.playerBack.accessibilityLabel=@"Rewind car video ten seconds";
-  self.playerPause=[self button:@"Play" symbol:@"playpause.fill" action:@selector(playerPauseTapped) filled:YES];self.playerPause.accessibilityIdentifier=@"player.pause";
-  self.playerForward=[self button:@"10s" symbol:@"goforward.10" action:@selector(playerForwardTapped) filled:NO];self.playerForward.accessibilityLabel=@"Forward car video ten seconds";
-  for(UIButton *button in @[self.playerBack,self.playerPause,self.playerForward]){UIButtonConfiguration *configuration=button.configuration;configuration.contentInsets=NSDirectionalEdgeInsetsMake(12,8,12,8);button.configuration=configuration;[playback addArrangedSubview:button];}[controls addArrangedSubview:playback];
-  self.playerPosition=[self label:@"Waiting for video" style:UIFontTextStyleFootnote];[controls addArrangedSubview:self.playerPosition];
+  // Four big tiles.
+  UIStackView *row1=[[UIStackView alloc]initWithArrangedSubviews:@[[self tile:@"Maps" symbol:@"map.fill" color:UIColor.systemGreenColor key:@"maps"],[self tile:@"Phone Sound" symbol:@"speaker.wave.2.fill" color:UIColor.systemOrangeColor key:@"phonesound"]]];
+  UIStackView *row2=[[UIStackView alloc]initWithArrangedSubviews:@[[self tile:@"Keep Playing" symbol:@"play.fill" color:UIColor.systemBlueColor key:@"keep"],[self tile:@"TikTok" symbol:@"music.note" color:UIColor.systemPinkColor key:@"tiktok"]]];
+  for(UIStackView *r in @[row1,row2]){r.spacing=10;r.distribution=UIStackViewDistributionFillEqually;}
+  UIStackView *tiles=[[UIStackView alloc]initWithArrangedSubviews:@[row1,row2]];tiles.axis=UILayoutConstraintAxisVertical;tiles.spacing=10;[stack addArrangedSubview:tiles];[self setTile:@"tiktok" on:NO text:@"Open"];
+  // Car player controls: shown by themselves while a video plays. Big buttons.
+  UIStackView *controls=[UIStackView new];controls.axis=UILayoutConstraintAxisVertical;controls.spacing=12;controls.layoutMargins=UIEdgeInsetsMake(16,16,16,16);controls.layoutMarginsRelativeArrangement=YES;controls.backgroundColor=UIColor.secondarySystemGroupedBackgroundColor;controls.layer.cornerRadius=12;controls.layer.cornerCurve=kCACornerCurveContinuous;
+  self.playerPosition=[self label:@"Waiting for video" style:UIFontTextStyleSubheadline];self.playerPosition.textColor=UIColor.secondaryLabelColor;[controls addArrangedSubview:self.playerPosition];
   self.playerSeek=[UISlider new];self.playerSeek.minimumValue=0;self.playerSeek.maximumValue=1;self.playerSeek.continuous=NO;self.playerSeek.accessibilityLabel=@"Car video position";self.playerSeek.accessibilityIdentifier=@"player.seek";[self.playerSeek addTarget:self action:@selector(playerSeekChanged) forControlEvents:UIControlEventValueChanged];[controls addArrangedSubview:self.playerSeek];
-  [controls addArrangedSubview:[self label:@"Car volume" style:UIFontTextStyleSubheadline]];
-  self.playerVolume=[UISlider new];self.playerVolume.minimumValue=0;self.playerVolume.maximumValue=1;self.playerVolume.value=1;self.playerVolume.continuous=NO;self.playerVolume.accessibilityLabel=@"Car player volume";self.playerVolume.accessibilityIdentifier=@"player.volume";[self.playerVolume addTarget:self action:@selector(playerVolumeChanged) forControlEvents:UIControlEventValueChanged];[controls addArrangedSubview:self.playerVolume];
-  self.playerEQ=[[UISegmentedControl alloc]initWithItems:@[@"Normal sound",@"Music"]];self.playerEQ.selectedSegmentIndex=0;self.playerEQ.accessibilityLabel=@"Car sound preset";[self.playerEQ addTarget:self action:@selector(playerEQChanged) forControlEvents:UIControlEventValueChanged];[self.playerEQ.heightAnchor constraintGreaterThanOrEqualToConstant:44].active=YES;[controls addArrangedSubview:self.playerEQ];
-  controls.hidden=YES;self.controlsCard=controls;[list addArrangedSubview:controls];[self showPlayerState:@{}];
-  [list addArrangedSubview:[self rowWithSymbol:@"pip" title:@"Small window (PiP)" subtitle:@"On" key:@"pip"]];
-  [list addArrangedSubview:[self rowWithSymbol:@"speaker.wave.2" title:@"Phone sound" subtitle:@"On" key:@"phonesound"]];
-  [list addArrangedSubview:[self rowWithSymbol:@"play.circle" title:@"Keep playing" subtitle:@"On" key:@"keep"]];
-  [list addArrangedSubview:[self rowWithSymbol:@"music.note" title:@"TikTok" subtitle:@"Inside ScreenLink · no screen recording" key:@"tiktok"]];
-  [list addArrangedSubview:[self rowWithSymbol:@"photo.on.rectangle" title:@"Waiting screen" subtitle:@"Your pictures, GIFs and videos" key:@"waiting"]];
-  UIControl *maps=[self rowWithSymbol:@"map" title:@"Maps" subtitle:@"Closed" key:@"maps"];maps.accessibilityIdentifier=@"home.maps";[list addArrangedSubview:maps];
-  // Build 135: a real On/Off switch on the Maps line (open or close all map systems); tapping the line shows the map.
-  {UISwitch *toggle=[UISwitch new];toggle.onTintColor=[UIColor colorWithRed:.2 green:.78 blue:.35 alpha:1];toggle.accessibilityIdentifier=@"home.mapsSwitch";toggle.accessibilityLabel=@"Maps on or off";toggle.translatesAutoresizingMaskIntoConstraints=NO;[toggle addTarget:self action:@selector(mapsSwitchChanged:) forControlEvents:UIControlEventValueChanged];[maps addSubview:toggle];self.mapsSwitch=toggle;{UIStackView *rowLine=(UIStackView *)maps.subviews.firstObject;if([rowLine isKindOfClass:UIStackView.class])rowLine.arrangedSubviews.lastObject.hidden=YES;}
-   [NSLayoutConstraint activateConstraints:@[[toggle.centerYAnchor constraintEqualToAnchor:maps.centerYAnchor],[toggle.trailingAnchor constraintEqualToAnchor:maps.trailingAnchor constant:-26]]];}
-  [list addArrangedSubview:[self rowWithSymbol:@"cube" title:@"Orbit Cube" subtitle:@"Needs Maps" key:@"cube"]];
-  [list addArrangedSubview:[self rowWithSymbol:@"questionmark.circle" title:@"Help" subtitle:@"How to connect · no screen recording" key:@"help"]];
-  UIStackView *steps=[UIStackView new];steps.axis=UILayoutConstraintAxisVertical;steps.spacing=7;[steps addArrangedSubview:[self label:@"Connect in three steps" style:UIFontTextStyleHeadline]];
-  for(NSString *line in @[@"1   Connect the viewer to your phone’s hotspot.",@"2   Choose ScreenLink in YouTube’s AirPlay menu.",@"3   Return here once to prepare the floating video."]){UILabel *label=[self label:line style:UIFontTextStyleSubheadline];label.textColor=SLHomeGrey();[steps addArrangedSubview:label];}  UILabel *footer=[self label:@"No screen recording is used. iOS manages background availability." style:UIFontTextStyleFootnote];footer.textColor=SLHomeGrey();[steps addArrangedSubview:footer];
-  if([steps.arrangedSubviews.firstObject isKindOfClass:UILabel.class])((UILabel *)steps.arrangedSubviews.firstObject).textColor=UIColor.whiteColor;
-  steps.layoutMargins=UIEdgeInsetsMake(4,50,14,4);steps.layoutMarginsRelativeArrangement=YES;steps.hidden=YES;self.helpCard=steps;[list addArrangedSubview:steps];[stack addArrangedSubview:list];
+  UIStackView *playback=[UIStackView new];playback.spacing=10;playback.distribution=UIStackViewDistributionFillEqually;
+  self.playerBack=[self button:@"10" symbol:@"gobackward.10" action:@selector(playerBackTapped) filled:NO];self.playerBack.accessibilityLabel=@"Rewind car video ten seconds";
+  self.playerPause=[self button:@"Pause" symbol:@"playpause.fill" action:@selector(playerPauseTapped) filled:YES];self.playerPause.accessibilityIdentifier=@"player.pause";
+  self.playerForward=[self button:@"10" symbol:@"goforward.10" action:@selector(playerForwardTapped) filled:NO];self.playerForward.accessibilityLabel=@"Forward car video ten seconds";
+  for(UIButton *button in @[self.playerBack,self.playerPause,self.playerForward]){[button.heightAnchor constraintGreaterThanOrEqualToConstant:52].active=YES;[playback addArrangedSubview:button];}[controls addArrangedSubview:playback];
+  UIImageView *quiet=[[UIImageView alloc]initWithImage:[UIImage systemImageNamed:@"speaker.fill"]],*loud=[[UIImageView alloc]initWithImage:[UIImage systemImageNamed:@"speaker.wave.3.fill"]];quiet.tintColor=loud.tintColor=UIColor.secondaryLabelColor;
+  self.playerVolume=[UISlider new];self.playerVolume.minimumValue=0;self.playerVolume.maximumValue=1;self.playerVolume.value=1;self.playerVolume.continuous=NO;self.playerVolume.accessibilityLabel=@"Car player volume";self.playerVolume.accessibilityIdentifier=@"player.volume";[self.playerVolume addTarget:self action:@selector(playerVolumeChanged) forControlEvents:UIControlEventValueChanged];
+  UIStackView *volume=[[UIStackView alloc]initWithArrangedSubviews:@[quiet,self.playerVolume,loud]];volume.spacing=10;volume.alignment=UIStackViewAlignmentCenter;[controls addArrangedSubview:volume];
+  self.playerQuality=[[UISegmentedControl alloc]initWithItems:@[@"Auto",@"720p",@"1080p",@"1440p",@"4K"]];self.playerQuality.selectedSegmentIndex=0;self.playerQuality.accessibilityIdentifier=@"player.quality";[self.playerQuality addTarget:self action:@selector(playerQualityChanged) forControlEvents:UIControlEventValueChanged];[self.playerQuality.heightAnchor constraintGreaterThanOrEqualToConstant:36].active=YES;[controls addArrangedSubview:self.playerQuality];
+  self.playerEQ=[[UISegmentedControl alloc]initWithItems:@[@"Normal Sound",@"Music"]];self.playerEQ.selectedSegmentIndex=0;self.playerEQ.accessibilityLabel=@"Car sound preset";[self.playerEQ addTarget:self action:@selector(playerEQChanged) forControlEvents:UIControlEventValueChanged];[self.playerEQ.heightAnchor constraintGreaterThanOrEqualToConstant:36].active=YES;[controls addArrangedSubview:self.playerEQ];
+  self.playerHint=[self label:@"Choose videos in YouTube. These buttons control the car player." style:UIFontTextStyleFootnote];self.playerHint.textColor=UIColor.secondaryLabelColor;[controls addArrangedSubview:self.playerHint];
+  controls.hidden=YES;self.controlsCard=controls;
+  UIView *playerHeader=[self sectionHeader:@"Car Player"];
+  UIStackView *playerSection=[[UIStackView alloc]initWithArrangedSubviews:@[playerHeader,controls]];playerSection.axis=UILayoutConstraintAxisVertical;playerSection.spacing=7;playerSection.layoutMargins=UIEdgeInsetsMake(0,0,0,0);playerSection.hidden=YES;self.playerSection=playerSection;[stack setCustomSpacing:22 afterView:tiles];[stack addArrangedSubview:playerSection];
+  // Settings-style list.
+  UIControl *quality=[self cell:@"Video Quality" symbol:@"sparkles.tv" color:UIColor.systemIndigoColor key:@"quality" value:@"Auto" accessory:1];
+  {UIButton *menu=[UIButton buttonWithType:UIButtonTypeSystem];menu.translatesAutoresizingMaskIntoConstraints=NO;menu.showsMenuAsPrimaryAction=YES;menu.accessibilityLabel=@"Video Quality";__weak typeof(self) weak=self;menu.menu=[UIMenu menuWithChildren:@[[UIDeferredMenuElement elementWithUncachedProvider:^(void (^completion)(NSArray<UIMenuElement *> *)){completion(weak?weak.qualityMenu.children:@[]);}]]];[quality addSubview:menu];
+   [NSLayoutConstraint activateConstraints:@[[menu.topAnchor constraintEqualToAnchor:quality.topAnchor],[menu.bottomAnchor constraintEqualToAnchor:quality.bottomAnchor],[menu.leadingAnchor constraintEqualToAnchor:quality.leadingAnchor],[menu.trailingAnchor constraintEqualToAnchor:quality.trailingAnchor]]];}
+  UIControl *pip=[self cell:@"Small Window" symbol:@"pip.fill" color:UIColor.systemTealColor key:@"pip" value:@"" accessory:2];
+  {UISwitch *toggle=[UISwitch new];toggle.accessibilityIdentifier=@"home.pipSwitch";toggle.accessibilityLabel=@"Small window (PiP)";[toggle addTarget:self action:@selector(pipSwitchChanged:) forControlEvents:UIControlEventValueChanged];UIStackView *line=(UIStackView *)pip.subviews.firstObject;[line addArrangedSubview:toggle];self.pipSwitch=toggle;}
+  UIControl *waiting=[self cell:@"Waiting Screen" symbol:@"photo.fill" color:UIColor.systemPinkColor key:@"waiting" value:@"" accessory:1];
+  UIControl *maps=[self cell:@"Open Map" symbol:@"location.fill" color:UIColor.systemGreenColor key:@"openmap" value:@"" accessory:1];maps.accessibilityIdentifier=@"home.maps";
+  [stack addArrangedSubview:[self sectionHeader:@"Car Player Settings"]];
+  UIView *settings=[self group:@[quality,pip,waiting,maps]];[stack addArrangedSubview:settings];[stack setCustomSpacing:7 afterView:stack.arrangedSubviews[stack.arrangedSubviews.count-2]];[stack setCustomSpacing:22 afterView:settings];
+  UIControl *help=[self cell:@"Help" symbol:@"questionmark" color:UIColor.systemGreenColor key:@"help" value:@"Khmer" accessory:1];
+  UIControl *more=[self cell:@"More" symbol:@"gearshape.fill" color:UIColor.systemGrayColor key:@"more" value:@"" accessory:1];more.accessibilityIdentifier=@"home.developer";
+  UIView *second=[self group:@[help,more]];[stack addArrangedSubview:second];
+  UIStackView *steps=[UIStackView new];steps.axis=UILayoutConstraintAxisVertical;steps.spacing=7;steps.layoutMargins=UIEdgeInsetsMake(14,16,14,16);steps.layoutMarginsRelativeArrangement=YES;steps.backgroundColor=UIColor.secondarySystemGroupedBackgroundColor;steps.layer.cornerRadius=12;
+  [steps addArrangedSubview:[self label:@"Connect in three steps" style:UIFontTextStyleHeadline]];
+  for(NSString *line in @[@"1   Turn on Personal Hotspot and let the car join it.",@"2   In YouTube tap the TV icon and choose ScreenLink VPN Phone.",@"3   Open car.tesla4khmer.com/video in the car."]){UILabel *label=[self label:line style:UIFontTextStyleSubheadline];label.textColor=UIColor.secondaryLabelColor;[steps addArrangedSubview:label];}
+  steps.hidden=YES;self.helpCard=steps;[stack addArrangedSubview:steps];
+  // Start / Stop ScreenLink, like the red line at the bottom of an Apple settings page.
+  self.startButton=[self bottomButton:@"Start ScreenLink" color:UIColor.systemBlueColor action:@selector(startTapped)];self.startButton.accessibilityIdentifier=@"home.start";self.startButton.accessibilityLabel=@"Start";
+  self.disconnectButton=[self bottomButton:@"Stop ScreenLink" color:UIColor.systemRedColor action:@selector(disconnectTapped)];self.disconnectButton.accessibilityIdentifier=@"home.disconnect";self.disconnectButton.accessibilityLabel=@"Disconnect all";
+  [stack setCustomSpacing:22 afterView:steps];[stack setCustomSpacing:22 afterView:second];[stack addArrangedSubview:self.startButton];[stack addArrangedSubview:self.disconnectButton];[stack setCustomSpacing:10 afterView:self.startButton];
+  [self showPlayerState:@{}];
   NSNotificationCenter *notifications=NSNotificationCenter.defaultCenter;
   for(NSString *event in @[UIApplicationDidBecomeActiveNotification,UIApplicationWillResignActiveNotification,UIApplicationDidEnterBackgroundNotification,UIAccessibilityReduceMotionStatusDidChangeNotification])[notifications addObserver:self selector:@selector(ambientStateChanged:) name:event object:nil];
  }
  return self;
+}
+- (UIButton *)bottomButton:(NSString *)title color:(UIColor *)color action:(SEL)action {
+ UIButtonConfiguration *config=UIButtonConfiguration.plainButtonConfiguration;config.title=title;config.baseForegroundColor=color;config.background.backgroundColor=UIColor.secondarySystemGroupedBackgroundColor;config.background.cornerRadius=12;config.contentInsets=NSDirectionalEdgeInsetsMake(15,16,15,16);
+ config.titleTextAttributesTransformer=^NSDictionary *(NSDictionary *a){NSMutableDictionary *m=[a mutableCopy];m[NSFontAttributeName]=[UIFont preferredFontForTextStyle:UIFontTextStyleBody];return m;};
+ UIButton *button=[UIButton buttonWithConfiguration:config primaryAction:nil];[button addTarget:self action:action forControlEvents:UIControlEventTouchUpInside];[button.heightAnchor constraintGreaterThanOrEqualToConstant:52].active=YES;return button;
+}
+- (void)makeLiveBadge {
+ UILabel *live=[UILabel new];self.liveBadge=live;live.text=@"  ● LIVE  ";live.font=[UIFont systemFontOfSize:12 weight:UIFontWeightHeavy];live.textColor=UIColor.whiteColor;live.backgroundColor=[UIColor colorWithRed:.95 green:.2 blue:.25 alpha:.92];live.layer.cornerRadius=11;live.clipsToBounds=YES;live.hidden=YES;live.translatesAutoresizingMaskIntoConstraints=NO;[self.car addSubview:live];
+ [NSLayoutConstraint activateConstraints:@[[live.topAnchor constraintEqualToAnchor:self.car.topAnchor constant:16],[live.leadingAnchor constraintEqualToAnchor:self.car.leadingAnchor constant:14],[live.heightAnchor constraintEqualToConstant:22]]];
 }
 - (void)dealloc {[NSNotificationCenter.defaultCenter removeObserver:self];[self stopAmbient];}
 - (void)didMoveToWindow {[super didMoveToWindow];[self updateAmbient];dispatch_async(dispatch_get_main_queue(),^{[self playEntrance];});}
@@ -266,7 +368,7 @@ static UIColor *SLHomeGrey(void){return [UIColor colorWithRed:.49 green:.51 blue
  self.car.videoLayer.player=self.ambientPlayer;[self.ambientPlayer play];
 }
 - (void)showStatus:(NSString *)status detail:(NSString *)detail busy:(BOOL)busy sharing:(BOOL)sharing disconnecting:(BOOL)disconnecting attention:(BOOL)attention {
- self.statusLabel.text=status;self.statusLabel.textColor=attention?UIColor.systemRedColor:UIColor.labelColor;self.detailLabel.text=detail;self.startButton.enabled=!busy;self.disconnectButton.enabled=!disconnecting;self.previewHost.hidden=!sharing;
+ self.statusLabel.text=status;self.statusLabel.textColor=UIColor.whiteColor;self.startButton.hidden=sharing&&!busy;self.disconnectButton.hidden=!sharing&&!busy;self.detailLabel.text=detail;self.startButton.enabled=!busy;self.disconnectButton.enabled=!disconnecting;self.previewHost.hidden=!sharing;
  UIButtonConfiguration *c=self.startButton.configuration;c.showsActivityIndicator=busy;self.startButton.configuration=c;
  self.idleAllowed=!busy&&!sharing;[self updateAmbient];
  UIColor *dot=attention?UIColor.systemOrangeColor:sharing?[UIColor colorWithRed:.25 green:.95 blue:.72 alpha:1]:busy?UIColor.systemBlueColor:UIColor.systemGrayColor;
@@ -298,6 +400,7 @@ static UIColor *SLHomeGrey(void){return [UIColor colorWithRed:.49 green:.51 blue
  if(!self.playerVolume.tracking&&settings[@"volume"])self.playerVolume.value=[settings[@"volume"] floatValue];
  NSUInteger quality=[@[@"auto",@"720",@"1080",@"1440",@"2160"] indexOfObject:settings[@"quality"]?:@"auto"];self.playerQuality.selectedSegmentIndex=quality==NSNotFound?0:quality;
  self.playerEQ.selectedSegmentIndex=[settings[@"eq"] isEqual:@"music"]?1:0;
+ self.playerSection.hidden=!active;self.controlsCard.hidden=!active;{NSInteger q=self.playerQuality.selectedSegmentIndex;NSArray *names=@[@"Auto",@"720p",@"1080p",@"1440p",@"4K"];if(q>=0&&q<(NSInteger)names.count)self.rowDetails[@"quality"].text=names[q];}
  UIButtonConfiguration *config=self.playerPause.configuration;config.title=[state[@"paused"] boolValue]?@"Play":@"Pause";self.playerPause.configuration=config;
  self.playerPosition.text=active?[NSString stringWithFormat:@"%ld:%02ld / %ld:%02ld · %@",(long)(position/60),(long)position%60,(long)(duration/60),(long)duration%60,[state[@"ready"] boolValue]?@"Car playback reported":@"Waiting for car player"]:@"Choose a video in YouTube after connecting AirPlay.";
 }
