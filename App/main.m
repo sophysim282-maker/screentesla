@@ -343,7 +343,7 @@ static void SLActivityFinish(void) {
   else if(self.carWarmAt>0&&NSProcessInfo.processInfo.systemUptime-self.carWarmAt<60&&![[self.receiver nativeMediaState][@"active"] boolValue]){level=1;status=@"Car ready";detail=@"Choose your video now: in YouTube tap the TV icon → ScreenLink VPN Phone. It starts fast.";}
   else{level=1;status=@"Car connected";detail=self.youtubePiP.active?@"Floating video is on. You can close it; ScreenLink stays awake without it.":@"Choose ScreenLink in YouTube’s AirPlay menu. You can leave this app; it stays awake.";}
  }
- self.dashboard.healthLevel=level;self.dashboard.screenPreview=self.broadcastArmed;
+ self.dashboard.healthLevel=level;
  [self.dashboard showStatus:status detail:detail busy:busy sharing:sharing disconnecting:self.disconnectFlow.running attention:self.disconnectNeedsAttention||self.discoveryPolicyDenied||self.homeFailure.length>0];
 }
 // Build 106: every 5 s while sharing (also in the background, the app stays awake since 105):
