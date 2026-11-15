@@ -23,8 +23,6 @@ static UIView *find(UIView *v,NSString *identifier){if([v.accessibilityIdentifie
   NSString *marker=[NSHomeDirectory() stringByAppendingPathComponent:@"Documents/phone-controls-passed.txt"];[@"PHONE_UI_PASSED" writeToFile:marker atomically:YES encoding:NSUTF8StringEncoding error:nil];
   // Build 86 preview: return to the top after the controls screenshot to show the 3D stage and Start button.
   dispatch_after(dispatch_time(DISPATCH_TIME_NOW,6*NSEC_PER_SEC),dispatch_get_main_queue(),^{[scroll setContentOffset:CGPointMake(0,-scroll.adjustedContentInset.top) animated:YES];});
-  // Build 148 preview: show the Video page for the last screenshot.
-  dispatch_after(dispatch_time(DISPATCH_TIME_NOW,14*NSEC_PER_SEC),dispatch_get_main_queue(),^{UIButton *tab=(id)find(home,@"home.tab.video");[tab sendActionsForControlEvents:UIControlEventTouchUpInside];});
  });return YES;
 }
 @end
