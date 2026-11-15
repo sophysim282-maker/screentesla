@@ -304,10 +304,10 @@ static UIColor *SLDyn(UIColor *light,UIColor *dark){return [UIColor colorWithDyn
   self.playerPosition=[self label:@"Waiting for video" style:UIFontTextStyleSubheadline];self.playerPosition.textColor=UIColor.secondaryLabelColor;[controls addArrangedSubview:self.playerPosition];
   self.playerSeek=[UISlider new];self.playerSeek.minimumValue=0;self.playerSeek.maximumValue=1;self.playerSeek.continuous=NO;self.playerSeek.accessibilityLabel=@"Car video position";self.playerSeek.accessibilityIdentifier=@"player.seek";[self.playerSeek addTarget:self action:@selector(playerSeekChanged) forControlEvents:UIControlEventValueChanged];[controls addArrangedSubview:self.playerSeek];
   UIStackView *playback=[UIStackView new];playback.spacing=10;playback.distribution=UIStackViewDistributionFillEqually;
-  self.playerBack=[self button:@"10" symbol:@"gobackward.10" action:@selector(playerBackTapped) filled:NO];self.playerBack.accessibilityLabel=@"Rewind car video ten seconds";
-  self.playerPause=[self button:@"Pause" symbol:@"playpause.fill" action:@selector(playerPauseTapped) filled:YES];self.playerPause.accessibilityIdentifier=@"player.pause";
-  self.playerForward=[self button:@"10" symbol:@"goforward.10" action:@selector(playerForwardTapped) filled:NO];self.playerForward.accessibilityLabel=@"Forward car video ten seconds";
-  for(UIButton *button in @[self.playerBack,self.playerPause,self.playerForward]){[button.heightAnchor constraintGreaterThanOrEqualToConstant:52].active=YES;[playback addArrangedSubview:button];}[controls addArrangedSubview:playback];
+  self.playerBack=[self button:@"" symbol:@"gobackward.10" action:@selector(playerBackTapped) filled:NO];self.playerBack.accessibilityLabel=@"Rewind car video ten seconds";
+  self.playerPause=[self button:@"" symbol:@"pause.fill" action:@selector(playerPauseTapped) filled:YES];self.playerPause.accessibilityIdentifier=@"player.pause";self.playerPause.accessibilityLabel=@"Pause";
+  self.playerForward=[self button:@"" symbol:@"goforward.10" action:@selector(playerForwardTapped) filled:NO];self.playerForward.accessibilityLabel=@"Forward car video ten seconds";
+  for(UIButton *button in @[self.playerBack,self.playerPause,self.playerForward]){UIButtonConfiguration *c=button.configuration;c.title=nil;c.imagePadding=0;c.preferredSymbolConfigurationForImage=[UIImageSymbolConfiguration configurationWithPointSize:22 weight:UIImageSymbolWeightSemibold];button.configuration=c;[button.heightAnchor constraintGreaterThanOrEqualToConstant:54].active=YES;[playback addArrangedSubview:button];}[controls addArrangedSubview:playback];
   UIImageView *quiet=[[UIImageView alloc]initWithImage:[UIImage systemImageNamed:@"speaker.fill"]],*loud=[[UIImageView alloc]initWithImage:[UIImage systemImageNamed:@"speaker.wave.3.fill"]];quiet.tintColor=loud.tintColor=UIColor.secondaryLabelColor;
   self.playerVolume=[UISlider new];self.playerVolume.minimumValue=0;self.playerVolume.maximumValue=1;self.playerVolume.value=1;self.playerVolume.continuous=NO;self.playerVolume.accessibilityLabel=@"Car player volume";self.playerVolume.accessibilityIdentifier=@"player.volume";[self.playerVolume addTarget:self action:@selector(playerVolumeChanged) forControlEvents:UIControlEventValueChanged];
   UIStackView *volume=[[UIStackView alloc]initWithArrangedSubviews:@[quiet,self.playerVolume,loud]];volume.spacing=10;volume.alignment=UIStackViewAlignmentCenter;[controls addArrangedSubview:volume];
@@ -368,7 +368,7 @@ static UIColor *SLDyn(UIColor *light,UIColor *dark){return [UIColor colorWithDyn
  self.car.videoLayer.player=self.ambientPlayer;[self.ambientPlayer play];
 }
 - (void)showStatus:(NSString *)status detail:(NSString *)detail busy:(BOOL)busy sharing:(BOOL)sharing disconnecting:(BOOL)disconnecting attention:(BOOL)attention {
- self.statusLabel.text=status;self.statusLabel.textColor=UIColor.whiteColor;self.startButton.hidden=sharing&&!busy;self.disconnectButton.hidden=!sharing&&!busy;self.detailLabel.text=detail;self.startButton.enabled=!busy;self.disconnectButton.enabled=!disconnecting;self.previewHost.hidden=!sharing;
+ self.statusLabel.text=status;self.statusLabel.textColor=UIColor.whiteColor;self.startButton.hidden=sharing&&!busy;self.disconnectButton.hidden=!sharing&&!busy;self.detailLabel.text=detail;self.startButton.enabled=!busy;self.disconnectButton.enabled=!disconnecting;self.previewHost.hidden=!(sharing&&self.screenPreview);
  UIButtonConfiguration *c=self.startButton.configuration;c.showsActivityIndicator=busy;self.startButton.configuration=c;
  self.idleAllowed=!busy&&!sharing;[self updateAmbient];
  UIColor *dot=attention?UIColor.systemOrangeColor:sharing?[UIColor colorWithRed:.25 green:.95 blue:.72 alpha:1]:busy?UIColor.systemBlueColor:UIColor.systemGrayColor;
@@ -401,7 +401,7 @@ static UIColor *SLDyn(UIColor *light,UIColor *dark){return [UIColor colorWithDyn
  NSUInteger quality=[@[@"auto",@"720",@"1080",@"1440",@"2160"] indexOfObject:settings[@"quality"]?:@"auto"];self.playerQuality.selectedSegmentIndex=quality==NSNotFound?0:quality;
  self.playerEQ.selectedSegmentIndex=[settings[@"eq"] isEqual:@"music"]?1:0;
  self.playerSection.hidden=!active;self.controlsCard.hidden=!active;{NSInteger q=self.playerQuality.selectedSegmentIndex;NSArray *names=@[@"Auto",@"720p",@"1080p",@"1440p",@"4K"];if(q>=0&&q<(NSInteger)names.count)self.rowDetails[@"quality"].text=names[q];}
- UIButtonConfiguration *config=self.playerPause.configuration;config.title=[state[@"paused"] boolValue]?@"Play":@"Pause";self.playerPause.configuration=config;
+ UIButtonConfiguration *config=self.playerPause.configuration;BOOL paused=[state[@"paused"] boolValue];config.title=nil;config.image=[UIImage systemImageNamed:paused?@"play.fill":@"pause.fill"];self.playerPause.configuration=config;self.playerPause.accessibilityLabel=paused?@"Play":@"Pause";
  self.playerPosition.text=active?[NSString stringWithFormat:@"%ld:%02ld / %ld:%02ld · %@",(long)(position/60),(long)position%60,(long)(duration/60),(long)duration%60,[state[@"ready"] boolValue]?@"Car playback reported":@"Waiting for car player"]:@"Choose a video in YouTube after connecting AirPlay.";
 }
 // Build 86: the car stage tilts in 3D with the phone and the finger, floats and shines.
