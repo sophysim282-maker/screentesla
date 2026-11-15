@@ -5,6 +5,8 @@
 @property(nonatomic,strong,readonly) UIView *previewHost;
 /// Build 106: status light. 0 = not used, 1 = green (car connected), 2 = yellow, 3 = red.
 @property(nonatomic) NSInteger healthLevel;
+/// Build 148: show the phone-screen preview box only in screen-sharing mode (it is empty for YouTube).
+@property(nonatomic) BOOL screenPreview;
 /// Build 116: list lines that open something outside this view: tiktok, waiting, cube.
 @property(nonatomic,copy) void (^moreAction)(NSString *key);
 - (void)setSubtitle:(NSString *)text forRow:(NSString *)key;

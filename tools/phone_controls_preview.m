@@ -9,7 +9,7 @@ static UIView *find(UIView *v,NSString *identifier){if([v.accessibilityIdentifie
 @implementation PreviewDelegate
 - (BOOL)application:(UIApplication *)app didFinishLaunchingWithOptions:(NSDictionary *)options {
  self.window=[[UIWindow alloc]initWithFrame:UIScreen.mainScreen.bounds];UIViewController *controller=[UIViewController new];ScreenLinkHomeView *home=[ScreenLinkHomeView new];home.translatesAutoresizingMaskIntoConstraints=NO;[controller.view addSubview:home];
- [NSLayoutConstraint activateConstraints:@[[home.topAnchor constraintEqualToAnchor:controller.view.safeAreaLayoutGuide.topAnchor],[home.bottomAnchor constraintEqualToAnchor:controller.view.safeAreaLayoutGuide.bottomAnchor],[home.leadingAnchor constraintEqualToAnchor:controller.view.leadingAnchor],[home.trailingAnchor constraintEqualToAnchor:controller.view.trailingAnchor]]];
+ [NSLayoutConstraint activateConstraints:@[[home.topAnchor constraintEqualToAnchor:controller.view.topAnchor],[home.bottomAnchor constraintEqualToAnchor:controller.view.bottomAnchor],[home.leadingAnchor constraintEqualToAnchor:controller.view.leadingAnchor],[home.trailingAnchor constraintEqualToAnchor:controller.view.trailingAnchor]]];
  [home showStatus:@"Playing on your car" detail:@"Choose videos in YouTube. Use the controls below for the car player." busy:NO sharing:YES disconnecting:NO attention:NO];
  [home showPlayerState:@{@"receiverRunning":@YES,@"active":@YES,@"epoch":@"fixture",@"paused":@NO,@"ready":@YES,@"position":@75,@"duration":@300,@"viewerControls":@{@"quality":@"auto",@"volume":@1,@"eq":@"normal"}}];
  NSMutableArray *actions=[NSMutableArray array];home.playerAction=^(NSDictionary *request){[actions addObject:request];};
@@ -23,6 +23,8 @@ static UIView *find(UIView *v,NSString *identifier){if([v.accessibilityIdentifie
   NSString *marker=[NSHomeDirectory() stringByAppendingPathComponent:@"Documents/phone-controls-passed.txt"];[@"PHONE_UI_PASSED" writeToFile:marker atomically:YES encoding:NSUTF8StringEncoding error:nil];
   // Build 86 preview: return to the top after the controls screenshot to show the 3D stage and Start button.
   dispatch_after(dispatch_time(DISPATCH_TIME_NOW,6*NSEC_PER_SEC),dispatch_get_main_queue(),^{[scroll setContentOffset:CGPointMake(0,-scroll.adjustedContentInset.top) animated:YES];});
+  // Build 148 preview: show the Video page for the last screenshot.
+  dispatch_after(dispatch_time(DISPATCH_TIME_NOW,14*NSEC_PER_SEC),dispatch_get_main_queue(),^{UIButton *tab=(id)find(home,@"home.tab.video");[tab sendActionsForControlEvents:UIControlEventTouchUpInside];});
  });return YES;
 }
 @end
