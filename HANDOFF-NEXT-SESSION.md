@@ -4,6 +4,8 @@ Read this first. It replaces reading the old 400k-token conversation.
 
 ## WHERE WE ARE NOW (read this part first)
 
+- **Build 147 was REJECTED by the user and removed** (Apple-style Home, auto start, map widget): "back to 146". Keep the build 146 Home; change it only in small steps the user asks for. Code of 147 is in git history (commit 9ffc5a3) if ever needed.
+
 - **Build 146 (0.21.09), branch `release/build146-car-arrived`:** first start after getting into the car: CAR ARRIVED + WARM-UP in main.m healthTick (SLWarmDownloads, Car ready on Home), shared warm NSURLSession for first tries in BoundedDownload.m, car page 1 s reconnect + carWarmUp() (3 connections, decoder configure). See BUILD146.md.
 
 - **Build 145 (0.21.08), branch `release/build145-phone-sound`:** ALAC (kind 2) decoded by Apple's open-source decoder in ThirdParty/ALAC (sl_alac.cpp, SLALAC.m); ChaCha20-Poly1305 with stream `shk` in raop_buffer_decrypt (prepare_receiver.py). Log shows setup fields + lock counts. See BUILD145.md.
