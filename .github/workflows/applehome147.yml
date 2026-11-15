@@ -1,5 +1,5 @@
 name: Build147 apple home
-# Build 147: Apple-style Home, auto start, map widget. Run 1.
+# Build 147: Apple-style Home, auto start, map widget. Run 2.
 on:
   push:
     branches: ['release/build147-apple-home']
