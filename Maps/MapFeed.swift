@@ -27,11 +27,6 @@ final class SLMapFeed: NSObject {
     @objc static func frameData() -> Data {
         lock.lock(); defer { lock.unlock() }; lastCarRequest = Date(); return frame
     }
-    /// Build 147: the latest state for the map widget, without counting as a car request.
-    static func peekState() -> [String: Any] {
-        lock.lock(); defer { lock.unlock() }
-        return ((try? JSONSerialization.jsonObject(with: state)) as? [String: Any]) ?? [:]
-    }
     @objc static func backgroundData() -> Data { lock.lock(); defer { lock.unlock() }; return background }
     @objc static func stateData() -> Data {
         lock.lock(); defer { lock.unlock() }
@@ -58,7 +53,6 @@ final class CarServer {
 
     func setState(_ dict: [String: Any]) {
         if let data = try? JSONSerialization.data(withJSONObject: dict) { SLMapFeed.store(state: data) }
-        SLWidgetMap.note(dict)
     }
     func setBackgroundMap(_ jpeg: Data) { SLMapFeed.store(background: jpeg) }
     func broadcast(_ jpeg: Data) { SLMapFeed.store(frame: jpeg) }

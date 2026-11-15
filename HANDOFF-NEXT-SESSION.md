@@ -4,8 +4,6 @@ Read this first. It replaces reading the old 400k-token conversation.
 
 ## WHERE WE ARE NOW (read this part first)
 
-- **Build 147 (0.21.10), branch `release/build147-apple-home`:** Apple-style Home (ScreenLinkHomeView.m initWithFrame rewritten: tiles, grouped cells, bottom Start/Stop), auto start in main.m `active` (not within 5 min of Stop, `stoppedAt`), Map widget (Widgets/MapWidget.swift, Maps/WidgetMap.swift, Receiver.m /local/widget/map, route screenlink://maps). See BUILD147.md.
-
 - **Build 146 (0.21.09), branch `release/build146-car-arrived`:** first start after getting into the car: CAR ARRIVED + WARM-UP in main.m healthTick (SLWarmDownloads, Car ready on Home), shared warm NSURLSession for first tries in BoundedDownload.m, car page 1 s reconnect + carWarmUp() (3 connections, decoder configure). See BUILD146.md.
 
 - **Build 145 (0.21.08), branch `release/build145-phone-sound`:** ALAC (kind 2) decoded by Apple's open-source decoder in ThirdParty/ALAC (sl_alac.cpp, SLALAC.m); ChaCha20-Poly1305 with stream `shk` in raop_buffer_decrypt (prepare_receiver.py). Log shows setup fields + lock counts. See BUILD145.md.

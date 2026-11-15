@@ -113,7 +113,6 @@ static void SLActivityFinish(void) {
 @property(nonatomic) NSUInteger soundOnlyCheck;
 @property(nonatomic) BOOL carLeftWarned;
 @property(nonatomic) BOOL carAway;
-@property(nonatomic) BOOL autoStartTried;
 @property(nonatomic) NSTimeInterval carWarmAt;
 @property(nonatomic) BOOL discoveryPolicyDenied;
 @end
@@ -170,8 +169,7 @@ static void SLActivityFinish(void) {
         [owner append:@"BACKGROUND RUNTIME ENDED: receiver, viewer link and media session retained. iOS may suspend this app without PiP. Returning to ScreenLink resumes the existing receiver; Start is not required to rebuild it."];
         if(!owner.preview.active&&!owner.youtubePiP.active && UIApplication.sharedApplication.applicationState==UIApplicationStateBackground)[owner beginGrace];
     };
-    [self append:@"Version 0.21.10 / build 147: new Apple-style Home (follows light/dark mode): car card with status and a YouTube button, four big tiles (Maps, Phone Sound, Keep Playing, TikTok), Settings-style list, Start/Stop ScreenLink at the bottom; car player buttons appear by themselves while a video plays. ScreenLink starts by itself when you open the app (not for 5 minutes after Stop). New ScreenLink Map widget (medium, large): Google map picture, route, next turn and arrival time."];
-    [self append:@"Earlier build 146: fast first start when you get into the car. When the car page comes back, the phone wakes everything by itself (CAR ARRIVED) and warms its mobile internet and YouTube connections (WARM-UP); Home shows Car ready. YouTube connections stay open between pieces. The car page reconnects every second when it wakes and warms its own connections and video decoder. Tip: when you get in, open iPhone Settings → Personal Hotspot until the car joins."];
+    [self append:@"Version 0.21.09 / build 146: fast first start when you get into the car. When the car page comes back, the phone wakes everything by itself (CAR ARRIVED) and warms its mobile internet and YouTube connections (WARM-UP); Home shows Car ready. YouTube connections stay open between pieces. The car page reconnects every second when it wakes and warms its own connections and video decoder. Tip: when you get in, open iPhone Settings → Personal Hotspot until the car joins."];
     [self append:@"Earlier build 145: phone sound of other apps (Messenger, Telegram). Apple Lossless sound is now unpacked by Apple's own open-source decoder instead of the iPhone unpacker that refused every packet, and sound locked with the newer AirPlay 2 key (shk) is opened too. Turn Phone sound On. The log line AIRPLAY SOUND now also says which lock the iPhone used."];
     [self append:@"Earlier build 144: the phone buzzes and shows a message when YouTube sends only sound (pick ScreenLink from the TV icon inside YouTube) or when the car leaves the Wi-Fi."];
     [self append:@"Earlier build 143: video first on the Wi-Fi. The car loads the far map squares only when there is no video or 8 s of picture is ready, so the map does not take the Wi-Fi the video needs. Car requests that arrive without the right address get an immediate try-again answer instead of waiting, and the log shows what they were. Includes build 142."];
@@ -244,7 +242,7 @@ static void SLActivityFinish(void) {
  self.previewIndex=[self.developerStack.arrangedSubviews indexOfObject:self.previewSlot];
  UIButton *back=[UIButton buttonWithType:UIButtonTypeSystem];[back setTitle:@"‹ Home" forState:UIControlStateNormal];back.accessibilityIdentifier=@"developer.home";[back.heightAnchor constraintGreaterThanOrEqualToConstant:44].active=YES;[back addTarget:self action:@selector(showHome) forControlEvents:UIControlEventTouchUpInside];[self.developerStack insertArrangedSubview:back atIndex:0];self.previewIndex++;
  self.dashboard=[ScreenLinkHomeView new];self.dashboard.translatesAutoresizingMaskIntoConstraints=NO;[self.view addSubview:self.dashboard];
- /* Build 147: Home fills the whole screen; its list keeps clear of the notch by itself. */[NSLayoutConstraint activateConstraints:@[[self.dashboard.topAnchor constraintEqualToAnchor:self.view.topAnchor],[self.dashboard.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor],[self.dashboard.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],[self.dashboard.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor]]];
+ [NSLayoutConstraint activateConstraints:@[[self.dashboard.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor],[self.dashboard.bottomAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.bottomAnchor],[self.dashboard.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],[self.dashboard.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor]]];
  __weak Controller *weak=self;
  self.dashboard.playerAction=^(NSDictionary *request){[weak phonePlayerControl:request];};
  self.dashboard.startAction=^{[weak startHome];};self.dashboard.mapAction=^{[weak showMaps];};[NSUserDefaults.standardUserDefaults registerDefaults:@{@"keepPlaying":@YES,@"phoneSound":@NO}];/* Build 127: Phone sound made ScreenLink vanish from the AirPlay list on the user's iPhone (build 126), so it is off for everyone, also for phones that still have it on from 124-126. */if(![NSUserDefaults.standardUserDefaults boolForKey:@"phoneSoundReset127"]){[NSUserDefaults.standardUserDefaults setBool:YES forKey:@"phoneSoundReset127"];[NSUserDefaults.standardUserDefaults setBool:NO forKey:@"phoneSound"];}[NSUserDefaults.standardUserDefaults synchronize];self.dashboard.moreAction=^(NSString *key){[weak openMore:key];};{Class engine=NSClassFromString(@"SLGoogleNav");if(engine)[(id<SLKeepAwakeAPI>)engine setLog:^(NSString *line){dispatch_async(dispatch_get_main_queue(),^{[weak append:line];});}];}{Class sound=NSClassFromString(@"SLAirPlaySound");if(sound)[(id<SLKeepAwakeAPI>)sound setLog:^(NSString *line){dispatch_async(dispatch_get_main_queue(),^{[weak append:line];});}];}self.dashboard.disconnectAction=^{[weak disconnectAll];};self.dashboard.developerAction=^{[weak showDeveloper];};self.dashboard.copyAction=^{[weak youtubeOnlyWebsite];};
@@ -416,7 +414,7 @@ static void SLActivityFinish(void) {
 - (void)disconnectAll {
  [self loadViewIfNeeded];if(self.disconnectFlow.running)return;
  id delegate=UIApplication.sharedApplication.delegate;if([delegate respondsToSelector:@selector(cancelPendingWidgetAction)])[(id<SLPendingWidgetAPI>)delegate cancelPendingWidgetAction];
- self.userDisconnected=YES;self.disconnectNeedsAttention=NO;self.homeFailure=nil;[NSUserDefaults.standardUserDefaults setBool:YES forKey:@"manualDisconnected"];[NSUserDefaults.standardUserDefaults setDouble:NSDate.date.timeIntervalSince1970 forKey:@"stoppedAt"];
+ self.userDisconnected=YES;self.disconnectNeedsAttention=NO;self.homeFailure=nil;[NSUserDefaults.standardUserDefaults setBool:YES forKey:@"manualDisconnected"];
  self.disconnectSession=[NSURLSession sessionWithConfiguration:NSURLSessionConfiguration.ephemeralSessionConfiguration];
  [self.disconnectFlow runStopSources:^{
   self.quickStartPending=NO;self.broadcastChecking=NO;[self stopPresentedSessions:self.presentedViewController];[self stop];[self.broadcastTimer invalidate];self.broadcastTimer=nil;
@@ -708,12 +706,7 @@ static void SLActivityFinish(void) {
     else {[self append:self.youtubePiPRequested?@"PIP NOT ACTIVE: return to ScreenLink and wait for YOUTUBE PiP ACTIVE before switching apps. The saved request alone cannot keep the receiver running.":@"Floating preview is not active. Only a short background grace is available. Return and start floating preview before switching apps."];[self beginGrace];}
 }
 - (void)active {
-    [self updateHome];
-    // Build 147: ScreenLink starts by itself when you open the app. After Stop (in the app or the widget) it
-    // stays off for 5 minutes, so Stop still means stop.
-    if(!self.autoStartTried&&!self.receiver.isRunning&&!self.broadcastArmed&&!self.disconnectFlow.running&&!self.vpn.disconnecting&&NSDate.date.timeIntervalSince1970-[NSUserDefaults.standardUserDefaults doubleForKey:@"stoppedAt"]>300){
-        self.autoStartTried=YES;[self append:@"AUTO START: ScreenLink starts by itself when the app opens."];[self startHome];return;}
-    if(self.userDisconnected||self.disconnectFlow.running)return;
+    [self updateHome];if(self.userDisconnected||self.disconnectFlow.running)return;
     [self requestLocalNetwork];
     if(![NSUserDefaults.standardUserDefaults boolForKey:@"widgetChecked51"]){[NSUserDefaults.standardUserDefaults setBool:YES forKey:@"widgetChecked51"];[self widgetDiagnostics];}
     if([NSUserDefaults.standardUserDefaults boolForKey:@"resumeYouTubeOnReturn"]){[self resumeYouTubeOnReturn];return;}
@@ -722,7 +715,7 @@ static void SLActivityFinish(void) {
     if([NSUserDefaults.standardUserDefaults boolForKey:@"receiverArmed"] && !self.receiver.isRunning)[self start];
 }
 - (void)foreground {
-    self.autoStartTried=NO;[self endGrace];[self append:@"App returned to foreground."];
+    [self endGrace];[self append:@"App returned to foreground."];
 }
 @end
 @interface AppDelegate : UIResponder <UIApplicationDelegate>
@@ -733,7 +726,7 @@ static void SLActivityFinish(void) {
 @implementation AppDelegate
 - (BOOL)application:(UIApplication *)app didFinishLaunchingWithOptions:(NSDictionary *)options {
  SLWidgetRoute launchAction=SLRouteForURL(options[UIApplicationLaunchOptionsURLKey]);
- if(launchAction==SLWidgetRouteDisconnect){[NSUserDefaults.standardUserDefaults setDouble:NSDate.date.timeIntervalSince1970 forKey:@"stoppedAt"];[NSUserDefaults.standardUserDefaults setBool:YES forKey:@"manualDisconnected"];[NSUserDefaults.standardUserDefaults setBool:NO forKey:@"receiverArmed"];[NSUserDefaults.standardUserDefaults setBool:NO forKey:@"resumeYouTubeOnReturn"];}
+ if(launchAction==SLWidgetRouteDisconnect){[NSUserDefaults.standardUserDefaults setBool:YES forKey:@"manualDisconnected"];[NSUserDefaults.standardUserDefaults setBool:NO forKey:@"receiverArmed"];[NSUserDefaults.standardUserDefaults setBool:NO forKey:@"resumeYouTubeOnReturn"];}
  self.window=[[UIWindow alloc]initWithFrame:UIScreen.mainScreen.bounds];self.window.rootViewController=[Controller new];[self.window makeKeyAndVisible];self.pendingWidgetAction=launchAction;return YES;
 }
 - (void)cancelPendingWidgetAction {self.widgetGeneration++;self.pendingWidgetAction=SLWidgetRouteNone;}
@@ -754,7 +747,6 @@ static void SLActivityFinish(void) {
  if(action==SLWidgetRouteDisconnect)[owner disconnectAll];
  else if(action==SLWidgetRouteStart)[owner startFromWidget];
  else if(action==SLWidgetRouteResume)[owner resumeYouTubeOnReturn];
- else if(action==SLWidgetRouteMaps)[owner showMaps];
 }
 @end
 int main(int argc,char **argv){@autoreleasepool{return UIApplicationMain(argc,argv,nil,NSStringFromClass(AppDelegate.class));}}
