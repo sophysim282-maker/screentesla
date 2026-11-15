@@ -1,5 +1,5 @@
 name: Build149 read ahead
-# Build 149: read-ahead store for weak internet. Run 1.
+# Build 149: read-ahead store for weak internet. Run 2.
 on:
   push:
     branches: ['release/build149-read-ahead']
