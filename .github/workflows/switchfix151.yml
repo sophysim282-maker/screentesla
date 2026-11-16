@@ -1,5 +1,5 @@
 name: Build151 switch fix
-# Build 151: fix the stuck video switch. Run 1.
+# Build 151: fix the stuck video switch. Run 2.
 on:
   push:
     branches: ['release/build151-switch-fix']
