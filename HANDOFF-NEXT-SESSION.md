@@ -4,6 +4,8 @@ Read this first. It replaces reading the old 400k-token conversation.
 
 ## WHERE WE ARE NOW (read this part first)
 
+- **Build 150 (0.21.13), branch `release/build150-trip-timer`:** trip timer in main.m (tripBegin/tripMark: app, car, page, airplay, video, picture → TRIP TIMING, last 3 in UserDefaults `tripTimings`), saved log Documents/screenlink-log.txt, Developer "Copy trip log". NEXT: ask the user for the trip log and fix the slowest step. See BUILD150.md.
+
 - **Build 149 (0.21.12), branch `release/build149-read-ahead`:** MediaCast.m read-ahead store (notePieces/aheadAfter, 180 s, 3 parallel, 900 MB, tmp/ScreenLinkAhead/<epoch>, `phoneAhead` in media state), car note in CanvasShell.js updateLoadingNote, INTERNET TOO SLOW FOR 4K alert (main.m) + notification. See BUILD149.md.
 
 - **Build 148 (0.21.11), branch `release/build148-glass-home`:** glass Home the user CHOSE (style from a Dribbble plant-app video they sent; mockup `ScreenLink-glass-easier.png`). ScreenLinkHomeView.m: full-screen car photo (self.car), black island card, big time, glass bar + Pause, 6 glass tiles, Start/Stop, bottom tab bar Home/Video/Map/Menu, Video page. Built on 146 (no auto start, no map widget). See BUILD148.md.

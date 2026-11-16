@@ -113,12 +113,16 @@ static void SLActivityFinish(void) {
 @property(nonatomic) NSUInteger soundOnlyCheck;
 @property(nonatomic) BOOL carLeftWarned;
 @property(nonatomic) BOOL carAway;
+@property(nonatomic) double tripStart,tripLastActive;
+@property(nonatomic,strong) NSMutableDictionary *tripMarks;
+@property(nonatomic) BOOL tripDone,tripHotspot;
+@property(nonatomic,strong) NSFileHandle *savedLog;
 @property(nonatomic) NSTimeInterval carWarmAt;
 @property(nonatomic) BOOL discoveryPolicyDenied;
 @end
 @implementation Controller
 - (void)viewDidLoad {
-    [super viewDidLoad];self.view.backgroundColor=UIColor.systemBackgroundColor;
+    [super viewDidLoad];self.view.backgroundColor=UIColor.systemBackgroundColor;dispatch_async(dispatch_get_main_queue(),^{[self tripBegin:@"ScreenLink started"];[self tripMark:@"app"];});
     self.backgroundTask=UIBackgroundTaskInvalid;self.userDisconnected=[NSUserDefaults.standardUserDefaults boolForKey:@"manualDisconnected"];self.disconnectFlow=[SLDisconnectFlow new];
     UIStackView *stack=[UIStackView new];stack.axis=UILayoutConstraintAxisVertical;stack.spacing=6;stack.translatesAutoresizingMaskIntoConstraints=NO;
     UIScrollView *scroll=[UIScrollView new];self.developerScroll=scroll;self.developerStack=stack;scroll.translatesAutoresizingMaskIntoConstraints=NO;[self.view addSubview:scroll];[NSLayoutConstraint activateConstraints:@[[scroll.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor],[scroll.bottomAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.bottomAnchor],[scroll.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],[scroll.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor]]];[scroll addSubview:stack];
@@ -141,8 +145,8 @@ static void SLActivityFinish(void) {
     NSLayoutConstraint *previewHeight=[self.previewSlot.heightAnchor constraintEqualToConstant:100];previewHeight.priority=750;previewHeight.active=YES;
     [stack addArrangedSubview:self.previewSlot];
     self.broadcastPicker=[[RPSystemBroadcastPickerView alloc]initWithFrame:CGRectMake(0,0,50,50)];self.broadcastPicker.showsMicrophoneButton=NO;self.broadcastPicker.hidden=YES;[self.broadcastPicker.heightAnchor constraintEqualToConstant:50].active=YES;[stack addArrangedSubview:self.broadcastPicker];
-    NSArray *labels=@[@"Import website certificate",@"Start YouTube · no recording",@"Start YouTube + PiP · no recording",@"Check Home Screen widget",@"Maps + YouTube · screen broadcast",@"Copy YouTube website link",@"Maps + YouTube · website",@"WebRTC moving-video test",@"Maps + YouTube · prepare screen broadcast",@"Start YouTube video-only",@"Start receiver",@"Copy viewer link",@"Start background session (iOS controlled)",@"Start floating preview",@"Show browser links",@"Copy test log",@"Refresh discovery",@"Stop sharing"];
-    NSArray *actions=@[NSStringFromSelector(@selector(importWebsiteCertificate)),NSStringFromSelector(@selector(startYouTubeNoRecording)),NSStringFromSelector(@selector(startYouTubePiP)),NSStringFromSelector(@selector(widgetDiagnostics)),NSStringFromSelector(@selector(quickStart)),NSStringFromSelector(@selector(youtubeOnlyWebsite)),NSStringFromSelector(@selector(youtubeWebsite)),NSStringFromSelector(@selector(rtcPrototype)),NSStringFromSelector(@selector(prepareBroadcast)),NSStringFromSelector(@selector(startMedia)),NSStringFromSelector(@selector(start)),NSStringFromSelector(@selector(copyViewer)),NSStringFromSelector(@selector(startSession)),NSStringFromSelector(@selector(startFloating)),NSStringFromSelector(@selector(links)),NSStringFromSelector(@selector(copyLog)),NSStringFromSelector(@selector(refreshDiscovery)),NSStringFromSelector(@selector(stop))];
+    NSArray *labels=@[@"Import website certificate",@"Start YouTube · no recording",@"Start YouTube + PiP · no recording",@"Check Home Screen widget",@"Maps + YouTube · screen broadcast",@"Copy YouTube website link",@"Maps + YouTube · website",@"WebRTC moving-video test",@"Maps + YouTube · prepare screen broadcast",@"Start YouTube video-only",@"Start receiver",@"Copy viewer link",@"Start background session (iOS controlled)",@"Start floating preview",@"Show browser links",@"Copy trip log (last 3 trips)",@"Copy test log",@"Refresh discovery",@"Stop sharing"];
+    NSArray *actions=@[NSStringFromSelector(@selector(importWebsiteCertificate)),NSStringFromSelector(@selector(startYouTubeNoRecording)),NSStringFromSelector(@selector(startYouTubePiP)),NSStringFromSelector(@selector(widgetDiagnostics)),NSStringFromSelector(@selector(quickStart)),NSStringFromSelector(@selector(youtubeOnlyWebsite)),NSStringFromSelector(@selector(youtubeWebsite)),NSStringFromSelector(@selector(rtcPrototype)),NSStringFromSelector(@selector(prepareBroadcast)),NSStringFromSelector(@selector(startMedia)),NSStringFromSelector(@selector(start)),NSStringFromSelector(@selector(copyViewer)),NSStringFromSelector(@selector(startSession)),NSStringFromSelector(@selector(startFloating)),NSStringFromSelector(@selector(links)),NSStringFromSelector(@selector(copyTripLog)),NSStringFromSelector(@selector(copyLog)),NSStringFromSelector(@selector(refreshDiscovery)),NSStringFromSelector(@selector(stop))];
     for(NSUInteger i=0;i<labels.count;i++) {
         UIButton *button=[UIButton buttonWithType:UIButtonTypeSystem];[button setTitle:labels[i] forState:UIControlStateNormal];[button.heightAnchor constraintEqualToConstant:34].active=YES;
         [button addTarget:self action:NSSelectorFromString(actions[i]) forControlEvents:UIControlEventTouchUpInside];[stack addArrangedSubview:button];
@@ -169,7 +173,8 @@ static void SLActivityFinish(void) {
         [owner append:@"BACKGROUND RUNTIME ENDED: receiver, viewer link and media session retained. iOS may suspend this app without PiP. Returning to ScreenLink resumes the existing receiver; Start is not required to rebuild it."];
         if(!owner.preview.active&&!owner.youtubePiP.active && UIApplication.sharedApplication.applicationState==UIApplicationStateBackground)[owner beginGrace];
     };
-    [self append:@"Version 0.21.12 / build 149: read-ahead store: while the internet is good, the phone downloads up to 3 minutes of the playing video ahead into phone storage (deleted when the video changes), so a minute without internet does not stop the car. The car says why it waits (phone internet slow, or video ready on the phone and the car Wi-Fi slow). When the internet is too slow for 4K / 1440p, the phone asks once whether to use Auto."];
+    [self append:@"Version 0.21.13 / build 150: trip timer. Each trip, ScreenLink times the first start: app open, car joined the Hotspot, car page, YouTube AirPlay, video handed over, first picture (TRIP TIMING line). The whole log is also saved in phone storage, so closing the app does not lose it. Developer → Copy trip log (last 3 trips)."];
+    [self append:@"Earlier build 149: read-ahead store: while the internet is good, the phone downloads up to 3 minutes of the playing video ahead into phone storage (deleted when the video changes), so a minute without internet does not stop the car. The car says why it waits (phone internet slow, or video ready on the phone and the car Wi-Fi slow). When the internet is too slow for 4K / 1440p, the phone asks once whether to use Auto."];
     [self append:@"Earlier build 148: glass Home chosen by the user: the car photo fills the screen, black status card with Open YouTube, big car video time, glass bar with Pause, glass tiles (Phone sound, Keep playing, Maps, Small window, Waiting screen, TikTok) with ON/OFF badges, Start/Stop ScreenLink, bottom bar Home · Video · Map · Menu. Video page: big Pause, ±10 s, timeline, quality, sound, volume. All functions unchanged."];
     [self append:@"Earlier build 146: fast first start when you get into the car. When the car page comes back, the phone wakes everything by itself (CAR ARRIVED) and warms its mobile internet and YouTube connections (WARM-UP); Home shows Car ready. YouTube connections stay open between pieces. The car page reconnects every second when it wakes and warms its own connections and video decoder. Tip: when you get in, open iPhone Settings → Personal Hotspot until the car joins."];
     [self append:@"Earlier build 145: phone sound of other apps (Messenger, Telegram). Apple Lossless sound is now unpacked by Apple's own open-source decoder instead of the iPhone unpacker that refused every packet, and sound locked with the newer AirPlay 2 key (shk) is opened too. Turn Phone sound On. The log line AIRPLAY SOUND now also says which lock the iPhone used."];
@@ -376,6 +381,9 @@ static void SLActivityFinish(void) {
   // everything at once: listeners, AirPlay in YouTube's list, and the phone's mobile internet + YouTube connections.
   // While the car waits with no video, keep the YouTube connections warm, so the first video starts like the second.
   BOOL hotspot=[health[@"hotspot"] boolValue];
+  // Build 150 trip timer: the car joined the Hotspot / the car page talks to the phone.
+  if(hotspot&&!self.tripHotspot){[self tripBegin:@"the car joined the Hotspot"];[self tripMark:@"car"];}self.tripHotspot=hotspot;
+  if(hotspot&&car>=0&&car<=6)[self tripMark:@"page"];
   if(!hotspot||car<0||car>30)self.carAway=YES;
   else if(car<=6){
    if(self.carAway){self.carAway=NO;
@@ -457,6 +465,7 @@ static void SLActivityFinish(void) {
   __weak Controller *weakSelf=self;[ask addAction:[UIAlertAction actionWithTitle:@"Use Auto" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a){Controller *owner=weakSelf;if(owner.dashboard.playerAction)owner.dashboard.playerAction(@{@"quality":@"auto"});[owner append:@"QUALITY: switched to Auto from the slow-internet message."];}]];
   [ask addAction:[UIAlertAction actionWithTitle:[@"Keep " stringByAppendingString:which] style:UIAlertActionStyleCancel handler:nil]];
   dispatch_async(dispatch_get_main_queue(),^{if(!weakSelf.presentedViewController)[weakSelf presentViewController:ask animated:YES completion:nil];});}
+ [self saveLogLine:[NSString stringWithFormat:@"%@ %@\n",[NSDate date],s]];[self tripWatchLine:s];
  if([s hasPrefix:@"MEDIA PLAY REQUEST"]){self.soundOnlyCheck++;if([self.homeFailure hasPrefix:@"YouTube sent sound only"]){self.homeFailure=nil;[self updateHome];}}
  else if([s hasPrefix:@"raop_rtp starting audio"]&&self.receiver.mediaOnly){NSUInteger check=++self.soundOnlyCheck;__weak Controller *weakSelf=self;
   dispatch_after(dispatch_time(DISPATCH_TIME_NOW,(int64_t)(5*NSEC_PER_SEC)),dispatch_get_main_queue(),^{Controller *owner=weakSelf;
@@ -664,6 +673,46 @@ static void SLActivityFinish(void) {
     [alert addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleDefault handler:nil]];[self presentViewController:alert animated:YES completion:nil];
 }
 - (void)copyLog { UIPasteboard.generalPasteboard.string=self.text.text;[self append:@"Test log copied."]; }
+// ---------- Build 150: trip timer ----------
+// Times each step of the first start in the car, so the slow one can be fixed: app opened, car joined the
+// Hotspot, car page connected, YouTube AirPlay connected, video handed over, first picture on the car.
+// The result (TRIP TIMING) and the whole log are saved in phone storage, so closing the app does not lose them.
+static double SLWall(void){return NSDate.date.timeIntervalSince1970;}
+- (void)tripBegin:(NSString *)why {
+ double now=SLWall();BOOL stale=!self.tripMarks||(self.tripDone&&now-self.tripLastActive>600)||(!self.tripDone&&now-self.tripStart>1800);
+ if(!stale)return;self.tripStart=now;self.tripMarks=[NSMutableDictionary dictionary];self.tripDone=NO;
+ [self append:[@"TRIP START: " stringByAppendingString:why]];
+}
+- (void)tripMark:(NSString *)name {
+ double now=SLWall();self.tripLastActive=now;if(!self.tripMarks||self.tripDone||self.tripMarks[name])return;
+ self.tripMarks[name]=@(MAX(0,now-self.tripStart));
+ if(![name isEqual:@"picture"])return;
+ self.tripDone=YES;NSArray *keys=@[@"app",@"car",@"page",@"airplay",@"video",@"picture"],*names=@[@"App open",@"Car joined",@"Car page",@"AirPlay",@"Video",@"Picture"];NSMutableArray *parts=[NSMutableArray array];
+ for(NSUInteger i=0;i<keys.count;i++){NSNumber *t=self.tripMarks[keys[i]];if(t)[parts addObject:[NSString stringWithFormat:@"%@ %ld:%02ld",names[i],(long)t.doubleValue/60,(long)t.doubleValue%60]];}
+ NSDateFormatter *f=[NSDateFormatter new];f.dateFormat=@"d MMM HH:mm";NSString *line=[NSString stringWithFormat:@"%@ · %@",[f stringFromDate:[NSDate dateWithTimeIntervalSince1970:self.tripStart]],[parts componentsJoinedByString:@" · "]];
+ NSMutableArray *saved=[[NSUserDefaults.standardUserDefaults arrayForKey:@"tripTimings"]?:@[] mutableCopy];[saved insertObject:line atIndex:0];while(saved.count>3)[saved removeLastObject];[NSUserDefaults.standardUserDefaults setObject:saved forKey:@"tripTimings"];
+ [self append:[@"TRIP TIMING: " stringByAppendingString:line]];
+}
+- (void)tripWatchLine:(NSString *)s {
+ if([s hasPrefix:@"AirPlay control connection received"])[self tripMark:@"airplay"];
+ else if([s hasPrefix:@"MEDIA PLAY REQUEST"])[self tripMark:@"video"];
+ else if([s hasPrefix:@"CAR PLAYER: start took"])[self tripMark:@"picture"];
+}
+- (NSString *)savedLogPath {return [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory,NSUserDomainMask,YES).firstObject stringByAppendingPathComponent:@"screenlink-log.txt"];}
+- (void)saveLogLine:(NSString *)line {
+ if(!self.savedLog){NSString *path=[self savedLogPath];if(![NSFileManager.defaultManager fileExistsAtPath:path])[NSFileManager.defaultManager createFileAtPath:path contents:nil attributes:nil];
+  unsigned long long size=[[NSFileManager.defaultManager attributesOfItemAtPath:path error:nil] fileSize];
+  if(size>2*1024*1024){NSData *all=[NSData dataWithContentsOfFile:path];NSData *tail=[all subdataWithRange:NSMakeRange(all.length-1024*1024,1024*1024)];[tail writeToFile:path atomically:YES];}
+  self.savedLog=[NSFileHandle fileHandleForWritingAtPath:path];[self.savedLog seekToEndOfFile];}
+ @try{[self.savedLog writeData:[line dataUsingEncoding:NSUTF8StringEncoding]];}@catch(NSException *e){self.savedLog=nil;}
+}
+- (void)copyTripLog {
+ NSArray *saved=[NSUserDefaults.standardUserDefaults arrayForKey:@"tripTimings"]?:@[];
+ NSData *all=[NSData dataWithContentsOfFile:[self savedLogPath]];if(all.length>600*1024)all=[all subdataWithRange:NSMakeRange(all.length-600*1024,600*1024)];
+ NSString *log=all?[[NSString alloc]initWithData:all encoding:NSUTF8StringEncoding]?:@"":@"";
+ UIPasteboard.generalPasteboard.string=[NSString stringWithFormat:@"TRIP TIMINGS (newest first):\n%@\n\nSAVED LOG (kept even if the app was closed):\n%@",saved.count?[saved componentsJoinedByString:@"\n"]:@"(no finished trip yet)",log];
+ [self append:@"Trip log copied (timings of the last 3 trips + saved log)."];
+}
 - (NSArray<NSDictionary *> *)addresses {
     struct ifaddrs *head=NULL;if(getifaddrs(&head)!=0)return @[];
     NSMutableArray *result=[NSMutableArray array];
@@ -724,7 +773,7 @@ static void SLActivityFinish(void) {
     if([NSUserDefaults.standardUserDefaults boolForKey:@"receiverArmed"] && !self.receiver.isRunning)[self start];
 }
 - (void)foreground {
-    [self endGrace];[self append:@"App returned to foreground."];
+    [self tripBegin:@"ScreenLink opened"];[self tripMark:@"app"];[self endGrace];[self append:@"App returned to foreground."];
 }
 @end
 @interface AppDelegate : UIResponder <UIApplicationDelegate>
