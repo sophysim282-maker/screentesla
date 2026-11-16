@@ -1,5 +1,5 @@
 name: Build150 trip timer
-# Build 150: trip timer for the first start. Run 1.
+# Build 150: trip timer for the first start. Run 2.
 on:
   push:
     branches: ['release/build150-trip-timer']
