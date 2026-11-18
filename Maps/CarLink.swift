@@ -61,6 +61,10 @@ final class CarLink: ObservableObject {
                                    satellite: Settings.shared.mapType == "satellite", language: Settings.shared.language)
             }
             var st = state()
+            // Build 156: load the map squares around the car while the internet works (saved on the phone).
+            if connected, Self.carMapOn, !Self.carGoogle {
+                SLMapTiles.ahead(lat: st["lat"] as? Double ?? 0, lng: st["lng"] as? Double ?? 0)
+            }
             st.merge(self.bgMeta) { a, _ in a }
             self.server.setState(st)
             guard connected, Self.carMapOn, !Self.carDrawsMap else { return }
