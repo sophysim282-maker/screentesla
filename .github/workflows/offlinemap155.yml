@@ -1,5 +1,5 @@
 name: Build155 offline map
-# Build 155: car map works on slow/no internet. Run 1.
+# Build 155: car map works on slow/no internet. Run 2.
 on:
   push:
     branches: ['release/build155-offline-map']
