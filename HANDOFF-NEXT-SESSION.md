@@ -4,6 +4,8 @@ Read this first. It replaces reading the old 400k-token conversation.
 
 ## WHERE WE ARE NOW (read this part first)
 
+- **Build 154 (0.21.17), branch `release/build154-deep-reconnect`:** main.m healthTick deep auto-reconnect — hotspot ON but carSeconds>15 for ~90 s triggers a full VPN reconnect (connectRouteProbe) + resumeListenersIfNeeded + refreshDiscovery + authorizeNextLocalViewer, at most once per 150 s (CAR DEEP RECONNECT). Fixes the "connecting to phone, never connect, must restart app" case after weak car Wi-Fi drops. See BUILD154.md.
+
 - **Build 153 (0.21.16), branch `release/build153-car-map-look`:** CanvasShell.js map loop — when the phone sends a live snapshot (`s.mapLive`, app foreground) the car prefers it over tiles (`snapLive`), so the car map = the phone's real Google map when ScreenLink is open; tiles remain the background fallback. Cached tiles + GPS-extrapolated pointer keep the map alive on weak internet. See BUILD153.md.
 
 - **Build 152 (0.21.15), branch `release/build152-approve-popup`:** (1) car-viewer approval popup on Home — main.m updateApprovalPopup (Allow/Not now UIAlertController from probeBroadcast pending state), no Developer needed. (2) CanvasShell.js videoBudget: a running player that has drawn no new frame for 8 s returns budget 3, so the car map (pointer/location) keeps updating when the video is lost/stalled. See BUILD152.md.

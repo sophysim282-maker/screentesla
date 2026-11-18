@@ -115,6 +115,7 @@ static void SLActivityFinish(void) {
 @property(nonatomic) NSUInteger soundOnlyCheck;
 @property(nonatomic) BOOL carLeftWarned;
 @property(nonatomic) BOOL carAway;
+@property(nonatomic) NSTimeInterval carLostSince,deepFixAt;
 @property(nonatomic) double tripStart,tripLastActive;
 @property(nonatomic,strong) NSMutableDictionary *tripMarks;
 @property(nonatomic) BOOL tripDone,tripHotspot;
@@ -175,7 +176,8 @@ static void SLActivityFinish(void) {
         [owner append:@"BACKGROUND RUNTIME ENDED: receiver, viewer link and media session retained. iOS may suspend this app without PiP. Returning to ScreenLink resumes the existing receiver; Start is not required to rebuild it."];
         if(!owner.preview.active&&!owner.youtubePiP.active && UIApplication.sharedApplication.applicationState==UIApplicationStateBackground)[owner beginGrace];
     };
-    [self append:@"Version 0.21.16 / build 153: the car map now looks like the phone map. When ScreenLink is open in front, the car shows the phone's own Google map picture (same look as the phone), instead of the flat tiles. When the app is in the background, iOS does not let the real map draw, so the flat Google tiles are used as before. On weak internet the car keeps the map it already has and your pointer keeps moving from GPS (no internet needed)."];
+    [self append:@"Version 0.21.17 / build 154: no more turning the app off and on. When the Hotspot is on but the car cannot reach the phone for about 90 seconds (the Wi-Fi dropped and came back, and the car shows connecting to phone), ScreenLink does by itself what restarting the app used to do: it reconnects the VPN and rebuilds the listeners (log: CAR DEEP RECONNECT), so the car comes back on its own. This cannot fix weak Wi-Fi, only recover faster when it returns."];
+    [self append:@"Earlier build 153: the car map now looks like the phone map. When ScreenLink is open in front, the car shows the phone's own Google map picture (same look as the phone), instead of the flat tiles. When the app is in the background, iOS does not let the real map draw, so the flat Google tiles are used as before. On weak internet the car keeps the map it already has and your pointer keeps moving from GPS (no internet needed)."];
     [self append:@"Earlier build 152: two things. 1) When the car asks to connect, Allow / Not now now pops up on Home — no need to open Developer. 2) When the video is lost or stuck (often on weak car Wi-Fi), the map keeps working: after 8 s with no new picture the map gets first place on the car link, so the pointer and your location stay live and on time instead of waiting behind a dead video. The phone map/navigation keeps running as before."];
     [self append:@"Earlier build 151: fixes the stuck video switch. When you pick another video, the car sometimes got HTTP 404 (the phone had just dropped the old video and the new pieces were not ready for a moment) and then waited 2 to 10 seconds. Now it retries fast (about 1 second) a few times at the start of a new video, so it recovers by itself instead of showing waiting until you pick another video."];
     [self append:@"Earlier build 150: trip timer. Each trip, ScreenLink times the first start: app open, car joined the Hotspot, car page, YouTube AirPlay, video handed over, first picture (TRIP TIMING line). The whole log is also saved in phone storage, so closing the app does not lose it. Developer → Copy trip log (last 3 trips)."];
@@ -386,6 +388,16 @@ static void SLActivityFinish(void) {
   // everything at once: listeners, AirPlay in YouTube's list, and the phone's mobile internet + YouTube connections.
   // While the car waits with no video, keep the YouTube connections warm, so the first video starts like the second.
   BOOL hotspot=[health[@"hotspot"] boolValue];
+  // Build 154: deep auto-reconnect. When the hotspot is ON but the car has not reached the phone for ~90 s
+  // (the Wi-Fi dropped and came back, but the car page is stuck "connecting to phone"), do what restarting the
+  // app used to do: reconnect the VPN and rebuild the listeners. At most once every 150 s. This never runs when
+  // the car is simply off the hotspot (nothing to reconnect to).
+  {BOOL carLost=hotspot&&(car<0||car>15);if(carLost){if(!self.carLostSince)self.carLostSince=now;}else self.carLostSince=0;
+   if(self.carLostSince&&now-self.carLostSince>=90&&now-self.deepFixAt>150&&!self.mediaOnlyRestarting){self.deepFixAt=now;
+    [self append:@"CAR DEEP RECONNECT: the car still cannot reach the phone. Rebuilding the link (VPN + listeners), the way restarting the app does. The car should come back on its own."];
+    __weak typeof(self) weak=self;[self.vpn connectRouteProbe:^(BOOL ok){typeof(self) owner=weak;if(!owner)return;
+     [owner.receiver resumeListenersIfNeeded];[owner.receiver refreshDiscovery];[owner.receiver authorizeNextLocalViewer];
+     [owner append:ok?@"CAR DEEP RECONNECT done: VPN back, listeners rebuilt. If the car still shows nothing, reload the page in the car.":@"CAR DEEP RECONNECT: the VPN could not reconnect; tap Start if the car stays blank."];[owner updateHome];}];}}
   // Build 150 trip timer: the car joined the Hotspot / the car page talks to the phone.
   if(hotspot&&!self.tripHotspot){[self tripBegin:@"the car joined the Hotspot"];[self tripMark:@"car"];}self.tripHotspot=hotspot;
   if(hotspot&&car>=0&&car<=6)[self tripMark:@"page"];
