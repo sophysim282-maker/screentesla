@@ -74,6 +74,8 @@ static void SLActivityFinish(void) {
 @property(nonatomic,copy) NSString *broadcastToken;
 @property(nonatomic,copy) NSString *lastBroadcastLine;
 @property(nonatomic,copy) NSString *localViewerRequestID;
+@property(nonatomic,strong) UIAlertController *approvalPopup;
+@property(nonatomic,copy) NSString *approvalPopupForID;
 @property(nonatomic) BOOL quickStartPending;
 @property(nonatomic) BOOL youtubePiPRequested;
 @property(nonatomic) BOOL broadcastYouTubeOnly;
@@ -173,7 +175,8 @@ static void SLActivityFinish(void) {
         [owner append:@"BACKGROUND RUNTIME ENDED: receiver, viewer link and media session retained. iOS may suspend this app without PiP. Returning to ScreenLink resumes the existing receiver; Start is not required to rebuild it."];
         if(!owner.preview.active&&!owner.youtubePiP.active && UIApplication.sharedApplication.applicationState==UIApplicationStateBackground)[owner beginGrace];
     };
-    [self append:@"Version 0.21.14 / build 151: fixes the stuck video switch. When you pick another video, the car sometimes got HTTP 404 (the phone had just dropped the old video and the new pieces were not ready for a moment) and then waited 2 to 10 seconds. Now it retries fast (about 1 second) a few times at the start of a new video, so it recovers by itself instead of showing waiting until you pick another video."];
+    [self append:@"Version 0.21.15 / build 152: two things. 1) When the car asks to connect, Allow / Not now now pops up on Home — no need to open Developer. 2) When the video is lost or stuck (often on weak car Wi-Fi), the map keeps working: after 8 s with no new picture the map gets first place on the car link, so the pointer and your location stay live and on time instead of waiting behind a dead video. The phone map/navigation keeps running as before."];
+    [self append:@"Earlier build 151: fixes the stuck video switch. When you pick another video, the car sometimes got HTTP 404 (the phone had just dropped the old video and the new pieces were not ready for a moment) and then waited 2 to 10 seconds. Now it retries fast (about 1 second) a few times at the start of a new video, so it recovers by itself instead of showing waiting until you pick another video."];
     [self append:@"Earlier build 150: trip timer. Each trip, ScreenLink times the first start: app open, car joined the Hotspot, car page, YouTube AirPlay, video handed over, first picture (TRIP TIMING line). The whole log is also saved in phone storage, so closing the app does not lose it. Developer → Copy trip log (last 3 trips)."];
     [self append:@"Earlier build 149: read-ahead store: while the internet is good, the phone downloads up to 3 minutes of the playing video ahead into phone storage (deleted when the video changes), so a minute without internet does not stop the car. The car says why it waits (phone internet slow, or video ready on the phone and the car Wi-Fi slow). When the internet is too slow for 4K / 1440p, the phone asks once whether to use Auto."];
     [self append:@"Earlier build 148: glass Home chosen by the user: the car photo fills the screen, black status card with Open YouTube, big car video time, glass bar with Pause, glass tiles (Phone sound, Keep playing, Maps, Small window, Waiting screen, TikTok) with ON/OFF badges, Start/Stop ScreenLink, bottom bar Home · Video · Map · Menu. Video page: big Pause, ±10 s, timeline, quality, sound, volume. All functions unchanged."];
@@ -565,10 +568,28 @@ static void SLActivityFinish(void) {
         [self.dashboard showPlayerState:owner[@"mediaState"]];
         if(self.quickStartPending){self.quickStartPending=NO;[self localViewerDecision:@"automatic"];}
         NSDictionary *local=[owner[@"localViewer"] isKindOfClass:NSDictionary.class]?owner[@"localViewer"]:@{};BOOL pending=[local[@"phase"] isEqual:@"pending"];self.localViewerRequestID=pending?local[@"requestID"]:nil;self.localViewerApprove.enabled=pending;self.localViewerReject.enabled=pending;
+        [self updateApprovalPopup:pending requestID:local[@"requestID"]];
         self.localViewerStatus.text=([owner[@"screenLocked"] boolValue]&&[local[@"automatic"] boolValue])?@"YOUTUBE READY · SCREEN LOCKED":[local[@"phase"] isEqual:@"approved"]?@"CONNECTED":([local[@"automatic"] boolValue]?@"READY":@"Start ScreenLink");
         self.broadcastToken=owner[@"token"];NSArray *logs=[owner[@"logs"] isKindOfClass:NSArray.class]?owner[@"logs"]:@[];NSUInteger begin=0;if(self.lastBroadcastLine){NSUInteger last=[logs indexOfObject:self.lastBroadcastLine];begin=last==NSNotFound?(logs.count>10?logs.count-10:0):last+1;}
         for(NSUInteger i=begin;i<logs.count;i++)[self append:[@"BROADCAST: " stringByAppendingString:logs[i]]];self.lastBroadcastLine=logs.lastObject;
     });}] resume];
+}
+// Build 152: when a car viewer is waiting for approval, show Approve / Reject right on Home, so the user does
+// not have to open Developer. The popup follows the pending state: it appears when a viewer waits and goes away
+// by itself when the viewer is approved, rejected or gone.
+- (void)updateApprovalPopup:(BOOL)pending requestID:(NSString *)requestID {
+    BOOL active=UIApplication.sharedApplication.applicationState==UIApplicationStateActive;
+    if(!pending||!active||self.userDisconnected||!requestID.length){if(self.approvalPopup){[self.approvalPopup dismissViewControllerAnimated:YES completion:nil];self.approvalPopup=nil;self.approvalPopupForID=nil;}return;}
+    if(self.approvalPopup&&[self.approvalPopupForID isEqual:requestID])return;   // already showing for this viewer
+    if(self.approvalPopup){[self.approvalPopup dismissViewControllerAnimated:NO completion:nil];self.approvalPopup=nil;}
+    if(self.presentedViewController)return;   // some other sheet is up; try again on the next poll
+    UIAlertController *ask=[UIAlertController alertControllerWithTitle:@"Car wants to connect" message:@"The car screen is asking to show your video. Allow it?" preferredStyle:UIAlertControllerStyleAlert];
+    __weak Controller *weak=self;
+    [ask addAction:[UIAlertAction actionWithTitle:@"Allow" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a){Controller *o=weak;o.approvalPopup=nil;o.approvalPopupForID=nil;[o approveLocalViewer];}]];
+    [ask addAction:[UIAlertAction actionWithTitle:@"Not now" style:UIAlertActionStyleCancel handler:^(UIAlertAction *a){Controller *o=weak;o.approvalPopup=nil;o.approvalPopupForID=nil;[o rejectLocalViewer];}]];
+    self.approvalPopup=ask;self.approvalPopupForID=requestID;
+    [[[UIImpactFeedbackGenerator alloc]initWithStyle:UIImpactFeedbackStyleMedium] impactOccurred];
+    [self presentViewController:ask animated:YES completion:nil];
 }
 - (void)approveLocalViewer { [self localViewerDecision:@"approve"]; }
 - (void)rejectLocalViewer { [self localViewerDecision:@"reject"]; }
