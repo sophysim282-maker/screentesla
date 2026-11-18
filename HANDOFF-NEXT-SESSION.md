@@ -4,6 +4,8 @@ Read this first. It replaces reading the old 400k-token conversation.
 
 ## WHERE WE ARE NOW (read this part first)
 
+- **Build 153 (0.21.16), branch `release/build153-car-map-look`:** CanvasShell.js map loop — when the phone sends a live snapshot (`s.mapLive`, app foreground) the car prefers it over tiles (`snapLive`), so the car map = the phone's real Google map when ScreenLink is open; tiles remain the background fallback. Cached tiles + GPS-extrapolated pointer keep the map alive on weak internet. See BUILD153.md.
+
 - **Build 152 (0.21.15), branch `release/build152-approve-popup`:** (1) car-viewer approval popup on Home — main.m updateApprovalPopup (Allow/Not now UIAlertController from probeBroadcast pending state), no Developer needed. (2) CanvasShell.js videoBudget: a running player that has drawn no new frame for 8 s returns budget 3, so the car map (pointer/location) keeps updating when the video is lost/stalled. See BUILD152.md.
 
 - **Build 151 (0.21.14), branch `release/build151-switch-fix`:** CanvasShell.js playbackFault — a fault near the start of a new video (HTTP 404 on video switch) retries ~900ms up to 8 times (freshRetry/lastFaultFresh) instead of 2-10s exponential, so switching videos recovers itself. No cube (user declined). Pending: phone→car slow-WiFi 4K warning. See BUILD151.md.
