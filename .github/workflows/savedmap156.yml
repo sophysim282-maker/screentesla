@@ -1,5 +1,5 @@
 name: Build156 saved map
-# Build 156: map saved on phone + squares around the car. Run 1.
+# Build 156: map saved on phone + squares around the car. Run 2.
 on:
   push:
     branches: ['release/build156-saved-map']
