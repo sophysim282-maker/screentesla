@@ -1,5 +1,5 @@
 name: Build154 deep reconnect
-# Build 154: deep auto-reconnect, no app restart. Run 1.
+# Build 154: deep auto-reconnect, no app restart. Run 2.
 on:
   push:
     branches: ['release/build154-deep-reconnect']
