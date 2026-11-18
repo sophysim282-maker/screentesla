@@ -1,5 +1,5 @@
 name: Build152 approve popup
-# Build 152: approval popup on Home + map survives a lost video. Run 1.
+# Build 152: approval popup on Home + map survives a lost video. Run 2.
 on:
   push:
     branches: ['release/build152-approve-popup']
