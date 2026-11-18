@@ -15,6 +15,12 @@ final class SLMapTiles: NSObject {
     // Squares are kept only for as long as Google's own answer allows (its Cache-Control header).
     private static var cache: [String: (data: Data, until: Date, header: String)] = [:]
     private static var order: [String] = []
+    // Build 155: offline store. The last good picture for each map square is kept here and is NEVER thrown away
+    // by the 4-minute traffic refresh, so when the internet is slow or gone the car keeps showing the map it
+    // already loaded (the pointer still moves from GPS). Cleared only when the Google key itself changes.
+    private static var offline: [String: Data] = [:]
+    private static var offlineOrder: [String] = []
+    private static var offlineKey = ""
     private static var failures = 0
 
     /// Why the squares cannot be fetched (empty = fine). Shown on the phone with a Fix button.
@@ -64,6 +70,7 @@ final class SLMapTiles: NSObject {
             creating = false
             if code == 200, let token = json?["session"] as? String, !token.isEmpty {
                 session = token; style = want; apiKey = key; made = Date()
+                if offlineKey != key { offline = [:]; offlineOrder = []; offlineKey = key }   // build 155: keep offline tiles unless the key changed
                 cache = [:]; order = []; failures = 0
                 version += 1
                 problem = ""
@@ -108,7 +115,7 @@ final class SLMapTiles: NSObject {
         let token = session, key = apiKey, held = cache[name]
         lock.unlock()
         if let held, held.until > Date() { return held.data }
-        guard !token.isEmpty, let url = URL(string: "https://tile.googleapis.com/v1/2dtiles/\(name)?session=\(token)&key=\(key)") else { return Data() }
+        guard !token.isEmpty, let url = URL(string: "https://tile.googleapis.com/v1/2dtiles/\(name)?session=\(token)&key=\(key)") else { lock.lock(); let o = offline[name]; lock.unlock(); return o ?? Data() }
         var req = URLRequest(url: url)
         req.timeoutInterval = 2   // build 107: never hold a car connection long; the video needs them
         req.setValue(Bundle.main.bundleIdentifier, forHTTPHeaderField: "X-Ios-Bundle-Identifier")
@@ -134,12 +141,17 @@ final class SLMapTiles: NSObject {
             } else {
                 cache[name] = nil
             }
+            // Build 155: keep a permanent offline copy of this square (bounded, oldest dropped first).
+            if offline[name] == nil { offlineOrder.append(name) }
+            offline[name] = result
+            if offlineOrder.count > 2000 { offline[offlineOrder.removeFirst()] = nil }
         } else if result.isEmpty, code == 400 || code == 401 || code == 403 {
             // The session is no longer accepted: make a new one on the next prepare().
             failures += 1
             if failures >= 4 { session = ""; problem = "Google answered \(code) for the map squares"; GoogleNav.line("MAP SQUARES FOR THE CAR: " + problem) }
         }
+        let offlineCopy = result.isEmpty ? offline[name] : nil   // build 155: internet could not fetch a fresh square; show the one we already have
         lock.unlock()
-        return result
+        return result.isEmpty ? (offlineCopy ?? Data()) : result
     }
 }

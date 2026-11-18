@@ -4,6 +4,8 @@ Read this first. It replaces reading the old 400k-token conversation.
 
 ## WHERE WE ARE NOW (read this part first)
 
+- **Build 155 (0.21.18), branch `release/build155-offline-map`:** Maps/MapTiles.swift offline tile store — `offline`/`offlineOrder` (LRU 2000) keeps every fetched square, NOT cleared by the 4-min traffic refresh (only on key change). tile() serves the offline copy when a fresh fetch fails/no session, so the car map survives slow/no internet with the GPS pointer still moving. New areas still need internet once. See BUILD155.md.
+
 - **Build 154 (0.21.17), branch `release/build154-deep-reconnect`:** main.m healthTick deep auto-reconnect — hotspot ON but carSeconds>15 for ~90 s triggers a full VPN reconnect (connectRouteProbe) + resumeListenersIfNeeded + refreshDiscovery + authorizeNextLocalViewer, at most once per 150 s (CAR DEEP RECONNECT). Fixes the "connecting to phone, never connect, must restart app" case after weak car Wi-Fi drops. See BUILD154.md.
 
 - **Build 153 (0.21.16), branch `release/build153-car-map-look`:** CanvasShell.js map loop — when the phone sends a live snapshot (`s.mapLive`, app foreground) the car prefers it over tiles (`snapLive`), so the car map = the phone's real Google map when ScreenLink is open; tiles remain the background fallback. Cached tiles + GPS-extrapolated pointer keep the map alive on weak internet. See BUILD153.md.
