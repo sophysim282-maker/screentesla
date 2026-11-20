@@ -247,7 +247,7 @@ static NSData *SLWholeFile(NSString *location){@synchronized(MediaCast.class){re
     NSDictionary *params=@{@"FCUP_Response_ClientInfo":@1,@"FCUP_Response_ClientRef":@40030004,@"FCUP_Response_RequestID":@(request),@"FCUP_Response_URL":url,@"sessionID":@1,@"FCUP_Response_Headers":headers};
     [self sendEvent:@{@"sessionID":@1,@"type":@"unhandledURLRequest",@"request":params} session:session];
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW,12*NSEC_PER_SEC),_events,^{
-        [self->_ready lock];BOOL expired=[self->_pending[url] isEqual:@(request)];if(expired){[self->_pending removeObjectForKey:url];self->_late[url]=@(request);[self->_ready broadcast];}[self->_ready unlock];
+        [self->_ready lock];BOOL expired=[self->_pending[url] isEqual:@(request)];if(expired){[self->_pending removeObjectForKey:url];NSMutableSet *lateIDs=self->_late[url];if(![lateIDs isKindOfClass:NSMutableSet.class]){lateIDs=[NSMutableSet set];self->_late[url]=lateIDs;}[lateIDs addObject:@(request)];[self->_ready broadcast];}[self->_ready unlock];
         if(expired){[self log:@"MEDIA: a playlist request timed out; retaining the current session for retry."];[self drivePrefetch];}
     });
 }
@@ -320,7 +320,10 @@ static NSData *SLWholeFile(NSString *location){@synchronized(MediaCast.class){re
             // Build 95: YouTube in the background often answers a playlist request just after the
             // 12 s timeout. Keep that late answer (same session and request) instead of rejecting it,
             // so the car's next try gets it at once instead of waiting through the same timeout again.
-            BOOL late=!valid && location && [session isEqual:_appleSession] && [_late[location] isEqual:params[@"FCUP_Response_RequestID"]];if(late){valid=YES;[_late removeObjectForKey:location];}
+            // Build 157: remember EVERY timed-out request of this video, not only the last one, so an answer that
+            // arrives after a second try was already sent is used too (log showed REJECTED + 12 s waits on video switch).
+            NSNumber *answerID=[params[@"FCUP_Response_RequestID"] isKindOfClass:NSNumber.class]?params[@"FCUP_Response_RequestID"]:nil;
+            BOOL late=!valid && location && answerID && [session isEqual:_appleSession] && [_late[location] containsObject:answerID];if(late){valid=YES;[_late removeObjectForKey:location];}
             if(valid){NSInteger code=params[@"FCUP_Response_StatusCode"]?[params[@"FCUP_Response_StatusCode"] integerValue]:200;
                 // Some YouTube FCUP completions use status 0 for a delivered
                 // playlist. Promote only a validated HLS body, never an empty,
