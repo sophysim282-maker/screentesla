@@ -323,13 +323,16 @@ static NSData *SLWholeFile(NSString *location){@synchronized(MediaCast.class){re
             // Build 157: remember EVERY timed-out request of this video, not only the last one, so an answer that
             // arrives after a second try was already sent is used too (log showed REJECTED + 12 s waits on video switch).
             NSNumber *answerID=[params[@"FCUP_Response_RequestID"] isKindOfClass:NSNumber.class]?params[@"FCUP_Response_RequestID"]:nil;
-            BOOL late=!valid && location && answerID && [session isEqual:_appleSession] && [_late[location] containsObject:answerID];if(late){valid=YES;[_late removeObjectForKey:location];}
+            // Build 158: never let an OLD late answer replace a NEWER playlist already received (YouTube's
+            // playlists grow while you watch; an older copy is shorter and could make the car think the video ended).
+            NSUInteger newestKept=[_cache[location][@"req"] unsignedIntegerValue];
+            BOOL late=!valid && location && answerID && [session isEqual:_appleSession] && [_late[location] containsObject:answerID] && answerID.unsignedIntegerValue>newestKept;if(late){valid=YES;[_late removeObjectForKey:location];}
             if(valid){NSInteger code=params[@"FCUP_Response_StatusCode"]?[params[@"FCUP_Response_StatusCode"] integerValue]:200;
                 // Some YouTube FCUP completions use status 0 for a delivered
                 // playlist. Promote only a validated HLS body, never an empty,
                 // non-playlist, or actual HTTP failure response.
                 code=SLFCUPPlaylistStatus(code,data);
-                _cache[location]=@{@"data":data?:[NSData data],@"code":@(code),@"time":@(NSProcessInfo.processInfo.systemUptime)};[_pending removeObjectForKey:location];[_ready broadcast];}[_ready unlock];
+                _cache[location]=@{@"data":data?:[NSData data],@"code":@(code),@"time":@(NSProcessInfo.processInfo.systemUptime),@"req":answerID?:@0};[_pending removeObjectForKey:location];[_ready broadcast];}[_ready unlock];
             [self reply:response status:valid?200:409 type:nil data:nil];if(!valid)[self log:@"MEDIA PLAYLIST RESPONSE REJECTED: session, URL, or request ID did not match an outstanding request."];if(valid){[self log:[NSString stringWithFormat:@"MEDIA PLAYLIST RESPONSE: %lu bytes received; sender status %@. Status 0 requires a valid HLS playlist.",(unsigned long)data.length,params[@"FCUP_Response_StatusCode"]?:@200]];[self recordSourceHeights:data location:location epoch:nil];[self prefetchChildren:data base:location];[self warmSegments:data location:location];[self drivePrefetch];}return YES;
         }
         if([type isEqual:@"playlistRemove"]){[_ready lock];NSDictionary *item=[params[@"item"] isKindOfClass:NSDictionary.class]?params[@"item"]:@{};if([session isEqual:_appleSession] && [item[@"uuid"] isEqual:_uuid]){_active=NO;_readyToPlay=NO;[_ready broadcast];}[_ready unlock];[self reply:response status:200 type:nil data:nil];return YES;}

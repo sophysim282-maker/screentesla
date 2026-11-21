@@ -52,7 +52,10 @@ function autoQualityStepDown(){
  const length=Math.max(1,Number(last.duration)||0),slow=(last.fetchMs||0)>length*1600;autoSlow=slow?autoSlow+1:0;
  {const ratio=(last.fetchMs||0)/(length*1000),tall=p.selectedHeight||0;speedHint={height:tall,ratio:speedHint&&speedHint.height===tall?speedHint.ratio*.6+ratio*.4:ratio,at:Date.now()};}
  const ready=Math.max(0,(p.preparedVideoEnd||0)-(p.currentTime||0)),height=p.selectedHeight||0,left=(p.duration||0)-(p.currentTime||0);
- if(autoSlow<2||ready>=6||left<30||Date.now()-autoCapAt<20000)return false;
+ // Build 158: also step down at once when one piece was very slow and the picture is about to run out
+ // (logs showed the picture stopping ~30-45 s in while waiting for a second slow piece).
+ const urgent=(last.fetchMs||0)>length*2000&&ready<3;
+ if((autoSlow<2&&!urgent)||ready>=6||left<30||Date.now()-autoCapAt<20000)return false;
  const lower=(p.offeredHeights||[]).map(Number).filter(h=>h>=360&&h<height&&h<=(height>720?720:480)).sort((a,b)=>b-a)[0];
  if(!lower)return false;
  autoCap=lower;autoCapAt=Date.now();autoSlow=0;
