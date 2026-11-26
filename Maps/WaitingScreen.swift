@@ -43,6 +43,35 @@ final class SLWaitingStore: NSObject {
         get { let v = defaults.integer(forKey: "waitingHold"); return v == 0 ? 8 : v }
         set { defaults.set(max(3, min(60, newValue)), forKey: "waitingHold"); changed() }
     }
+    // Build 159: waiting music. One song the user picks from Files. It plays softly on the car while it waits
+    // for a video, fades out smoothly when the video picture comes, and goes on from the same place next time.
+    static var musicFile: String {
+        get { defaults.string(forKey: "waitingMusicFile") ?? "" }
+        set { defaults.set(newValue, forKey: "waitingMusicFile"); changed() }
+    }
+    static var musicName: String {
+        get { defaults.string(forKey: "waitingMusicName") ?? "" }
+        set { defaults.set(newValue, forKey: "waitingMusicName") }
+    }
+    static var musicMime: String {
+        get { defaults.string(forKey: "waitingMusicMime") ?? "audio/mpeg" }
+        set { defaults.set(newValue, forKey: "waitingMusicMime") }
+    }
+    static var musicOn: Bool {
+        get { defaults.object(forKey: "waitingMusicOn") as? Bool ?? true }
+        set { defaults.set(newValue, forKey: "waitingMusicOn"); changed() }
+    }
+    /// Percent of full volume; low by default so it stays chill.
+    static var musicVolume: Int {
+        get { let v = defaults.integer(forKey: "waitingMusicVolume"); return v == 0 ? 25 : v }
+        set { defaults.set(max(5, min(100, newValue)), forKey: "waitingMusicVolume"); changed() }
+    }
+    static func removeMusic() {
+        if !musicFile.isEmpty { try? FileManager.default.removeItem(at: folder.appendingPathComponent(musicFile)) }
+        musicName = ""
+        musicFile = ""
+    }
+
     /// Goes up on every change, so the car loads the new files and settings.
     static var version: Int { defaults.integer(forKey: "waitingVersion") }
     private static func changed() { defaults.set(version + 1, forKey: "waitingVersion") }
@@ -57,7 +86,7 @@ final class SLWaitingStore: NSObject {
     /// One grey line for the Home list.
     @objc static func summary() -> String {
         let count = items.count
-        guard count > 0 else { return "Your pictures, GIFs and videos" }
+        guard count > 0 else { return musicFile.isEmpty ? "Your pictures, GIFs, videos and music" : "Music: \(musicName)" }
         let name = transitions.first { $0.0 == transition }?.1 ?? "Fade"
         return "\(count) file\(count == 1 ? "" : "s") · \(name)"
     }
@@ -75,11 +104,17 @@ final class SLWaitingStore: NSObject {
         let list: [String: Any] = [
             "v": version, "transition": transition, "fit": fit, "hold": hold,
             "items": items.map { ["id": $0.id, "kind": $0.kind, "mime": $0.mime] },
+            "music": musicFile.isEmpty ? [:] as [String: Any] : ["on": musicOn, "volume": musicVolume, "file": musicFile],
         ]
         return (try? JSONSerialization.data(withJSONObject: list)) ?? Data("{}".utf8)
     }
 
     @objc(item:) static func item(_ id: String) -> [String: Any] {
+        if id == "music" {
+            let file = musicFile
+            guard !file.isEmpty, let data = try? Data(contentsOf: folder.appendingPathComponent(file), options: .mappedIfSafe) else { return [:] }
+            return ["data": data, "mime": musicMime]
+        }
         lock.lock(); let found = items.first { $0.id == id }; lock.unlock()
         guard let found, let data = try? Data(contentsOf: folder.appendingPathComponent(found.file), options: .mappedIfSafe) else { return [:] }
         return ["data": data, "mime": found.mime]
@@ -116,6 +151,10 @@ struct WaitingScreenView: View {
     @State private var hold = SLWaitingStore.hold
     @State private var working = false
     @State private var note = ""
+    @State private var musicName = SLWaitingStore.musicName
+    @State private var musicOn = SLWaitingStore.musicOn
+    @State private var musicVolume = Double(SLWaitingStore.musicVolume)
+    @State private var pickSong = false
 
     var body: some View {
         NavigationView {
@@ -146,6 +185,31 @@ struct WaitingScreenView: View {
                         }
                     }
                 }
+                Section("Waiting music") {
+                    if musicName.isEmpty {
+                        Text("No song. Choose one from Files: it plays softly on the car while it waits for a video.")
+                            .font(.footnote).foregroundColor(.secondary)
+                    } else {
+                        HStack {
+                            Image(systemName: "music.note")
+                            Text(musicName).lineLimit(1)
+                            Spacer()
+                            Button(role: .destructive) { SLWaitingStore.removeMusic(); musicName = "" } label: { Image(systemName: "trash") }
+                                .buttonStyle(.borderless)
+                        }
+                        Toggle("Play while waiting", isOn: $musicOn)
+                        HStack {
+                            Image(systemName: "speaker.fill").foregroundColor(.secondary)
+                            Slider(value: $musicVolume, in: 5...100, step: 5)
+                            Image(systemName: "speaker.wave.3.fill").foregroundColor(.secondary)
+                        }
+                        Text("Volume \(Int(musicVolume))%. It fades out smoothly when the video starts and goes on from the same place next time.")
+                            .font(.footnote).foregroundColor(.secondary)
+                    }
+                    Button { pickSong = true } label: {
+                        Label(musicName.isEmpty ? "Choose a song" : "Choose another song", systemImage: "music.note.list")
+                    }
+                }
                 Section("How it changes to the video") {
                     Picker("Transition", selection: $transition) {
                         ForEach(SLWaitingStore.transitions, id: \.0) { Text($0.1).tag($0.0) }
@@ -165,6 +229,27 @@ struct WaitingScreenView: View {
             .toolbar { Button("Done") { dismiss() } }
         }
         .onChange(of: transition) { SLWaitingStore.transition = $0 }
+        .onChange(of: musicOn) { SLWaitingStore.musicOn = $0 }
+        .onChange(of: musicVolume) { SLWaitingStore.musicVolume = Int($0) }
+        .fileImporter(isPresented: $pickSong, allowedContentTypes: [.audio]) { result in
+            guard case .success(let url) = result else { return }
+            let opened = url.startAccessingSecurityScopedResource()
+            defer { if opened { url.stopAccessingSecurityScopedResource() } }
+            let ext = url.pathExtension.isEmpty ? "mp3" : url.pathExtension.lowercased()
+            let name = "music-" + UUID().uuidString + "." + ext
+            do {
+                let size = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+                guard size <= 40 * 1024 * 1024 else { note = "That song is larger than 40 MB."; return }
+                try FileManager.default.copyItem(at: url, to: SLWaitingStore.folder.appendingPathComponent(name))
+                SLWaitingStore.removeMusic()
+                SLWaitingStore.musicMime = UTType(filenameExtension: ext)?.preferredMIMEType ?? "audio/mpeg"
+                SLWaitingStore.musicName = url.deletingPathExtension().lastPathComponent
+                SLWaitingStore.musicFile = name
+                musicName = SLWaitingStore.musicName
+            } catch {
+                note = "The song could not be added (\(error.localizedDescription))."
+            }
+        }
         .onChange(of: fit) { SLWaitingStore.fit = $0 }
         .onChange(of: hold) { SLWaitingStore.hold = $0 }
         .onChange(of: picked) { chosen in

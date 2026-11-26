@@ -827,7 +827,27 @@ function waitSet(show){
   else{waitBox.classList.add('gone');setTimeout(done,650);}
  }
 }
+// Build 159: waiting music. A song the user chose on the phone plays softly while the car waits for a video,
+// fades out smoothly (about 1.5 s) when the video picture comes, and goes on from the same place next time.
+const waitMusic=new Audio();waitMusic.loop=true;waitMusic.preload='auto';waitMusic.volume=0;let musicSrc='',musicBlocked=false,musicLogged=false;
+function musicPos(save){try{if(save!==undefined)localStorage.setItem('screenlink-music-pos',String(save));return Number(localStorage.getItem('screenlink-music-pos'))||0;}catch{return 0;}}
+function musicTick(want){
+ const m=waitList?.music||{},target=Math.max(0,Math.min(1,(Number(m.volume)||25)/100));
+ if(!m.file){if(musicSrc){waitMusic.pause();waitMusic.removeAttribute('src');waitMusic.load();musicSrc='';}return;}
+ const src='/waiting/item/music?token='+encodeURIComponent(token)+'&v='+encodeURIComponent(m.file);
+ want=want&&m.on!==false;
+ if(want){
+  if(musicSrc!==src){musicSrc=src;waitMusic.src=src;waitMusic.volume=0;const at=musicPos();waitMusic.addEventListener('loadedmetadata',()=>{try{if(at>0&&at<(waitMusic.duration||0))waitMusic.currentTime=at;}catch{}},{once:true});}
+  if(waitMusic.paused&&!musicBlocked)waitMusic.play().then(()=>{if(!musicLogged){musicLogged=true;carLogLine('waiting music: playing softly while the car waits.');}}).catch(()=>{musicBlocked=true;carLogLine('waiting music: the car browser wants one tap on the screen before it plays sound.');const go=()=>{musicBlocked=false;document.removeEventListener('pointerdown',go,true);};document.addEventListener('pointerdown',go,true);});
+  waitMusic.volume=Math.min(target,waitMusic.volume+target/10);
+ }else if(!waitMusic.paused){
+  waitMusic.volume=Math.max(0,waitMusic.volume-Math.max(target,.05)/10);
+  if(waitMusic.volume<=0.001){waitMusic.pause();musicPos(waitMusic.currentTime||0);}
+ }
+}
+self.ScreenLinkMusic=()=>({src:musicSrc,paused:waitMusic.paused,volume:waitMusic.volume,blocked:musicBlocked});
 function waitLoop(){
+ try{const picture=!!player&&!mediaFailed&&(player.stats?.drawn||0)>0;musicTick(connected&&!!token&&!picture);}catch{}
  try{
   if(connected&&token&&Date.now()-waitAskedAt>15000){waitAskedAt=Date.now();
    api('/waiting/list').then(list=>{if(!list||!Array.isArray(list.items))return;if(list.v===waitVersion)return;waitVersion=list.v;waitList=list;waitIndex=0;waitState='off';waitFrozen=false;clearTimeout(waitTimer);waitBox.hidden=true;for(const el of [...waitBox.querySelectorAll('.wait-item')])waitDrop(el);}).catch(()=>{});}
