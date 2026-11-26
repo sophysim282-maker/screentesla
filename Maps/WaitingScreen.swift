@@ -45,12 +45,19 @@ final class SLWaitingStore: NSObject {
     }
     // Build 159: waiting music. One song the user picks from Files. It plays softly on the car while it waits
     // for a video, fades out smoothly when the video picture comes, and goes on from the same place next time.
+    /// Build 160: a song added inside the user's own app file (WaitingSong.mp3, added after the build,
+    /// never in the public code) is used when no song was chosen. Removing it in the app turns it off.
+    static let bundledSong = "bundled"
+    static var bundledURL: URL? { Bundle.main.url(forResource: "WaitingSong", withExtension: "mp3") }
     static var musicFile: String {
-        get { defaults.string(forKey: "waitingMusicFile") ?? "" }
+        get {
+            if let chosen = defaults.string(forKey: "waitingMusicFile"), !chosen.isEmpty { return chosen }
+            return bundledURL != nil && !defaults.bool(forKey: "waitingBundledSongRemoved") ? bundledSong : ""
+        }
         set { defaults.set(newValue, forKey: "waitingMusicFile"); changed() }
     }
     static var musicName: String {
-        get { defaults.string(forKey: "waitingMusicName") ?? "" }
+        get { let n = defaults.string(forKey: "waitingMusicName") ?? ""; return n.isEmpty && musicFile == bundledSong ? "Crazy For You" : n }
         set { defaults.set(newValue, forKey: "waitingMusicName") }
     }
     static var musicMime: String {
@@ -67,7 +74,8 @@ final class SLWaitingStore: NSObject {
         set { defaults.set(max(5, min(100, newValue)), forKey: "waitingMusicVolume"); changed() }
     }
     static func removeMusic() {
-        if !musicFile.isEmpty { try? FileManager.default.removeItem(at: folder.appendingPathComponent(musicFile)) }
+        if musicFile == bundledSong { defaults.set(true, forKey: "waitingBundledSongRemoved") }
+        else if !musicFile.isEmpty { try? FileManager.default.removeItem(at: folder.appendingPathComponent(musicFile)) }
         musicName = ""
         musicFile = ""
     }
@@ -112,6 +120,7 @@ final class SLWaitingStore: NSObject {
     @objc(item:) static func item(_ id: String) -> [String: Any] {
         if id == "music" {
             let file = musicFile
+            if file == bundledSong, let url = bundledURL, let data = try? Data(contentsOf: url, options: .mappedIfSafe) { return ["data": data, "mime": "audio/mpeg"] }
             guard !file.isEmpty, let data = try? Data(contentsOf: folder.appendingPathComponent(file), options: .mappedIfSafe) else { return [:] }
             return ["data": data, "mime": musicMime]
         }
