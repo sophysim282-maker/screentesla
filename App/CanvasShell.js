@@ -829,9 +829,10 @@ function waitSet(show){
 }
 // Build 159: waiting music. A song the user chose on the phone plays softly while the car waits for a video,
 // fades out smoothly (about 1.5 s) when the video picture comes, and goes on from the same place next time.
-const waitMusic=new Audio();waitMusic.loop=true;waitMusic.preload='auto';waitMusic.volume=0;let musicSrc='',musicBlocked=false,musicLogged=false;
+const waitMusic=typeof Audio==='function'?new Audio():null;if(waitMusic){waitMusic.loop=true;waitMusic.preload='auto';waitMusic.volume=0;}let musicSrc='',musicBlocked=false,musicLogged=false;
 function musicPos(save){try{if(save!==undefined)localStorage.setItem('screenlink-music-pos',String(save));return Number(localStorage.getItem('screenlink-music-pos'))||0;}catch{return 0;}}
 function musicTick(want){
+ if(!waitMusic)return;
  const m=waitList?.music||{},target=Math.max(0,Math.min(1,(Number(m.volume)||25)/100));
  if(!m.file){if(musicSrc){waitMusic.pause();waitMusic.removeAttribute('src');waitMusic.load();musicSrc='';}return;}
  const src='/waiting/item/music?token='+encodeURIComponent(token)+'&v='+encodeURIComponent(m.file);
@@ -845,7 +846,7 @@ function musicTick(want){
   if(waitMusic.volume<=0.001){waitMusic.pause();musicPos(waitMusic.currentTime||0);}
  }
 }
-self.ScreenLinkMusic=()=>({src:musicSrc,paused:waitMusic.paused,volume:waitMusic.volume,blocked:musicBlocked});
+self.ScreenLinkMusic=()=>({src:musicSrc,paused:waitMusic?waitMusic.paused:true,volume:waitMusic?waitMusic.volume:0,blocked:musicBlocked});
 function waitLoop(){
  try{const picture=!!player&&!mediaFailed&&(player.stats?.drawn||0)>0;musicTick(connected&&!!token&&!picture);}catch{}
  try{
