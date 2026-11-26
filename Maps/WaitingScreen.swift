@@ -73,6 +73,11 @@ final class SLWaitingStore: NSObject {
         get { let v = defaults.integer(forKey: "waitingMusicVolume"); return v == 0 ? 25 : v }
         set { defaults.set(max(5, min(100, newValue)), forKey: "waitingMusicVolume"); changed() }
     }
+    /// Build 161: "car" = the car website plays it; "phone" = the iPhone plays it (speaker or Bluetooth).
+    static var musicOutput: String {
+        get { defaults.string(forKey: "waitingMusicOutput") ?? "car" }
+        set { defaults.set(newValue, forKey: "waitingMusicOutput"); changed() }
+    }
     static func removeMusic() {
         if musicFile == bundledSong { defaults.set(true, forKey: "waitingBundledSongRemoved") }
         else if !musicFile.isEmpty { try? FileManager.default.removeItem(at: folder.appendingPathComponent(musicFile)) }
@@ -112,7 +117,7 @@ final class SLWaitingStore: NSObject {
         let list: [String: Any] = [
             "v": version, "transition": transition, "fit": fit, "hold": hold,
             "items": items.map { ["id": $0.id, "kind": $0.kind, "mime": $0.mime] },
-            "music": musicFile.isEmpty ? [:] as [String: Any] : ["on": musicOn, "volume": musicVolume, "file": musicFile],
+            "music": musicFile.isEmpty ? [:] as [String: Any] : ["on": musicOn && musicOutput == "car", "volume": musicVolume, "file": musicFile],
         ]
         return (try? JSONSerialization.data(withJSONObject: list)) ?? Data("{}".utf8)
     }
@@ -164,6 +169,7 @@ struct WaitingScreenView: View {
     @State private var musicOn = SLWaitingStore.musicOn
     @State private var musicVolume = Double(SLWaitingStore.musicVolume)
     @State private var pickSong = false
+    @State private var musicOutput = SLWaitingStore.musicOutput
 
     var body: some View {
         NavigationView {
@@ -207,6 +213,11 @@ struct WaitingScreenView: View {
                                 .buttonStyle(.borderless)
                         }
                         Toggle("Play while waiting", isOn: $musicOn)
+                        Picker("Sound comes from", selection: $musicOutput) {
+                            Text("Car website").tag("car")
+                            Text("Phone / Bluetooth").tag("phone")
+                        }
+                        .pickerStyle(.segmented)
                         HStack {
                             Image(systemName: "speaker.fill").foregroundColor(.secondary)
                             Slider(value: $musicVolume, in: 5...100, step: 5)
@@ -239,6 +250,7 @@ struct WaitingScreenView: View {
         }
         .onChange(of: transition) { SLWaitingStore.transition = $0 }
         .onChange(of: musicOn) { SLWaitingStore.musicOn = $0 }
+        .onChange(of: musicOutput) { SLWaitingStore.musicOutput = $0 }
         .onChange(of: musicVolume) { SLWaitingStore.musicVolume = Int($0) }
         .fileImporter(isPresented: $pickSong, allowedContentTypes: [.audio]) { result in
             guard case .success(let url) = result else { return }

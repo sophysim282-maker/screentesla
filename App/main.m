@@ -19,6 +19,12 @@
 #import "IdentityStore.h"
 #import "StreamNotifier.h"
 // Swift class has an explicit Objective-C runtime name; no generated header.
+// Build 161: waiting music through the phone / Bluetooth (Maps/WaitingPhoneMusic.swift).
+@protocol SLWaitingPhoneMusicAPI
++ (id)shared;
+- (void)setSharing:(BOOL)on;
+@end
+static void SLPhoneMusicSharing(BOOL on){Class<SLWaitingPhoneMusicAPI> music=(Class<SLWaitingPhoneMusicAPI>)NSClassFromString(@"SLWaitingPhoneMusic");if(music)[[music shared] setSharing:on];}
 @protocol SLSessionDisconnectAPI
 - (void)stopForDisconnectAll;
 @end
@@ -176,7 +182,8 @@ static void SLActivityFinish(void) {
         [owner append:@"BACKGROUND RUNTIME ENDED: receiver, viewer link and media session retained. iOS may suspend this app without PiP. Returning to ScreenLink resumes the existing receiver; Start is not required to rebuild it."];
         if(!owner.preview.active&&!owner.youtubePiP.active && UIApplication.sharedApplication.applicationState==UIApplicationStateBackground)[owner beginGrace];
     };
-    [self append:@"Version 0.21.23 / build 160: the waiting song is inside the app, ready to play: Crazy For You plays softly on the car while it waits for a video and fades out when the video starts. Turn it off or change it in Home > Waiting screen > Waiting music. Includes build 159 (waiting music) and 158."];
+    [self append:@"Version 0.21.24 / build 161: waiting music can come from the car website or from the phone (its speaker or Bluetooth to the car): Home > Waiting screen > Waiting music > Sound comes from. Either way it fades out smoothly when the video starts. Includes build 160 (song in the app)."];
+    [self append:@"Earlier build 160: the waiting song is inside the app, ready to play: Crazy For You plays softly on the car while it waits for a video and fades out when the video starts. Turn it off or change it in Home > Waiting screen > Waiting music. Includes build 159 (waiting music) and 158."];
     [self append:@"Earlier build 159: waiting music. Home > Waiting screen > Waiting music: choose a song from Files. It plays softly on the car while it waits for a video, fades out smoothly when the video starts, and goes on from the same place next time. On/Off switch and volume (low by default). Includes build 158."];
     [self append:@"Earlier build 158: video stopping after about 30 seconds. 1) A late YouTube answer can no longer replace a newer one (YouTube's list grows while you watch; an old, shorter copy could make the car stop). 2) On Auto, when one picture piece arrives very slowly and the picture is about to run out, the video steps down to 720p at once instead of freezing. Includes build 157 and 156."];
     [self append:@"Earlier build 157: faster video switch when YouTube answers late. When you pick another video, YouTube sometimes answers the phone a few seconds after the phone stopped waiting (log: MEDIA PLAYLIST RESPONSE REJECTED, then 12 s waits and HTTP 504). Now every late answer for the same video is kept and used at once, so the car does not wait another 12 s. Includes build 156 (map saved on the phone)."];
@@ -384,6 +391,7 @@ static void SLActivityFinish(void) {
  [self append:[NSString stringWithFormat:@"CAR RECONNECT (%@): listeners %@, AirPlay published again, the car page may come back in without approval. If the car still shows nothing, reload the page in the car.",why,ok?@"OK":@"could not all restart"]];
 }
 - (void)healthTick {
+    SLPhoneMusicSharing(self.receiver.isRunning);
  if(!self.receiver.isRunning||self.userDisconnected||self.disconnectFlow.running||self.broadcastArmed){[self updateHome];return;}
  [self.receiver resumeListenersIfNeeded];
  // Build 142: YouTube handed a video over but the car page has said nothing for 20 s: fix it by itself (at most once a minute).
@@ -458,6 +466,7 @@ static void SLActivityFinish(void) {
  completion:^(BOOL confirmed){
   [self.disconnectSession invalidateAndCancel];self.disconnectSession=nil;
   self.disconnectNeedsAttention=!confirmed;self.localViewerStatus.text=confirmed?@"Disconnected":@"Disconnect not fully confirmed";
+  SLPhoneMusicSharing(NO);
   [self append:confirmed?@"DISCONNECT ALL CONFIRMED: sharing, PiP, viewer sessions, background tasks and ScreenLink VPN stopped. Auto-resume is disabled; saved VPN configuration retained.":@"Sharing stopped; complete disconnect could not be confirmed. Check the VPN/broadcast status before starting again."];
   [self updateHome];
  }];

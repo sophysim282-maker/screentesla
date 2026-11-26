@@ -265,7 +265,7 @@ static NSData *SLWholeFile(NSString *location){@synchronized(MediaCast.class){re
     if(![next isEqual:_eventState]){_eventState=next;event=next;session=_appleSession;}
     if([next isEqual:@"stopped"])_active=NO;[_ready unlock];
     if(newError)[self log:[@"MEDIA BROWSER ERROR: " stringByAppendingString:newError]];
-    if(event){[self sendEvent:@{@"category":@"video",@"state":event} session:session];[self log:[NSString stringWithFormat:@"MEDIA BROWSER %@: video-only playback state reported.",event.uppercaseString]];}
+    if(event){NSString *carEvent=event;dispatch_async(dispatch_get_main_queue(),^{[NSNotificationCenter.defaultCenter postNotificationName:@"SLCarVideoEvent" object:carEvent];});[self sendEvent:@{@"category":@"video",@"state":event} session:session];[self log:[NSString stringWithFormat:@"MEDIA BROWSER %@: video-only playback state reported.",event.uppercaseString]];}
 }
 - (void)connectionClosed:(void *)connection{[_ready lock];if(connection==_reverseConnection){if(_reverse>=0)close(_reverse);_reverse=-1;_reverseConnection=NULL;[_pending removeAllObjects];[_ready broadcast];}[_ready unlock];}
 - (void)stop{[_ready lock];[_late removeAllObjects];_active=NO;_readyToPlay=NO;_primary=nil;_sourceHeights=@[];_epoch=NSUUID.UUID.UUIDString;[_resources removeAllObjects];[_identifiers removeAllObjects];[_playlistLinks removeAllObjects];[_playlistTimes removeAllObjects];[_inflight removeAllObjects];[_retiredLinks removeAllObjects];[_selectedPlaylists removeAllObjects];[_pending removeAllObjects];[_prefetch removeAllObjects];[_cache removeAllObjects];if(_reverse>=0)close(_reverse);_reverse=-1;_reverseConnection=NULL;[_ready broadcast];[_ready unlock];}
