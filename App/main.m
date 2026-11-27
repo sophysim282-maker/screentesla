@@ -182,7 +182,8 @@ static void SLActivityFinish(void) {
         [owner append:@"BACKGROUND RUNTIME ENDED: receiver, viewer link and media session retained. iOS may suspend this app without PiP. Returning to ScreenLink resumes the existing receiver; Start is not required to rebuild it."];
         if(!owner.preview.active&&!owner.youtubePiP.active && UIApplication.sharedApplication.applicationState==UIApplicationStateBackground)[owner beginGrace];
     };
-    [self append:@"Version 0.21.27 / build 164: iPhone Duo test. Built with the newest Apple tools on the cloud Macs (Xcode 26) instead of Xcode 16, turns every way, and the Car Status words no longer break into pieces. Includes build 163 (two columns on the big screen)."];
+    [self append:@"Version 0.21.28 / build 165: two versions. The normal file is for every iPhone. The Duo file is for the iPhone Duo: it uses iOS scenes and is marked as made for iOS 27.1, so the Duo can show it full screen without black bars (big screen = two columns). Includes build 164."];
+    [self append:@"Earlier build 164: iPhone Duo test. Built with the newest Apple tools on the cloud Macs (Xcode 26) instead of Xcode 16, turns every way, and the Car Status words no longer break into pieces. Includes build 163 (two columns on the big screen)."];
     [self append:@"Earlier build 163: iPhone Duo. When the phone is opened (big inner screen) or turned sideways, Home shows the car status, time and Pause on the left and the tiles and Start / Stop on the right; the Video page shows the player on the left and quality, sound and volume on the right. Folding it back gives the normal one-column screen. All functions are the same. Includes build 162."];
     [self append:@"Earlier build 162: the waiting music on the car website now plays through the same sound system as the video (no music player element), so the car browser does not block it while driving. Includes build 161 (music from the car or the phone / Bluetooth)."];
     [self append:@"Earlier build 161: waiting music can come from the car website or from the phone (its speaker or Bluetooth to the car): Home > Waiting screen > Waiting music > Sound comes from. Either way it fades out smoothly when the video starts. Includes build 160 (song in the app)."];
@@ -833,11 +834,14 @@ static double SLWall(void){return NSDate.date.timeIntervalSince1970;}
 @property(nonatomic,strong) UIWindow *window;
 @property(nonatomic) SLWidgetRoute pendingWidgetAction;
 @property(nonatomic) NSUInteger widgetGeneration;
+- (void)consumeWidgetStart;
 @end
 @implementation AppDelegate
 - (BOOL)application:(UIApplication *)app didFinishLaunchingWithOptions:(NSDictionary *)options {
  SLWidgetRoute launchAction=SLRouteForURL(options[UIApplicationLaunchOptionsURLKey]);
  if(launchAction==SLWidgetRouteDisconnect){[NSUserDefaults.standardUserDefaults setBool:YES forKey:@"manualDisconnected"];[NSUserDefaults.standardUserDefaults setBool:NO forKey:@"receiverArmed"];[NSUserDefaults.standardUserDefaults setBool:NO forKey:@"resumeYouTubeOnReturn"];}
+ // Build 165: the iPhone Duo version has a scene list in its Info.plist; its window is made by SLSceneDelegate.
+ if([NSBundle.mainBundle objectForInfoDictionaryKey:@"UIApplicationSceneManifest"]){self.pendingWidgetAction=launchAction;return YES;}
  self.window=[[UIWindow alloc]initWithFrame:UIScreen.mainScreen.bounds];self.window.rootViewController=[Controller new];[self.window makeKeyAndVisible];self.pendingWidgetAction=launchAction;return YES;
 }
 - (void)cancelPendingWidgetAction {self.widgetGeneration++;self.pendingWidgetAction=SLWidgetRouteNone;}
@@ -859,6 +863,26 @@ static double SLWall(void){return NSDate.date.timeIntervalSince1970;}
  else if(action==SLWidgetRouteStart)[owner startFromWidget];
  else if(action==SLWidgetRouteResume)[owner resumeYouTubeOnReturn];
 }
+@end
+// Build 165: iPhone Duo version. Same app, but iOS gives it a window through a scene, which apps built for
+// iOS 27 must use. Opening links from the widgets and the app becoming active go through the app delegate as before.
+@interface SLSceneDelegate : UIResponder <UIWindowSceneDelegate>
+@property(nonatomic,strong) UIWindow *window;
+@end
+@implementation SLSceneDelegate
+- (void)scene:(UIScene *)scene willConnectToSession:(UISceneSession *)session options:(UISceneConnectionOptions *)options {
+ if(![scene isKindOfClass:UIWindowScene.class])return;
+ AppDelegate *app=(AppDelegate *)UIApplication.sharedApplication.delegate;
+ UIWindow *window=[[UIWindow alloc]initWithWindowScene:(UIWindowScene *)scene];
+ window.rootViewController=app.window.rootViewController?:[Controller new];
+ self.window=window;app.window=window;[window makeKeyAndVisible];
+ for(UIOpenURLContext *link in options.URLContexts){SLWidgetRoute action=SLRouteForURL(link.URL);if(action!=SLWidgetRouteNone)app.pendingWidgetAction=action;}
+}
+- (void)scene:(UIScene *)scene openURLContexts:(NSSet<UIOpenURLContext *> *)contexts {
+ AppDelegate *app=(AppDelegate *)UIApplication.sharedApplication.delegate;
+ for(UIOpenURLContext *link in contexts)[app application:UIApplication.sharedApplication openURL:link.URL options:@{}];
+}
+- (void)sceneDidBecomeActive:(UIScene *)scene {[(AppDelegate *)UIApplication.sharedApplication.delegate consumeWidgetStart];}
 @end
 int main(int argc,char **argv){@autoreleasepool{return UIApplicationMain(argc,argv,nil,NSStringFromClass(AppDelegate.class));}}
 
