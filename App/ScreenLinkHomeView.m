@@ -140,8 +140,8 @@ static UIColor *SLShade(UIColor *c,CGFloat bri,CGFloat satScale){CGFloat h,s,b;i
  CGRect s=CGRectIsEmpty(self.stage)?self.bounds:self.stage;
  self.room.frame=CGRectInset(s,-s.size.width*.15,-s.size.height*.1);self.room.startPoint=CGPointMake(.5,.6);self.room.endPoint=CGPointMake(1.05,1.15);
  UIImage *car=self.carView.image;CGFloat aspect=car.size.width>0?car.size.height/car.size.width:.4;
- CGFloat w=MIN(s.size.width*(self.narrow?.86:.72),s.size.height*(self.narrow?1.6:1.15)/MAX(.2,aspect)),h=w*aspect;
- CGFloat bottom=CGRectGetMinY(s)+s.size.height*(self.narrow?.82:.70);
+ CGFloat w=MIN(s.size.width*(self.narrow?.86:.80),s.size.height*(self.narrow?1.6:.5)/MAX(.2,aspect)),h=w*aspect;
+ CGFloat bottom=CGRectGetMinY(s)+s.size.height*(self.narrow?.82:.62);
  self.carView.frame=CGRectMake(CGRectGetMidX(s)-w/2,bottom-h,w,h);self.softEdge.frame=self.carView.bounds;
  self.reflection.transform=CGAffineTransformIdentity;self.reflection.frame=CGRectMake(CGRectGetMinX(self.carView.frame),bottom-2,w,h);self.reflection.transform=CGAffineTransformMakeScale(1,-1);self.reflectionFade.frame=self.reflection.bounds;
  self.shadow.frame=CGRectMake(CGRectGetMidX(s)-w*.46,bottom-h*.09,w*.92,h*.18);
@@ -200,7 +200,7 @@ static UIColor *SLShade(UIColor *c,CGFloat bri,CGFloat satScale){CGFloat h,s,b;i
 @property(nonatomic,strong) SLCarStudioView *studio;
 @property(nonatomic,strong) UIScrollView *premiumPage,*classicHome;
 @property(nonatomic,strong) UIView *stageOverlay,*tabBarView,*stageSpacer,*premiumStageSide;
-@property(nonatomic,strong) NSLayoutConstraint *pageNarrowTrailing,*pageWideWidth,*overlayNarrowLeading,*overlayWideLeading,*spacerHeight,*overlayNarrowHeight;
+@property(nonatomic,strong) NSLayoutConstraint *overlayWideBottom,*pageNarrowTrailing,*pageWideWidth,*overlayNarrowLeading,*overlayWideLeading,*spacerHeight,*overlayNarrowHeight;
 @property(nonatomic,strong) UIStackView *sideStack,*narrowActions,*stageActions,*stageInfo,*stageButtons;
 @property(nonatomic,strong) UILabel *pStatus,*pDetail,*pNowTime,*pOnCar,*pBigTime,*pInfoCar,*pInfoLink,*pInfoQuality;
 @property(nonatomic,strong) UIView *pDot;
@@ -779,7 +779,7 @@ static UIColor *SLPremiumCard(void){return [UIColor colorWithRed:.13 green:.137 
  // Over the car: time, three facts with thin lines, the action row and two outlined buttons.
  UIView *overlay=[UIView new];overlay.translatesAutoresizingMaskIntoConstraints=NO;[self addSubview:overlay];self.stageOverlay=overlay;
  self.overlayNarrowLeading=[overlay.leadingAnchor constraintEqualToAnchor:self.leadingAnchor];self.overlayWideLeading=[overlay.leadingAnchor constraintEqualToAnchor:page.trailingAnchor];
- self.overlayNarrowHeight=[overlay.heightAnchor constraintEqualToConstant:120];
+ self.overlayNarrowHeight=[overlay.heightAnchor constraintEqualToConstant:120];self.overlayWideBottom=[overlay.bottomAnchor constraintEqualToAnchor:self.bottomAnchor];
  [NSLayoutConstraint activateConstraints:@[[overlay.topAnchor constraintEqualToAnchor:self.safeAreaLayoutGuide.topAnchor],[overlay.trailingAnchor constraintEqualToAnchor:self.safeAreaLayoutGuide.trailingAnchor],self.overlayNarrowLeading,self.overlayNarrowHeight]];
  self.pOnCar=[self pLabel:@"ON THE CAR" size:13 weight:UIFontWeightMedium grey:YES];self.pOnCar.textAlignment=NSTextAlignmentCenter;
  NSMutableAttributedString *spaced=[[NSMutableAttributedString alloc]initWithString:@"ON THE CAR" attributes:@{NSKernAttributeName:@2.4,NSForegroundColorAttributeName:SLPremiumGrey(),NSFontAttributeName:[UIFont systemFontOfSize:13 weight:UIFontWeightMedium]}];self.pOnCar.attributedText=spaced;
@@ -788,7 +788,7 @@ static UIColor *SLPremiumCard(void){return [UIColor colorWithRed:.13 green:.137 
  [NSLayoutConstraint activateConstraints:@[[timeStack.topAnchor constraintEqualToAnchor:overlay.topAnchor constant:14],[timeStack.centerXAnchor constraintEqualToAnchor:overlay.centerXAnchor]]];
  NSMutableArray *facts=[NSMutableArray array];
  for(NSArray *f in @[@[@"Car screen",@"car"],@[@"ScreenLink",@"link"],@[@"Quality",@"quality"]]){
-  UILabel *top=[self pLabel:f[0] size:14 weight:UIFontWeightRegular grey:YES],*value=[self pLabel:@"–" size:18 weight:UIFontWeightSemibold grey:NO];
+  UILabel *top=[self pLabel:f[0] size:14 weight:UIFontWeightRegular grey:YES],*value=[self pLabel:@"–" size:18 weight:UIFontWeightSemibold grey:NO];value.numberOfLines=1;value.adjustsFontSizeToFitWidth=YES;value.minimumScaleFactor=.6;
   if([f[1] isEqual:@"car"])self.pInfoCar=value;else if([f[1] isEqual:@"link"])self.pInfoLink=value;else self.pInfoQuality=value;
   UIView *line=[UIView new];line.backgroundColor=[UIColor colorWithWhite:1 alpha:.18];line.translatesAutoresizingMaskIntoConstraints=NO;
   UIStackView *words=[[UIStackView alloc]initWithArrangedSubviews:@[top,value]];words.axis=UILayoutConstraintAxisVertical;words.spacing=1;
@@ -808,7 +808,7 @@ static UIColor *SLPremiumCard(void){return [UIColor colorWithRed:.13 green:.137 
 - (void)layoutPremium {
  if(!self.premium)return;
  BOOL wide=self.bounds.size.width>=640;CGFloat top=self.safeAreaInsets.top;
- self.pageNarrowTrailing.active=!wide;self.pageWideWidth.active=wide;self.overlayNarrowLeading.active=!wide;self.overlayWideLeading.active=wide;self.overlayNarrowHeight.active=!wide;
+ self.pageNarrowTrailing.active=!wide;self.pageWideWidth.active=wide;self.overlayNarrowLeading.active=!wide;self.overlayWideLeading.active=wide;self.overlayNarrowHeight.active=!wide;self.overlayWideBottom.active=wide;
  self.overlayNarrowHeight.constant=96;
  CGFloat stageH=MIN(self.bounds.size.width*.62,300);self.spacerHeight.constant=wide?0:stageH;self.stageSpacer.hidden=wide;self.narrowActions.hidden=wide;
  self.stageInfo.hidden=!wide;self.stageActions.hidden=!wide;self.stageButtons.hidden=!wide;self.stageOverlay.userInteractionEnabled=wide;
@@ -829,7 +829,7 @@ static UIColor *SLPremiumCard(void){return [UIColor colorWithRed:.13 green:.137 
  self.pStart.enabled=!busy;self.pStop.enabled=!disconnecting;self.pStart.hidden=sharing&&!busy;self.pStop.hidden=!sharing&&!busy;
  UIButtonConfiguration *c=self.pStart.configuration;c.showsActivityIndicator=busy;self.pStart.configuration=c;
  for(UIButton *b in self.pPowerButtons){UIButtonConfiguration *p=b.configuration;p.title=sharing?@"Stop":@"Start";b.configuration=p;}
- self.pInfoCar.text=self.linkText.text.length?[self.linkText.text stringByReplacingOccurrencesOfString:@"ScreenLink is off" withString:@"Not connected"]:@"–";
+ self.pInfoCar.text=!sharing?(busy?@"Starting":@"Off"):attention?@"Check":self.healthLevel==1?@"Connected":self.healthLevel==2?@"Waiting":self.healthLevel==3?@"Not answering":@"On";
  self.pInfoLink.text=sharing?@"On · LIVE":busy?@"Starting…":@"Off";
  BOOL good=sharing&&self.healthLevel==1;
  UIButtonConfiguration *pill=self.pStatusPill.configuration;pill.title=self.linkText.text?:@"";pill.baseForegroundColor=good?[UIColor colorWithRed:.3 green:.86 blue:.52 alpha:1]:SLPremiumGrey();pill.background.strokeColor=good?[UIColor colorWithRed:.3 green:.86 blue:.52 alpha:.9]:[UIColor colorWithWhite:1 alpha:.28];self.pStatusPill.configuration=pill;
