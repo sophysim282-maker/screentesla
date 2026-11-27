@@ -1,5 +1,5 @@
 name: Xcode probe
-# Lists the Xcode versions on the cloud Macs (for the iPhone Duo full-screen build). Run 1.
+# Lists the Xcode versions on the cloud Macs (for the iPhone Duo full-screen build). Run 2.
 on:
   push:
     branches: ['release/xcode-probe']
