@@ -1,5 +1,5 @@
 name: Xcode probe
-# Lists the Xcode versions on the cloud Macs (for the iPhone Duo full-screen build). Run 2.
+# Lists the Xcode versions on the cloud Macs (for the iPhone Duo full-screen build). Run 3.
 on:
   push:
     branches: ['release/xcode-probe']
@@ -11,7 +11,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-15, macos-26, macos-latest]
+        os: [macos-27, macos-27-arm64, macos-26-xcode-27, macos-26-arm64]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 10
     steps:
