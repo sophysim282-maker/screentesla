@@ -9,7 +9,7 @@ xcrun clang -fobjc-arc -fmodules -target "$arch-apple-ios15.0-simulator" -isysro
 cp App/CarPoster.jpg App/CarAmbient.mp4 "$app/"
 python3 - "$app" <<'PY'
 import pathlib,plistlib,sys
-p={'CFBundleIdentifier':'local.screenlink.preview86','CFBundleExecutable':'ScreenLinkPreview','CFBundleName':'ScreenLink Preview','CFBundleVersion':'86','CFBundleShortVersionString':'0.20.49','CFBundlePackageType':'APPL','MinimumOSVersion':'15.0','UILaunchScreen':{}}
+p={'CFBundleIdentifier':'local.screenlink.preview86','CFBundleExecutable':'ScreenLinkPreview','CFBundleName':'ScreenLink Preview','CFBundleVersion':'86','CFBundleShortVersionString':'0.20.49','CFBundlePackageType':'APPL','MinimumOSVersion':'15.0','UILaunchScreen':{},'UIDeviceFamily':[1,2],'UISupportedInterfaceOrientations':['UIInterfaceOrientationPortrait','UIInterfaceOrientationLandscapeLeft','UIInterfaceOrientationLandscapeRight']}
 pathlib.Path(sys.argv[1]+'/Info.plist').write_bytes(plistlib.dumps(p))
 PY
 codesign --force --sign - "$app"
@@ -43,5 +43,20 @@ xcrun simctl ui "$device" appearance light
 sleep 3
 xcrun simctl io "$device" screenshot build/ui/home-top-light.png
 xcrun simctl terminate "$device" local.screenlink.preview86
+# Build 163: the wide two-column layout (like the iPhone Duo opened), on the smallest available iPad.
+wide="$(xcrun simctl list devices available -j | python3 -c 'import json,sys; d=json.load(sys.stdin); c=[x for k,v in d["devices"].items() if "iOS" in k for x in v if x["isAvailable"] and "iPad" in x["name"]]; c.sort(key=lambda x:("mini" not in x["name"],x["name"])); print(c[0]["udid"] if c else "")')"
+if [ -n "$wide" ]; then
+  xcrun simctl boot "$wide" || true
+  xcrun simctl bootstatus "$wide" -b
+  xcrun simctl install "$wide" "$app"
+  xcrun simctl ui "$wide" appearance dark
+  xcrun simctl launch "$wide" local.screenlink.preview86
+  sleep 20
+  xcrun simctl io "$wide" screenshot build/ui/home-wide-duo.png || true
+  xcrun simctl terminate "$wide" local.screenlink.preview86 || true
+  xcrun simctl shutdown "$wide" || true
+else
+  echo "No iPad simulator for the wide preview."
+fi
 ls -la build/ui
 echo 'HOME_PREVIEW_PASSED: Cosmic Glass Home runs in the simulator; controls work; motion video and screenshots captured.'

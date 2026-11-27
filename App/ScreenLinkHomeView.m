@@ -124,6 +124,10 @@ static CGFloat SLMix(CGFloat a,CGFloat b,CGFloat t){return a+(b-a)*MAX(0,MIN(1,t
 @property(nonatomic,strong) SLGlowBorder *statusGlow;
 @property(nonatomic,strong) UIView *statusDot,*liveBadge;
 @property(nonatomic,strong) UIStackView *mainStack;
+// Build 163: big screens (iPhone Duo opened, landscape): the pages split into two columns.
+@property(nonatomic,strong) UIStackView *homeRight,*homeColumns,*videoRight,*videoColumns;
+@property(nonatomic,strong) NSMutableArray<NSLayoutConstraint *> *pageWidths;
+@property(nonatomic) BOOL wideLayout;
 @property(nonatomic) BOOL entranceDone;
 @property(nonatomic,strong) CAGradientLayer *startShine;
 @property(nonatomic,strong) NSMutableDictionary<NSString *,UILabel *> *rowDetails;
@@ -231,17 +235,34 @@ static UIColor *SLGlassFill(void){return [UIColor colorWithRed:.43 green:.45 blu
  UIButton *button=[UIButton buttonWithConfiguration:config primaryAction:nil];[button addTarget:self action:action forControlEvents:UIControlEventTouchUpInside];return button;
 }
 - (UILabel *)white:(NSString *)text size:(CGFloat)size weight:(UIFontWeight)weight {UILabel *l=[UILabel new];l.text=text;l.textColor=UIColor.whiteColor;l.font=[UIFontMetrics.defaultMetrics scaledFontForFont:[UIFont systemFontOfSize:size weight:weight]];l.adjustsFontForContentSizeCategory=YES;l.numberOfLines=0;return l;}
+// Build 163: iPhone Duo. When the screen is wide (opened inner screen about 669 points, or landscape),
+// Home shows the car status on the left and the tiles and Start on the right; the Video page shows the
+// player on the left and quality / sound / volume on the right. Folding back goes to one column again.
+- (void)layoutSubviews {
+ [super layoutSubviews];
+ BOOL wide=self.bounds.size.width>=640;
+ if(wide==self.wideLayout&&self.homeColumns.axis==(wide?UILayoutConstraintAxisHorizontal:UILayoutConstraintAxisVertical))return;
+ self.wideLayout=wide;
+ for(UIStackView *c in @[self.homeColumns?:[UIStackView new],self.videoColumns?:[UIStackView new]]){
+  c.axis=wide?UILayoutConstraintAxisHorizontal:UILayoutConstraintAxisVertical;
+  c.alignment=wide?UIStackViewAlignmentTop:UIStackViewAlignmentFill;
+  c.distribution=wide?UIStackViewDistributionFillEqually:UIStackViewDistributionFill;
+  c.spacing=wide?24:(c==self.homeColumns?12:14);
+ }
+ for(NSLayoutConstraint *w in self.pageWidths)w.constant=wide?1180:620;
+ [self setNeedsLayout];
+}
 - (UIScrollView *)pageScroll:(UIStackView *)stack identifier:(NSString *)identifier {
  UIScrollView *scroll=[UIScrollView new];scroll.alwaysBounceVertical=YES;scroll.showsVerticalScrollIndicator=NO;scroll.accessibilityIdentifier=identifier;scroll.backgroundColor=UIColor.clearColor;
  stack.axis=UILayoutConstraintAxisVertical;stack.translatesAutoresizingMaskIntoConstraints=NO;[scroll addSubview:stack];
- NSLayoutConstraint *width=[stack.widthAnchor constraintEqualToAnchor:scroll.frameLayoutGuide.widthAnchor constant:-28];width.priority=999;
- [NSLayoutConstraint activateConstraints:@[[scroll.contentLayoutGuide.widthAnchor constraintEqualToAnchor:scroll.frameLayoutGuide.widthAnchor],[stack.topAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.topAnchor constant:6],[stack.bottomAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.bottomAnchor constant:-110],[stack.centerXAnchor constraintEqualToAnchor:scroll.centerXAnchor],width,[stack.widthAnchor constraintLessThanOrEqualToConstant:620]]];
+ NSLayoutConstraint *width=[stack.widthAnchor constraintEqualToAnchor:scroll.frameLayoutGuide.widthAnchor constant:-28];width.priority=999;NSLayoutConstraint *maxWidth=[stack.widthAnchor constraintLessThanOrEqualToConstant:620];[self.pageWidths addObject:maxWidth];
+ [NSLayoutConstraint activateConstraints:@[[scroll.contentLayoutGuide.widthAnchor constraintEqualToAnchor:scroll.frameLayoutGuide.widthAnchor],[stack.topAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.topAnchor constant:6],[stack.bottomAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.bottomAnchor constant:-110],[stack.centerXAnchor constraintEqualToAnchor:scroll.centerXAnchor],width,maxWidth]];
  return scroll;
 }
 - (instancetype)initWithFrame:(CGRect)frame {
  if((self=[super initWithFrame:frame])){
   self.overrideUserInterfaceStyle=UIUserInterfaceStyleDark;self.backgroundColor=UIColor.blackColor;self.idleAllowed=YES;self.clipsToBounds=YES;
-  self.rowDetails=[NSMutableDictionary dictionary];self.tileParts=[NSMutableDictionary dictionary];self.tileOn=[NSMutableDictionary dictionary];
+  self.rowDetails=[NSMutableDictionary dictionary];self.tileParts=[NSMutableDictionary dictionary];self.tileOn=[NSMutableDictionary dictionary];self.pageWidths=[NSMutableArray array];
   // The car photo fills the screen (the user's own picture when there is one), darker at the top and bottom.
   self.car=[SLAmbientCarView new];self.car.layer.cornerRadius=0;self.car.layer.borderWidth=0;self.car.sheen.hidden=YES;self.car.isAccessibilityElement=NO;[self fill:self.car in:self inset:UIEdgeInsetsZero];
   self.heroImage=[UIImageView new];self.heroImage.contentMode=UIViewContentModeScaleAspectFill;self.heroImage.clipsToBounds=YES;self.heroImage.hidden=YES;[self fill:self.heroImage in:self.car inset:UIEdgeInsetsZero];
@@ -251,8 +272,10 @@ static UIColor *SLGlassFill(void){return [UIColor colorWithRed:.43 green:.45 blu
   {NSString *path=[NSBundle.mainBundle pathForResource:@"entrance-4" ofType:@"jpg"];self.heroDefault=path?[UIImage imageWithContentsOfFile:path]:nil;[self showHeroImage:nil];}
 
   // ---------- Home page ----------
-  UIStackView *stack=[UIStackView new];self.mainStack=stack;stack.spacing=12;
-  UIScrollView *home=[self pageScroll:stack identifier:@"home.scroll"];[self fill:home in:self inset:UIEdgeInsetsZero];self.homePage=home;
+  UIStackView *stack=[UIStackView new];self.mainStack=stack;stack.spacing=12;stack.axis=UILayoutConstraintAxisVertical;
+  UIStackView *homeRight=[UIStackView new];homeRight.axis=UILayoutConstraintAxisVertical;homeRight.spacing=12;self.homeRight=homeRight;
+  UIStackView *homeColumns=[[UIStackView alloc]initWithArrangedSubviews:@[stack,homeRight]];homeColumns.spacing=12;self.homeColumns=homeColumns;
+  UIScrollView *home=[self pageScroll:homeColumns identifier:@"home.scroll"];[self fill:home in:self inset:UIEdgeInsetsZero];self.homePage=home;
   // Black status card (like the Dynamic Island).
   UIView *island=[UIView new];island.backgroundColor=UIColor.blackColor;island.layer.cornerRadius=32;island.layer.cornerCurve=kCACornerCurveContinuous;
   UIImageView *carIcon=[[UIImageView alloc]initWithImage:[self symbol:@"car.fill" size:11]];carIcon.tintColor=UIColor.whiteColor;carIcon.contentMode=UIViewContentModeCenter;carIcon.backgroundColor=[UIColor colorWithRed:.12 green:.5 blue:.42 alpha:1];carIcon.layer.cornerRadius=11;carIcon.clipsToBounds=YES;[carIcon.widthAnchor constraintEqualToConstant:22].active=YES;[carIcon.heightAnchor constraintEqualToConstant:22].active=YES;
@@ -295,15 +318,17 @@ static UIColor *SLGlassFill(void){return [UIColor colorWithRed:.43 green:.45 blu
   UIStackView *row2=[[UIStackView alloc]initWithArrangedSubviews:@[[self tile:@"Small window" symbol:@"pip.fill" key:@"pip"],[self tile:@"Waiting screen" symbol:@"photo.on.rectangle" key:@"waiting"],[self tile:@"TikTok" symbol:@"music.note" key:@"tiktok"]]];
   for(UIStackView *r in @[row1,row2]){r.spacing=10;r.distribution=UIStackViewDistributionFillEqually;}
   [self setTile:@"waiting" on:NO text:@"OPEN"];[self setTile:@"tiktok" on:NO text:@"OPEN"];
-  UIStackView *tiles=[[UIStackView alloc]initWithArrangedSubviews:@[row1,row2]];tiles.axis=UILayoutConstraintAxisVertical;tiles.spacing=10;[stack addArrangedSubview:tiles];
+  UIStackView *tiles=[[UIStackView alloc]initWithArrangedSubviews:@[row1,row2]];tiles.axis=UILayoutConstraintAxisVertical;tiles.spacing=10;[homeRight addArrangedSubview:tiles];
   // Start / Stop ScreenLink.
   self.startButton=[self wideButton:@"Start ScreenLink" symbol:@"play.fill" color:[UIColor colorWithRed:.19 green:.82 blue:.35 alpha:1] action:@selector(startTapped)];self.startButton.accessibilityIdentifier=@"home.start";self.startButton.accessibilityLabel=@"Start";
   self.disconnectButton=[self wideButton:@"Stop ScreenLink" symbol:@"power" color:[UIColor colorWithRed:1 green:.42 blue:.4 alpha:1] action:@selector(disconnectTapped)];self.disconnectButton.accessibilityIdentifier=@"home.disconnect";self.disconnectButton.accessibilityLabel=@"Disconnect all";self.disconnectButton.hidden=YES;
-  [stack addArrangedSubview:self.startButton];[stack addArrangedSubview:self.disconnectButton];
+  [homeRight addArrangedSubview:self.startButton];[homeRight addArrangedSubview:self.disconnectButton];
 
   // ---------- Video page ----------
-  UIStackView *vstack=[UIStackView new];vstack.spacing=14;vstack.alignment=UIStackViewAlignmentFill;
-  UIScrollView *video=[self pageScroll:vstack identifier:@"video.scroll"];[self fill:video in:self inset:UIEdgeInsetsZero];video.hidden=YES;self.videoPage=video;
+  UIStackView *vstack=[UIStackView new];vstack.spacing=14;vstack.alignment=UIStackViewAlignmentFill;vstack.axis=UILayoutConstraintAxisVertical;
+  UIStackView *videoRight=[UIStackView new];videoRight.axis=UILayoutConstraintAxisVertical;videoRight.spacing=14;self.videoRight=videoRight;
+  UIStackView *videoColumns=[[UIStackView alloc]initWithArrangedSubviews:@[vstack,videoRight]];videoColumns.spacing=14;self.videoColumns=videoColumns;
+  UIScrollView *video=[self pageScroll:videoColumns identifier:@"video.scroll"];[self fill:video in:self inset:UIEdgeInsetsZero];video.hidden=YES;self.videoPage=video;
   UIButton *playerTab=[self pill:@"Player" symbol:nil background:[UIColor colorWithWhite:.92 alpha:1] foreground:UIColor.blackColor action:@selector(noop)];
   UIButton *waitingTab=[self pill:@"Waiting screen" symbol:nil background:[UIColor colorWithWhite:1 alpha:.16] foreground:UIColor.whiteColor action:@selector(waitingQuickTapped)];
   for(UIButton *b in @[playerTab,waitingTab]){UIButtonConfiguration *c=b.configuration;c.background.cornerRadius=20;c.contentInsets=NSDirectionalEdgeInsetsMake(10,18,10,18);b.configuration=c;}
@@ -332,7 +357,7 @@ static UIColor *SLGlassFill(void){return [UIColor colorWithRed:.43 green:.45 blu
   self.playerVolume=[UISlider new];self.playerVolume.minimumValue=0;self.playerVolume.maximumValue=1;self.playerVolume.value=1;self.playerVolume.continuous=NO;self.playerVolume.minimumTrackTintColor=UIColor.whiteColor;self.playerVolume.accessibilityLabel=@"Car player volume";self.playerVolume.accessibilityIdentifier=@"player.volume";[self.playerVolume addTarget:self action:@selector(playerVolumeChanged) forControlEvents:UIControlEventValueChanged];
   UIStackView *vol=[[UIStackView alloc]initWithArrangedSubviews:@[quiet,self.playerVolume,loud]];vol.spacing=10;vol.alignment=UIStackViewAlignmentCenter;[o addArrangedSubview:vol];
   self.playerHint=[self white:@"Choose videos in YouTube. These buttons control the car player." size:12 weight:UIFontWeightRegular];self.playerHint.textColor=[UIColor colorWithWhite:1 alpha:.6];[o addArrangedSubview:self.playerHint];
-  [vstack addArrangedSubview:opts];self.controlsCard=opts;
+  [videoRight addArrangedSubview:opts];self.controlsCard=opts;
 
   // ---------- Bottom bar: Home · Video · Map · Menu ----------
   UIView *tabBar=[UIView new];UIVisualEffectView *tabGlass=[[UIVisualEffectView alloc]initWithEffect:[UIBlurEffect effectWithStyle:UIBlurEffectStyleSystemChromeMaterialDark]];tabGlass.layer.cornerRadius=26;tabGlass.layer.cornerCurve=kCACornerCurveContinuous;tabGlass.clipsToBounds=YES;tabGlass.layer.borderWidth=1;tabGlass.layer.borderColor=[UIColor colorWithWhite:1 alpha:.12].CGColor;[self fill:tabGlass in:tabBar inset:UIEdgeInsetsZero];
@@ -479,7 +504,7 @@ static NSString *SLClock(double seconds){long s=(long)MAX(0,seconds);return s>=3
  [self revealHomeParts:.05];
 }
 - (void)revealHomeParts:(NSTimeInterval)delay {
- NSArray<UIView *> *views=self.mainStack.arrangedSubviews;
+ NSArray<UIView *> *views=[self.mainStack.arrangedSubviews arrayByAddingObjectsFromArray:self.homeRight.arrangedSubviews?:@[]];
  [views enumerateObjectsUsingBlock:^(UIView *view,NSUInteger index,BOOL *stop){
   view.alpha=0;if(view!=self.car)view.transform=CGAffineTransformMakeTranslation(0,28);
   [UIView animateWithDuration:.75 delay:delay+index*.055 usingSpringWithDamping:.8 initialSpringVelocity:.4 options:UIViewAnimationOptionAllowUserInteraction animations:^{view.alpha=1;if(view!=self.car)view.transform=CGAffineTransformIdentity;} completion:nil];
@@ -511,7 +536,7 @@ static NSString *SLClock(double seconds){long s=(long)MAX(0,seconds);return s>=3
  CABasicAnimation *bob=[CABasicAnimation animationWithKeyPath:@"transform.translation.y"];bob.fromValue=@0;bob.toValue=@7;bob.duration=.9;bob.autoreverses=YES;bob.repeatCount=HUGE_VALF;bob.timingFunction=[CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseInEaseOut];[arrow.layer addAnimation:bob forKey:@"bob"];
  UIScrollView *scroll=[[UIScrollView alloc]initWithFrame:cover.bounds];scroll.autoresizingMask=cover.autoresizingMask;scroll.contentSize=CGSizeMake(W,H*3.4);scroll.showsVerticalScrollIndicator=NO;scroll.bounces=NO;scroll.contentInsetAdjustmentBehavior=UIScrollViewContentInsetAdjustmentNever;scroll.decelerationRate=UIScrollViewDecelerationRateNormal;scroll.delegate=self;scroll.backgroundColor=UIColor.clearColor;[cover addSubview:scroll];self.entranceScroll=scroll;
  [scroll addGestureRecognizer:[[UITapGestureRecognizer alloc]initWithTarget:self action:@selector(entranceTapped)]];
- for(UIView *part in self.mainStack.arrangedSubviews)part.alpha=0;
+ for(UIView *part in [self.mainStack.arrangedSubviews arrayByAddingObjectsFromArray:self.homeRight.arrangedSubviews?:@[]])part.alpha=0;
  [self entranceProgress:0];cover.alpha=0;[UIView animateWithDuration:.6 animations:^{cover.alpha=1;}];
  return YES;
 }
