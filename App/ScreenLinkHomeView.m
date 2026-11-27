@@ -279,7 +279,7 @@ static UIColor *SLGlassFill(void){return [UIColor colorWithRed:.43 green:.45 blu
   // Black status card (like the Dynamic Island).
   UIView *island=[UIView new];island.backgroundColor=UIColor.blackColor;island.layer.cornerRadius=32;island.layer.cornerCurve=kCACornerCurveContinuous;
   UIImageView *carIcon=[[UIImageView alloc]initWithImage:[self symbol:@"car.fill" size:11]];carIcon.tintColor=UIColor.whiteColor;carIcon.contentMode=UIViewContentModeCenter;carIcon.backgroundColor=[UIColor colorWithRed:.12 green:.5 blue:.42 alpha:1];carIcon.layer.cornerRadius=11;carIcon.clipsToBounds=YES;[carIcon.widthAnchor constraintEqualToConstant:22].active=YES;[carIcon.heightAnchor constraintEqualToConstant:22].active=YES;
-  UILabel *carStatus=[self white:@"Car Status" size:14 weight:UIFontWeightBold];
+  UILabel *carStatus=[self white:@"Car Status" size:14 weight:UIFontWeightBold];carStatus.numberOfLines=1;carStatus.adjustsFontSizeToFitWidth=YES;carStatus.minimumScaleFactor=.7;[carStatus setContentCompressionResistancePriority:UILayoutPriorityRequired forAxis:UILayoutConstraintAxisHorizontal];
   UIButton *help=[self roundButton:@"questionmark.circle" label:@"Help" action:@selector(helpTapped)];help.accessibilityIdentifier=@"home.help";
   UIButton *copy=[self roundButton:@"link" label:@"Copy the car website link" action:@selector(copyTapped)];copy.accessibilityIdentifier=@"home.copy";
   for(UIButton *b in @[help,copy]){UIButtonConfiguration *c=b.configuration;c.baseForegroundColor=[UIColor colorWithWhite:1 alpha:.85];c.image=[self symbol:(b==help?@"questionmark.circle":@"link") size:17];c.contentInsets=NSDirectionalEdgeInsetsMake(6,6,6,6);b.configuration=c;}
