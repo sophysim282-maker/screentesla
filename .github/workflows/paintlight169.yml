@@ -1,5 +1,5 @@
 name: Build169 paint and light
-# Build 169: paint color + room light. Run 1.
+# Build 169: paint color + room light. Run 2.
 on:
   push:
     branches: ['release/build169-paint-light']

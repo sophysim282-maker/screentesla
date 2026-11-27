@@ -732,7 +732,9 @@ static UIColor *SLPremiumCard(void){return [UIColor colorWithRed:.13 green:.137 
  self.studio=[SLCarStudioView new];self.studio.translatesAutoresizingMaskIntoConstraints=NO;[self insertSubview:self.studio aboveSubview:self.car];
  [NSLayoutConstraint activateConstraints:@[[self.studio.topAnchor constraintEqualToAnchor:self.topAnchor],[self.studio.bottomAnchor constraintEqualToAnchor:self.bottomAnchor],[self.studio.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],[self.studio.trailingAnchor constraintEqualToAnchor:self.trailingAnchor]]];
  // The blur behind the Video page now sits over the studio.
- [self.videoBlur removeFromSuperview];self.videoBlur.translatesAutoresizingMaskIntoConstraints=NO;[self insertSubview:self.videoBlur aboveSubview:self.studio];[self fill:self.videoBlur in:self inset:UIEdgeInsetsZero];
+ [self.videoBlur removeFromSuperview];self.videoBlur.translatesAutoresizingMaskIntoConstraints=NO;[self insertSubview:self.videoBlur aboveSubview:self.studio];
+ // Build 169 fix: keep the blur BEHIND the Video page (adding it again on top covered the whole page).
+ [NSLayoutConstraint activateConstraints:@[[self.videoBlur.topAnchor constraintEqualToAnchor:self.topAnchor],[self.videoBlur.bottomAnchor constraintEqualToAnchor:self.bottomAnchor],[self.videoBlur.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],[self.videoBlur.trailingAnchor constraintEqualToAnchor:self.trailingAnchor]]];
  self.classicHome=self.homePage;self.classicHome.hidden=YES;self.classicHome.accessibilityIdentifier=@"home.scroll.classic";
  // Side panel (the whole page on a small screen).
  UIScrollView *page=[UIScrollView new];page.accessibilityIdentifier=@"home.scroll";page.showsVerticalScrollIndicator=NO;page.alwaysBounceVertical=YES;page.delegate=self;page.translatesAutoresizingMaskIntoConstraints=NO;[self addSubview:page];self.premiumPage=page;self.homePage=page;
