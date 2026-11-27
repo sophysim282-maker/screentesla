@@ -1,0 +1,22 @@
+name: Xcode probe
+# Lists the Xcode versions on the cloud Macs (for the iPhone Duo full-screen build). Run 1.
+on:
+  push:
+    branches: ['release/xcode-probe']
+    paths: ['.github/workflows/xcodeprobe.yml']
+permissions:
+  contents: read
+jobs:
+  probe:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, macos-26, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - run: |
+          sw_vers || true
+          ls -d /Applications/Xcode* || true
+          xcodebuild -version || true
+          xcrun simctl list devicetypes | grep -i -e duo -e fold || true
