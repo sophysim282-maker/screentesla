@@ -255,8 +255,9 @@ static UIColor *SLGlassFill(void){return [UIColor colorWithRed:.43 green:.45 blu
 - (UIScrollView *)pageScroll:(UIStackView *)stack identifier:(NSString *)identifier {
  UIScrollView *scroll=[UIScrollView new];scroll.alwaysBounceVertical=YES;scroll.showsVerticalScrollIndicator=NO;scroll.accessibilityIdentifier=identifier;scroll.backgroundColor=UIColor.clearColor;
  stack.axis=UILayoutConstraintAxisVertical;stack.translatesAutoresizingMaskIntoConstraints=NO;[scroll addSubview:stack];
- NSLayoutConstraint *width=[stack.widthAnchor constraintEqualToAnchor:scroll.frameLayoutGuide.widthAnchor constant:-28];width.priority=999;NSLayoutConstraint *maxWidth=[stack.widthAnchor constraintLessThanOrEqualToConstant:620];[self.pageWidths addObject:maxWidth];
- [NSLayoutConstraint activateConstraints:@[[scroll.contentLayoutGuide.widthAnchor constraintEqualToAnchor:scroll.frameLayoutGuide.widthAnchor],[stack.topAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.topAnchor constant:6],[stack.bottomAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.bottomAnchor constant:-110],[stack.centerXAnchor constraintEqualToAnchor:scroll.centerXAnchor],width,maxWidth]];
+ // Build 166: keep clear of the clock / camera strip (on the side of the iPhone Duo when it is turned sideways).
+ NSLayoutConstraint *width=[stack.widthAnchor constraintEqualToAnchor:scroll.safeAreaLayoutGuide.widthAnchor constant:-28];width.priority=999;NSLayoutConstraint *maxWidth=[stack.widthAnchor constraintLessThanOrEqualToConstant:620];[self.pageWidths addObject:maxWidth];
+ [NSLayoutConstraint activateConstraints:@[[scroll.contentLayoutGuide.widthAnchor constraintEqualToAnchor:scroll.frameLayoutGuide.widthAnchor],[stack.topAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.topAnchor constant:6],[stack.bottomAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.bottomAnchor constant:-110],[stack.centerXAnchor constraintEqualToAnchor:scroll.safeAreaLayoutGuide.centerXAnchor],width,maxWidth]];
  return scroll;
 }
 - (instancetype)initWithFrame:(CGRect)frame {
