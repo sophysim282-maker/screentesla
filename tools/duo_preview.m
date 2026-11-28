@@ -1,5 +1,5 @@
 // Build 171: real Home view on the Xcode 27.1 iPhone Duo simulator. Scene-based (like the Duo app).
-// It goes through Home, Video, then sideways Home and Video; after each it writes shot-N.txt and waits
+// Step 0 is on the outside screen; the script then opens the phone. Steps 1-4: Home, Video, sideways Home and Video; after each it writes shot-N.txt and waits
 // for the script to take the screenshot (ack-N.txt).
 #import <UIKit/UIKit.h>
 #import "ScreenLinkHomeView.h"
@@ -27,12 +27,12 @@ static NSString *Doc(NSString *n){return [NSHomeDirectory() stringByAppendingPat
  [self step:0];
 }
 - (void)step:(int)n {
- if(n>=4){[@"done" writeToFile:Doc(@"done.txt") atomically:YES encoding:NSUTF8StringEncoding error:nil];return;}
+ if(n>=5){[@"done" writeToFile:Doc(@"done.txt") atomically:YES encoding:NSUTF8StringEncoding error:nil];return;}
  UIWindowScene *ws=self.window.windowScene;
- if(n==2&&@available(iOS 16.0,*)){[ws requestGeometryUpdateWithPreferences:[[UIWindowSceneGeometryPreferencesIOS alloc]initWithInterfaceOrientations:UIInterfaceOrientationMaskLandscapeRight] errorHandler:nil];}
+ if(n==3&&@available(iOS 16.0,*)){[ws requestGeometryUpdateWithPreferences:[[UIWindowSceneGeometryPreferencesIOS alloc]initWithInterfaceOrientations:UIInterfaceOrientationMaskLandscapeRight] errorHandler:nil];}
  SEL page=NSSelectorFromString(@"showPage:");
- dispatch_after(dispatch_time(DISPATCH_TIME_NOW,(int64_t)((n==2?3:2)*NSEC_PER_SEC)),dispatch_get_main_queue(),^{
-  if([self.home respondsToSelector:page]){NSInteger p=(n%2);NSMethodSignature *sig=[self.home methodSignatureForSelector:page];NSInvocation *inv=[NSInvocation invocationWithMethodSignature:sig];inv.selector=page;inv.target=self.home;[inv setArgument:&p atIndex:2];[inv invoke];}
+ dispatch_after(dispatch_time(DISPATCH_TIME_NOW,(int64_t)((n==3?3:2)*NSEC_PER_SEC)),dispatch_get_main_queue(),^{
+  if([self.home respondsToSelector:page]){NSInteger p=(n==2||n==4)?1:0;NSMethodSignature *sig=[self.home methodSignatureForSelector:page];NSInvocation *inv=[NSInvocation invocationWithMethodSignature:sig];inv.selector=page;inv.target=self.home;[inv setArgument:&p atIndex:2];[inv invoke];}
   dispatch_after(dispatch_time(DISPATCH_TIME_NOW,(int64_t)(2.5*NSEC_PER_SEC)),dispatch_get_main_queue(),^{
    CGSize s=self.window.bounds.size;
    [[NSString stringWithFormat:@"%.0fx%.0f",s.width,s.height] writeToFile:Doc([NSString stringWithFormat:@"shot-%d.txt",n]) atomically:YES encoding:NSUTF8StringEncoding error:nil];

@@ -22,17 +22,19 @@ xcrun simctl boot "$dev"; xcrun simctl bootstatus "$dev" -b
 xcrun simctl ui "$dev" appearance dark
 xcrun simctl status_bar "$dev" override --time 9:41 --batteryLevel 100 --cellularBars 4 || true
 xcrun simctl install "$dev" "$app"
-# Open the phone: power off the outside screen (display 1) so iOS uses the big inside screen (display 3).
-xcrun simctl io "$dev" screenConfig --display=1 power off && echo "outside screen off" || true
-xcrun simctl io "$dev" screenConfig --display=3 power on || true
-sleep 4
 xcrun simctl launch "$dev" local.screenlink.duo
 data="$(xcrun simctl get_app_container "$dev" local.screenlink.duo data)"
-names=(home-tall video-tall home-wide video-wide)
-for n in 0 1 2 3; do
+names=(outside-home inside-home inside-video inside-home-sideways inside-video-sideways)
+for n in 0 1 2 3 4; do
   for i in $(seq 1 120); do test -f "$data/Documents/shot-$n.txt" && break; sleep 1; done
   echo "shot $n: window $(cat "$data/Documents/shot-$n.txt" 2>/dev/null || echo missing)"
   for d in 1 3; do xcrun simctl io "$dev" screenshot --display=$d "$PWD/build/duo-ui/${names[$n]}-d$d.png" >/dev/null 2>&1 && echo "  display $d ok" || true; done
+  if [ $n = 0 ]; then
+    # Open the phone: turn off the outside screen so iOS moves the app to the big inside screen.
+    xcrun simctl io "$dev" screenConfig --display=1 power off && echo "outside screen off" || true
+    sleep 10
+    xcrun simctl io "$dev" screenshot --display=3 "$PWD/build/duo-ui/after-open.png" || true
+  fi
   touch "$data/Documents/ack-$n.txt"
 done
 xcrun simctl spawn "$dev" log show --last 2m --style compact --predicate 'process == "DuoPreview"' 2>/dev/null | grep -iE "error|exception|constraint" | tail -20 || true
