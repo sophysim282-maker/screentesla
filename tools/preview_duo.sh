@@ -30,8 +30,22 @@ for n in 0 1 2 3 4; do
   echo "shot $n: window $(cat "$data/Documents/shot-$n.txt" 2>/dev/null || echo missing)"
   for d in 1 3; do xcrun simctl io "$dev" screenshot --display=$d "$PWD/build/duo-ui/${names[$n]}-d$d.png" >/dev/null 2>&1 && echo "  display $d ok" || true; done
   if [ $n = 0 ]; then
-    # Open the phone: turn off the outside screen so iOS moves the app to the big inside screen.
-    xcrun simctl io "$dev" screenConfig --display=1 power off && echo "outside screen off" || true
+    # Open the phone with the Simulator app's Device menu (there is no simctl command for the fold).
+    xcrun simctl ui "$dev" help 2>&1 | head -20 || true
+    open -a Simulator --args -CurrentDeviceUDID "$dev"; sleep 12
+    osascript -e 'tell application "System Events" to tell process "Simulator" to get name of every menu item of menu 1 of menu bar item "Device" of menu bar 1' 2>&1 || true
+    osascript -e 'tell application "System Events" to tell process "Simulator"
+      set found to ""
+      repeat with m in (every menu item of menu 1 of menu bar item "Device" of menu bar 1)
+        set t to name of m
+        if t is not missing value and (t contains "Unfold" or t contains "Open" and t contains "Phone" or t contains "Fold") then
+          click m
+          set found to t
+          exit repeat
+        end if
+      end repeat
+      return "clicked: " & found
+    end tell' 2>&1 || true
     sleep 10
     xcrun simctl io "$dev" screenshot --display=3 "$PWD/build/duo-ui/after-open.png" || true
   fi
