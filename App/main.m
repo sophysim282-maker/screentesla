@@ -1,3 +1,4 @@
+#import <objc/runtime.h>
 #import <UIKit/UIKit.h>
 #import <AudioToolbox/AudioToolbox.h>
 #import <ifaddrs.h>
@@ -182,6 +183,7 @@ static void SLActivityFinish(void) {
         [owner append:@"BACKGROUND RUNTIME ENDED: receiver, viewer link and media session retained. iOS may suspend this app without PiP. Returning to ScreenLink resumes the existing receiver; Start is not required to rebuild it."];
         if(!owner.preview.active&&!owner.youtubePiP.active && UIApplication.sharedApplication.applicationState==UIApplicationStateBackground)[owner beginGrace];
     };
+    [self append:@"Version 0.23 / build 170: new Outside screen page (Home list). iPhone Duo test: pick a photo or video; when iOS gives ScreenLink the outside screen it shows there. Copy report tells what this iPhone allows."];
     [self append:@"Version 0.22.2 / build 169: Choose car now also has Paint color (Original, Black, White, Grey, Red, Blue, Green, Purple: the car body is repainted, stripes, windows and wheels stay) and Room light (Auto follows the paint, or Blue, Red, Purple, Orange, Green, White). Includes build 168."];
     [self append:@"Earlier build 168: premium Home fixes on the big screen: the Pause · YouTube · Music · Map · Start/Stop row and the Choose car button under the car now show, the car is bigger and higher, and Car screen says one short word (Connected, Waiting, Off). Includes build 167."];
     [self append:@"Earlier build 167: new premium Home. A dark studio with your car in the middle, its reflection on a glossy floor and a soft room light in the car's own color. Big screen (iPhone Duo opened or sideways): the list on the left (Now on the car, Video, Maps, Waiting screen, Phone sound, Keep playing, Small window, TikTok, Your car, Settings) and the car on the right with the video time, Car screen / ScreenLink / Quality and Pause · YouTube · Music · Map · Start/Stop. Small screen: the car on top, the same buttons and list below. Your car: choose one of the cars in the app or add your own picture from Photos (the iPhone cuts the car out). All functions are the same. Includes build 166."];
@@ -888,5 +890,10 @@ static double SLWall(void){return NSDate.date.timeIntervalSince1970;}
 }
 - (void)sceneDidBecomeActive:(UIScene *)scene {[(AppDelegate *)UIApplication.sharedApplication.delegate consumeWidgetStart];}
 @end
-int main(int argc,char **argv){@autoreleasepool{return UIApplicationMain(argc,argv,nil,NSStringFromClass(AppDelegate.class));}}
+// Build 170: in the Duo version, extra screens (outside screen test) get their own scene delegate.
+UISceneConfiguration *SLOuterConfiguration(UISceneSession *session);
+static UISceneConfiguration *SLConfigForScene(id self,SEL _cmd,UIApplication *app,UISceneSession *session,UISceneConnectionOptions *options){return SLOuterConfiguration(session);}
+int main(int argc,char **argv){@autoreleasepool{
+ if([NSBundle.mainBundle objectForInfoDictionaryKey:@"UIApplicationSceneManifest"])class_addMethod(AppDelegate.class,@selector(application:configurationForConnectingSceneSession:options:),(IMP)SLConfigForScene,"@@:@@@");
+ return UIApplicationMain(argc,argv,nil,NSStringFromClass(AppDelegate.class));}}
 

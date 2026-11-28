@@ -1,3 +1,4 @@
+#import <objc/message.h>
 #import "ScreenLinkHomeView.h"
 #import <AVFoundation/AVFoundation.h>
 
@@ -690,6 +691,7 @@ static UIColor *SLPremiumCard(void){return [UIColor colorWithRed:.13 green:.137 
  if([key isEqual:@"video"])[self showPage:1];
  else if([key isEqual:@"settings"])[self developerTapped];
  else if([key isEqual:@"car"])[self chooseCarTapped];
+ else if([key isEqual:@"outer"]){Class outer=NSClassFromString(@"SLOuterScreen");UIViewController *from=[self pController];if(outer&&from)((void(*)(id,SEL,UIViewController *))objc_msgSend)(outer,NSSelectorFromString(@"presentFrom:"),from);}
  else if([key isEqual:@"waiting"]||[key isEqual:@"tiktok"]){if(self.moreAction)self.moreAction(key);}
  else [self toggleKey:key];
 }
@@ -769,7 +771,7 @@ static UIColor *SLPremiumCard(void){return [UIColor colorWithRed:.13 green:.137 
  UIStackView *cardStack=[[UIStackView alloc]initWithArrangedSubviews:@[nowTop,self.pProgress,topLine,controls]];cardStack.axis=UILayoutConstraintAxisVertical;cardStack.spacing=12;[cardStack setCustomSpacing:14 afterView:self.pProgress];[self fill:cardStack in:card inset:UIEdgeInsetsMake(14,16,8,12)];
  [side addArrangedSubview:card];[side setCustomSpacing:12 afterView:card];
  // List.
- for(NSArray *r in @[@[@"Video",@"play.rectangle.fill",@"video",@"Choose a video in YouTube"],@[@"Maps",@"location.north.fill",@"maps",@""],@[@"Waiting screen",@"music.note",@"waiting",@"Pictures, music and transitions"],@[@"Phone sound",@"speaker.wave.2.fill",@"phonesound",@""],@[@"Keep playing",@"repeat",@"keep",@""],@[@"Small window",@"pip.fill",@"pip",@""],@[@"TikTok",@"music.note.tv",@"tiktok",@"Open TikTok inside ScreenLink"],@[@"Your car",@"car.side.fill",@"car",@"Pick your car picture"],@[@"Settings",@"line.3.horizontal",@"settings",@"Help · test log · developer"]])
+ for(NSArray *r in @[@[@"Video",@"play.rectangle.fill",@"video",@"Choose a video in YouTube"],@[@"Maps",@"location.north.fill",@"maps",@""],@[@"Waiting screen",@"music.note",@"waiting",@"Pictures, music and transitions"],@[@"Phone sound",@"speaker.wave.2.fill",@"phonesound",@""],@[@"Keep playing",@"repeat",@"keep",@""],@[@"Small window",@"pip.fill",@"pip",@""],@[@"TikTok",@"music.note.tv",@"tiktok",@"Open TikTok inside ScreenLink"],@[@"Your car",@"car.side.fill",@"car",@"Pick your car picture"],@[@"Outside screen",@"rectangle.portrait.on.rectangle.portrait",@"outer",@"iPhone Duo: photo or video on the outside (test)"],@[@"Settings",@"line.3.horizontal",@"settings",@"Help · test log · developer"]])
   [side addArrangedSubview:[self pRow:r[0] symbol:r[1] key:r[2] subtitle:r[3]]];
  for(NSString *k in @[@"maps",@"phonesound",@"keep",@"pip"])[self pShowSwitch:k on:[self.tileOn[k] boolValue]];
  // Start / Stop.

@@ -17,6 +17,13 @@ exe="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$plist")"
 /usr/libexec/PlistBuddy -c 'Add :UIApplicationSceneManifest:UISceneConfigurations:UIWindowSceneSessionRoleApplication:0 dict' "$plist"
 /usr/libexec/PlistBuddy -c 'Add :UIApplicationSceneManifest:UISceneConfigurations:UIWindowSceneSessionRoleApplication:0:UISceneConfigurationName string Default' "$plist"
 /usr/libexec/PlistBuddy -c 'Add :UIApplicationSceneManifest:UISceneConfigurations:UIWindowSceneSessionRoleApplication:0:UISceneDelegateClassName string SLSceneDelegate' "$plist"
+# Build 170: screens other than the main window (outside screen test) go to SLOuterSceneDelegate.
+for role in UIWindowSceneSessionRoleExternalDisplayNonInteractive UIWindowSceneSessionRoleExternalDisplay; do
+ /usr/libexec/PlistBuddy -c "Add :UIApplicationSceneManifest:UISceneConfigurations:$role array" "$plist"
+ /usr/libexec/PlistBuddy -c "Add :UIApplicationSceneManifest:UISceneConfigurations:$role:0 dict" "$plist"
+ /usr/libexec/PlistBuddy -c "Add :UIApplicationSceneManifest:UISceneConfigurations:$role:0:UISceneConfigurationName string Outside" "$plist"
+ /usr/libexec/PlistBuddy -c "Add :UIApplicationSceneManifest:UISceneConfigurations:$role:0:UISceneDelegateClassName string SLOuterSceneDelegate" "$plist"
+done
 for key in DTPlatformVersion:27.1 DTSDKName:iphoneos27.1 DTSDKBuild:27B5000; do /usr/libexec/PlistBuddy -c "Set :${key%%:*} ${key#*:}" "$plist" 2>/dev/null || true; done
 minos="$(otool -l "$app/$exe" | awk '/LC_BUILD_VERSION/{f=1} f&&/minos/{print $2; exit}')"
 vtool -set-build-version ios "${minos:-16.0}" 27.1 -replace -output "$app/$exe.duo" "$app/$exe"
