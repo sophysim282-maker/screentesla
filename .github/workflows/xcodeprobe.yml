@@ -1,5 +1,5 @@
 name: Xcode probe
-# Run 5: look in Apple's iOS 27.1 headers for the iPhone Duo outside-screen feature.
+# Run 6: read the camera-accessory (outside screen) and hinge docs, list iPhone Duo simulators.
 on:
   push:
     branches: ['release/xcode-probe']
@@ -13,11 +13,11 @@ jobs:
     steps:
       - run: |
           sudo xcode-select -s /Applications/Xcode_27.1.app/Contents/Developer
-          xcodebuild -version
-          SDK="$(xcrun --sdk iphoneos --show-sdk-path)"; echo "$SDK"
-          F="$SDK/System/Library/Frameworks"
-          echo "=== scene roles"; grep -rh "UIWindowSceneSessionRole\|UISceneSessionRole" "$F/UIKit.framework/Headers" | sort -u | head -40
-          echo "=== outer/cover/exterior"; grep -rniE "outer ?display|cover ?display|exterior|outerScreen|coverScreen|secondaryDisplay|innerDisplay|rear ?display" "$F"/*/Headers 2>/dev/null | head -80
-          echo "=== reserved / fold"; grep -rniE "ReservedRegion|foldable|hinge|posture|UIDeviceFold|isFolded|foldState" "$F"/*/Headers 2>/dev/null | head -60
-          echo "=== swiftinterface"; for m in UIKit SwiftUI; do find "$F/$m.framework" -name "*.swiftinterface" | head -1 | xargs grep -niE "outer|cover display|exterior|reservedRegion|fold" 2>/dev/null | head -40; done
-          echo "=== simulators"; xcrun simctl list devicetypes | grep -iE "duo|fold|iphone" | tail -15
+          SDK="$(xcrun --sdk iphoneos --show-sdk-path)"; F="$SDK/System/Library/Frameworks"
+          echo "=== CameraCaptureAccessory"; grep -rn -B12 -A6 "CameraCaptureAccessory" "$F/UIKit.framework/Headers" | head -120
+          echo "=== other frameworks"; grep -rlE "CameraCaptureAccessory|captureAccessory|UIHinge|outerDisplay" "$F"/*/Headers 2>/dev/null | head
+          grep -rn -B6 -A10 -iE "captureAccessory" "$F/AVFoundation.framework/Headers" "$F/AVKit.framework/Headers" 2>/dev/null | head -80
+          echo "=== swift"; find "$F/UIKit.framework" -name "*.swiftinterface" | head -1 | xargs grep -n -B3 -A3 -iE "cameraCaptureAccessory|UIHinge" | head -60
+          echo "=== UIHinge"; sed -n 1,80p "$F/UIKit.framework/Headers/UIHinge.h"; ls "$F/UIKit.framework/Headers" | grep -i hinge
+          echo "=== simulators"; xcrun simctl list devicetypes | grep -iE "duo|fold|17|18|19|Air" 
+          xcrun simctl list runtimes
