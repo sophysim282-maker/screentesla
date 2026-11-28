@@ -1,5 +1,5 @@
 name: Xcode probe
-# Lists the Xcode versions on the cloud Macs (for the iPhone Duo build). Run 4: the xcode-27 label.
+# Run 5: look in Apple's iOS 27.1 headers for the iPhone Duo outside-screen feature.
 on:
   push:
     branches: ['release/xcode-probe']
@@ -8,15 +8,16 @@ permissions:
   contents: read
 jobs:
   probe:
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [xcode-27, xcode-27-xlarge, macos-27, macos-26]
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 10
+    runs-on: xcode-27
+    timeout-minutes: 15
     steps:
       - run: |
-          sw_vers || true
-          ls -d /Applications/Xcode* || true
-          xcodebuild -version || true
-          xcodebuild -showsdks | grep -i iphoneos || true
+          sudo xcode-select -s /Applications/Xcode_27.1.app/Contents/Developer
+          xcodebuild -version
+          SDK="$(xcrun --sdk iphoneos --show-sdk-path)"; echo "$SDK"
+          F="$SDK/System/Library/Frameworks"
+          echo "=== scene roles"; grep -rh "UIWindowSceneSessionRole\|UISceneSessionRole" "$F/UIKit.framework/Headers" | sort -u | head -40
+          echo "=== outer/cover/exterior"; grep -rniE "outer ?display|cover ?display|exterior|outerScreen|coverScreen|secondaryDisplay|innerDisplay|rear ?display" "$F"/*/Headers 2>/dev/null | head -80
+          echo "=== reserved / fold"; grep -rniE "ReservedRegion|foldable|hinge|posture|UIDeviceFold|isFolded|foldState" "$F"/*/Headers 2>/dev/null | head -60
+          echo "=== swiftinterface"; for m in UIKit SwiftUI; do find "$F/$m.framework" -name "*.swiftinterface" | head -1 | xargs grep -niE "outer|cover display|exterior|reservedRegion|fold" 2>/dev/null | head -40; done
+          echo "=== simulators"; xcrun simctl list devicetypes | grep -iE "duo|fold|iphone" | tail -15
