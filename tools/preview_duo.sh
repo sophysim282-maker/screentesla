@@ -17,18 +17,21 @@ pathlib.Path(sys.argv[1]+'/Info.plist').write_bytes(plistlib.dumps(p))
 PY
 codesign --force --sign - "$app"
 xcrun simctl help | grep -iE "fold|hinge|posture" || echo "(no fold command in simctl)"
+xcrun simctl help io 2>&1 | head -60 || true
 dev="$(xcrun simctl create duo com.apple.CoreSimulator.SimDeviceType.iPhone-Duo com.apple.CoreSimulator.SimRuntime.iOS-27-1)"
 xcrun simctl boot "$dev"; xcrun simctl bootstatus "$dev" -b
 xcrun simctl ui "$dev" appearance dark
 xcrun simctl status_bar "$dev" override --time 9:41 --batteryLevel 100 --cellularBars 4 || true
 xcrun simctl install "$dev" "$app"
+xcrun simctl io "$dev" enumerate 2>&1 | head -60 || true
 xcrun simctl launch "$dev" local.screenlink.duo
 data="$(xcrun simctl get_app_container "$dev" local.screenlink.duo data)"
 names=(home-tall video-tall home-wide video-wide)
 for n in 0 1 2 3; do
   for i in $(seq 1 120); do test -f "$data/Documents/shot-$n.txt" && break; sleep 1; done
   echo "shot $n: window $(cat "$data/Documents/shot-$n.txt" 2>/dev/null || echo missing)"
-  xcrun simctl io "$dev" screenshot "build/duo-ui/${names[$n]}.png" || true
+  xcrun simctl io "$dev" screenshot "$PWD/build/duo-ui/${names[$n]}.png" || true
+  for d in internal external 0 1 2; do xcrun simctl io "$dev" screenshot --display=$d "$PWD/build/duo-ui/${names[$n]}-d$d.png" >/dev/null 2>&1 && echo "  display $d ok" || true; done
   touch "$data/Documents/ack-$n.txt"
 done
 xcrun simctl spawn "$dev" log show --last 2m --style compact --predicate 'process == "DuoPreview"' 2>/dev/null | grep -iE "error|exception|constraint" | tail -20 || true
