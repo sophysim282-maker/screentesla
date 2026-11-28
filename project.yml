@@ -180,6 +180,7 @@ targets:
     - path: App
       excludes:
       - main.m
+      - SLOuterScreen.m
       - LocalVPN.h
       - LocalVPN.m
       - BackgroundSession.h

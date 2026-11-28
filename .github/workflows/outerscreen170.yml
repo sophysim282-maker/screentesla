@@ -1,5 +1,5 @@
 name: Build170 outside screen
-# Build 170: iPhone Duo outside screen test.
+# Build 170: iPhone Duo outside screen test. Run 2.
 on:
   push:
     branches: ['release/build170-outside-screen']
