@@ -31,8 +31,7 @@ for n in 0 1 2 3 4; do
   for d in 1 3; do xcrun simctl io "$dev" screenshot --display=$d "$PWD/build/duo-ui/${names[$n]}-d$d.png" >/dev/null 2>&1 && echo "  display $d ok" || true; done
   if [ $n = 0 ]; then
     # Open the phone with the Simulator app's Device menu (there is no simctl command for the fold).
-    xcrun simctl ui "$dev" help 2>&1 | head -20 || true
-    open -a Simulator --args -CurrentDeviceUDID "$dev"; sleep 12
+    open -a "$(xcode-select -p)/Applications/Simulator.app" --args -CurrentDeviceUDID "$dev" || true; sleep 15
     osascript -e 'tell application "System Events" to tell process "Simulator" to get name of every menu item of menu 1 of menu bar item "Device" of menu bar 1' 2>&1 || true
     osascript -e 'tell application "System Events" to tell process "Simulator"
       set found to ""
