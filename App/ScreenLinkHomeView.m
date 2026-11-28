@@ -241,10 +241,16 @@ static UIColor *SLHomeGrey(void){return [UIColor colorWithRed:.49 green:.51 blue
 // Stop ScreenLink, and a bottom bar with names: Home · Video · Map · Menu. Every old action and test name
 // is kept (home.start, home.disconnect, home.developer, home.copy, home.maps, home.scroll, player.*).
 static UIColor *SLGlassFill(void){return [UIColor colorWithRed:.43 green:.45 blue:.49 alpha:.34];}
+// Build 171: Apple's clear Liquid Glass (iOS 26 and newer); older iPhones keep the frosted blur.
+static BOOL SLHasLiquidGlass(void){if(@available(iOS 26.0,*))return NSClassFromString(@"UIGlassEffect")!=nil;return NO;}
+static UIVisualEffect *SLGlassEffect(BOOL clear){
+ if(@available(iOS 26.0,*)){if(SLHasLiquidGlass()){UIGlassEffect *g=[UIGlassEffect effectWithStyle:clear?UIGlassEffectStyleClear:UIGlassEffectStyleRegular];g.interactive=NO;return g;}}
+ return [UIBlurEffect effectWithStyle:clear?UIBlurEffectStyleSystemUltraThinMaterialDark:UIBlurEffectStyleSystemChromeMaterialDark];
+}
 - (UIVisualEffectView *)glassBox:(CGFloat)radius {
- UIVisualEffectView *box=[[UIVisualEffectView alloc]initWithEffect:[UIBlurEffect effectWithStyle:UIBlurEffectStyleSystemUltraThinMaterialDark]];
- box.layer.cornerRadius=radius;box.layer.cornerCurve=kCACornerCurveContinuous;box.clipsToBounds=YES;box.layer.borderWidth=1;box.layer.borderColor=[UIColor colorWithWhite:1 alpha:.15].CGColor;
- box.contentView.backgroundColor=SLGlassFill();return box;
+ UIVisualEffectView *box=[[UIVisualEffectView alloc]initWithEffect:SLGlassEffect(YES)];
+ box.layer.cornerRadius=radius;box.layer.cornerCurve=kCACornerCurveContinuous;box.clipsToBounds=YES;box.layer.borderWidth=1;box.layer.borderColor=[UIColor colorWithWhite:1 alpha:SLHasLiquidGlass()?.22:.15].CGColor;
+ box.contentView.backgroundColor=SLHasLiquidGlass()?[UIColor colorWithWhite:0 alpha:.18]:SLGlassFill();return box;
 }
 - (void)fill:(UIView *)child in:(UIView *)parent inset:(UIEdgeInsets)inset {
  child.translatesAutoresizingMaskIntoConstraints=NO;[parent addSubview:child];
@@ -429,7 +435,7 @@ static UIColor *SLGlassFill(void){return [UIColor colorWithRed:.43 green:.45 blu
 
   [self buildPremium];
   // ---------- Bottom bar: Home · Video · Map · Menu ----------
-  UIView *tabBar=[UIView new];UIVisualEffectView *tabGlass=[[UIVisualEffectView alloc]initWithEffect:[UIBlurEffect effectWithStyle:UIBlurEffectStyleSystemChromeMaterialDark]];tabGlass.layer.cornerRadius=26;tabGlass.layer.cornerCurve=kCACornerCurveContinuous;tabGlass.clipsToBounds=YES;tabGlass.layer.borderWidth=1;tabGlass.layer.borderColor=[UIColor colorWithWhite:1 alpha:.12].CGColor;[self fill:tabGlass in:tabBar inset:UIEdgeInsetsZero];
+  UIView *tabBar=[UIView new];UIVisualEffectView *tabGlass=[[UIVisualEffectView alloc]initWithEffect:SLGlassEffect(NO)];tabGlass.layer.cornerRadius=26;tabGlass.layer.cornerCurve=kCACornerCurveContinuous;tabGlass.clipsToBounds=YES;tabGlass.layer.borderWidth=1;tabGlass.layer.borderColor=[UIColor colorWithWhite:1 alpha:.12].CGColor;[self fill:tabGlass in:tabBar inset:UIEdgeInsetsZero];
   NSMutableArray *tabs=[NSMutableArray array];NSArray *names=@[@"Home",@"Video",@"Map",@"Menu"],*symbols=@[@"house",@"video",@"map",@"line.3.horizontal"],*ids=@[@"home.tab.home",@"home.tab.video",@"home.maps",@"home.developer"];
   for(NSUInteger i=0;i<4;i++){UIButtonConfiguration *c=UIButtonConfiguration.plainButtonConfiguration;c.title=names[i];c.image=[self symbol:symbols[i] size:20];c.imagePlacement=NSDirectionalRectEdgeTop;c.imagePadding=4;c.baseForegroundColor=UIColor.whiteColor;c.background.cornerRadius=18;c.contentInsets=NSDirectionalEdgeInsetsMake(8,4,8,4);
    c.titleTextAttributesTransformer=^NSDictionary *(NSDictionary *a){NSMutableDictionary *m=[a mutableCopy];m[NSFontAttributeName]=[UIFont systemFontOfSize:12 weight:UIFontWeightBold];return m;};
@@ -740,7 +746,7 @@ static UIColor *SLPremiumCard(void){return [UIColor colorWithRed:.13 green:.137 
  self.classicHome=self.homePage;self.classicHome.hidden=YES;self.classicHome.accessibilityIdentifier=@"home.scroll.classic";
  // Side panel (the whole page on a small screen).
  UIScrollView *page=[UIScrollView new];page.accessibilityIdentifier=@"home.scroll";page.showsVerticalScrollIndicator=NO;page.alwaysBounceVertical=YES;page.delegate=self;page.translatesAutoresizingMaskIntoConstraints=NO;[self addSubview:page];self.premiumPage=page;self.homePage=page;
- UIView *sideBack=[UIView new];sideBack.backgroundColor=[UIColor colorWithRed:.071 green:.078 blue:.09 alpha:1];sideBack.translatesAutoresizingMaskIntoConstraints=NO;sideBack.userInteractionEnabled=NO;[self insertSubview:sideBack belowSubview:page];self.premiumStageSide=sideBack;
+ UIVisualEffectView *sideBack=[[UIVisualEffectView alloc]initWithEffect:SLGlassEffect(YES)];sideBack.contentView.backgroundColor=[UIColor colorWithRed:.03 green:.035 blue:.045 alpha:.42];sideBack.translatesAutoresizingMaskIntoConstraints=NO;sideBack.userInteractionEnabled=NO;[self insertSubview:sideBack belowSubview:page];self.premiumStageSide=sideBack;
  [NSLayoutConstraint activateConstraints:@[[sideBack.topAnchor constraintEqualToAnchor:page.topAnchor],[sideBack.bottomAnchor constraintEqualToAnchor:page.bottomAnchor],[sideBack.leadingAnchor constraintEqualToAnchor:page.leadingAnchor],[sideBack.trailingAnchor constraintEqualToAnchor:page.trailingAnchor]]];
  UIStackView *side=[UIStackView new];side.axis=UILayoutConstraintAxisVertical;side.spacing=4;side.translatesAutoresizingMaskIntoConstraints=NO;[page addSubview:side];self.sideStack=side;
  [NSLayoutConstraint activateConstraints:@[[page.contentLayoutGuide.widthAnchor constraintEqualToAnchor:page.frameLayoutGuide.widthAnchor],[side.topAnchor constraintEqualToAnchor:page.contentLayoutGuide.topAnchor constant:18],[side.bottomAnchor constraintEqualToAnchor:page.contentLayoutGuide.bottomAnchor constant:-110],[side.leadingAnchor constraintEqualToAnchor:page.safeAreaLayoutGuide.leadingAnchor constant:20],[side.trailingAnchor constraintEqualToAnchor:page.frameLayoutGuide.trailingAnchor constant:-20]]];
@@ -757,7 +763,7 @@ static UIColor *SLPremiumCard(void){return [UIColor colorWithRed:.13 green:.137 
  self.stageSpacer=[UIView new];self.spacerHeight=[self.stageSpacer.heightAnchor constraintEqualToConstant:0];self.spacerHeight.active=YES;[side addArrangedSubview:self.stageSpacer];
  self.narrowActions=[self pActionRow];[side addArrangedSubview:self.narrowActions];[side setCustomSpacing:18 afterView:self.narrowActions];
  // Now on the car.
- UIView *card=[UIView new];card.backgroundColor=SLPremiumCard();card.layer.cornerRadius=14;card.layer.cornerCurve=kCACornerCurveContinuous;card.clipsToBounds=YES;
+ UIView *card=[UIView new];card.layer.cornerRadius=18;card.layer.cornerCurve=kCACornerCurveContinuous;card.clipsToBounds=YES;UIVisualEffectView *cardGlass=[self glassBox:18];cardGlass.userInteractionEnabled=NO;[self fill:cardGlass in:card inset:UIEdgeInsetsZero];
  UILabel *nowTitle=[self pLabel:@"Now on the car" size:15 weight:UIFontWeightMedium grey:NO];self.pNowTime=[self pLabel:@"–" size:13 weight:UIFontWeightRegular grey:YES];self.pNowTime.textAlignment=NSTextAlignmentRight;
  UIStackView *nowTop=[[UIStackView alloc]initWithArrangedSubviews:@[nowTitle,self.pNowTime]];
  self.pProgress=[[UIProgressView alloc]initWithProgressViewStyle:UIProgressViewStyleDefault];self.pProgress.progressTintColor=UIColor.whiteColor;self.pProgress.trackTintColor=[UIColor colorWithWhite:1 alpha:.15];
@@ -816,7 +822,7 @@ static UIColor *SLPremiumCard(void){return [UIColor colorWithRed:.13 green:.137 
  self.overlayNarrowHeight.constant=96;
  CGFloat stageH=MIN(self.bounds.size.width*.62,300);self.spacerHeight.constant=wide?0:stageH;self.stageSpacer.hidden=wide;self.narrowActions.hidden=wide;
  self.stageInfo.hidden=!wide;self.stageActions.hidden=!wide;self.stageButtons.hidden=!wide;self.stageOverlay.userInteractionEnabled=wide;
- self.premiumStageSide.backgroundColor=wide?[UIColor colorWithRed:.071 green:.078 blue:.09 alpha:1]:UIColor.clearColor;
+ self.premiumStageSide.alpha=wide?1:0;
  BOOL home=!self.premiumPage.hidden;self.stageOverlay.hidden=!home||!wide;self.premiumStageSide.hidden=!home;
  self.tabBarView.hidden=wide&&home;
  CGFloat sideW=wide?CGRectGetMaxX(self.premiumPage.frame):0;
