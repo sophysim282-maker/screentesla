@@ -817,10 +817,13 @@ static UIColor *SLPremiumCard(void){return [UIColor colorWithRed:.13 green:.137 
 }
 - (void)layoutPremium {
  if(!self.premium)return;
- BOOL wide=self.bounds.size.width>=640;CGFloat top=self.safeAreaInsets.top;
+ // Build 171: side panel + car stage only on a really wide screen (iPhone Duo open and sideways, iPad).
+ // Narrower big screens (Duo open upright, 669 pt) get one column with a bigger car at the top.
+ CGFloat W=self.bounds.size.width;BOOL wide=W>=900;CGFloat top=self.safeAreaInsets.top;
+ self.pageWideWidth.constant=MIN(350,MAX(300,W*.36));
  self.pageNarrowTrailing.active=!wide;self.pageWideWidth.active=wide;self.overlayNarrowLeading.active=!wide;self.overlayWideLeading.active=wide;self.overlayNarrowHeight.active=!wide;self.overlayWideBottom.active=wide;
  self.overlayNarrowHeight.constant=96;
- CGFloat stageH=MIN(self.bounds.size.width*.62,300);self.spacerHeight.constant=wide?0:stageH;self.stageSpacer.hidden=wide;self.narrowActions.hidden=wide;
+ CGFloat stageH=W>=600?MIN(W*.62,430):MIN(W*.62,300);self.spacerHeight.constant=wide?0:stageH;self.stageSpacer.hidden=wide;self.narrowActions.hidden=wide;
  self.stageInfo.hidden=!wide;self.stageActions.hidden=!wide;self.stageButtons.hidden=!wide;self.stageOverlay.userInteractionEnabled=wide;
  self.premiumStageSide.alpha=wide?1:0;
  BOOL home=!self.premiumPage.hidden;self.stageOverlay.hidden=!home||!wide;self.premiumStageSide.hidden=!home;
@@ -832,7 +835,7 @@ static UIColor *SLPremiumCard(void){return [UIColor colorWithRed:.13 green:.137 
  if(!wide&&CGRectGetHeight(self.stageSpacer.frame)<1)stage.origin.y=top+120;
  if(!CGRectEqualToRect(stage,self.studio.stage)){self.studio.stage=stage;[self.studio setNeedsLayout];}
 }
-- (void)scrollPremium {if(self.premium&&!self.wideLayout)[self layoutPremium];}
+- (void)scrollPremium {if(self.premium&&self.bounds.size.width<900)[self layoutPremium];}
 - (void)showPremiumStatus:(BOOL)sharing busy:(BOOL)busy disconnecting:(BOOL)disconnecting attention:(BOOL)attention dot:(UIColor *)dot {
  if(!self.premium)return;self.pSharing=sharing;
  self.pStatus.text=self.statusLabel.text;self.pDetail.text=self.detailLabel.text;self.pDot.backgroundColor=dot;

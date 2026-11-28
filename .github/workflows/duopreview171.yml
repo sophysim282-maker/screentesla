@@ -1,5 +1,5 @@
 name: Duo preview 171
-# Build 171: real iPhone Duo simulator screenshots with Xcode 27.1. Run 6.
+# Build 171: real iPhone Duo simulator screenshots with Xcode 27.1. Run 7.
 on:
   push:
     branches: ['release/build171-duo-glass']
